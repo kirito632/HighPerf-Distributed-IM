@@ -17,7 +17,7 @@ find_package(gRPC CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 
-find_package(Boost REQUIRED COMPONENTS system filesystem uuid)
+find_package(Boost REQUIRED COMPONENTS system filesystem)
 
 # hiredis
 set(HIREDIS_TARGET "")

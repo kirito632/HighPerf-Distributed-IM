@@ -18,7 +18,7 @@ target_link_libraries(chat_server2 PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
-    Boost::system Boost::filesystem Boost::uuid
+    Boost::system Boost::filesystem
 )
 
 if(HIREDIS_TARGET)

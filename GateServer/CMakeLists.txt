@@ -18,7 +18,7 @@ target_link_libraries(gate_server PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
-    Boost::system Boost::filesystem Boost::uuid
+    Boost::system Boost::filesystem
 )
 
 if(HIREDIS_TARGET)
