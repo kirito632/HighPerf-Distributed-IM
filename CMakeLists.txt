@@ -12,7 +12,7 @@ option(BUILD_SHARED_LIBS "Build with shared libraries" ON)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 # Third-party deps (vcpkg-friendly)
-find_package(Protobuf CONFIG REQUIRED)
+find_package(Protobuf REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
