@@ -8,31 +8,31 @@
 #include"RedisMgr.h"
 #include"MysqlDao.h"
 #include"Singleton.h"
-#include <jdbc/cppconn/exception.h>
+#include <cppconn/exception.h>
 #include<csignal>
 class MysqlPool;
 
-// ÓÃÓÚ¹ÜÀíÈ«¾ÖÎ¨Ò»µÄMySQLÁ¬½Ó³Ø
-// Ê¹ÓÃµ¥ÀýÄ£Ê½È·±£Õû¸ö³ÌÐòÖ»ÓÐÒ»¸öMySQLÁ¬½Ó³ØÊµÀý
+// ï¿½ï¿½ï¿½Ú¹ï¿½ï¿½ï¿½È«ï¿½ï¿½Î¨Ò»ï¿½ï¿½MySQLï¿½ï¿½ï¿½Ó³ï¿½
+// Ê¹ï¿½Ãµï¿½ï¿½ï¿½Ä£Ê½È·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö»ï¿½ï¿½Ò»ï¿½ï¿½MySQLï¿½ï¿½ï¿½Ó³ï¿½Êµï¿½ï¿½
 using MySqlPoolSingleton = Singleton<MySqlPool>;
 
-// ²âÊÔRedisÁ¬½ÓºÍ»ù±¾²Ù×÷
+// ï¿½ï¿½ï¿½ï¿½Redisï¿½ï¿½ï¿½ÓºÍ»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 // 
-// ×÷ÓÃ£º
-//   ²âÊÔRedisÊý¾Ý¿âµÄÁ¬½Ó¡¢ÈÏÖ¤¡¢»ù±¾²Ù×÷µÈ¹¦ÄÜ
+// ï¿½ï¿½ï¿½Ã£ï¿½
+//   ï¿½ï¿½ï¿½ï¿½Redisï¿½ï¿½ï¿½Ý¿ï¿½ï¿½ï¿½ï¿½ï¿½Ó¡ï¿½ï¿½ï¿½Ö¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¹ï¿½ï¿½ï¿½
 // 
-// ÊµÏÖÂß¼­£º
-//   1. Á¬½Óµ½±¾µØRedis·þÎñÆ÷£¨¶Ë¿Ú6380£©
-//   2. ½øÐÐÉí·ÝÈÏÖ¤£¨ÃÜÂë: 123456£©
-//   3. Ö´ÐÐ»ù±¾²Ù×÷£ºSET¡¢GET¡¢STRLENÃüÁî
-//   4. ÊÍ·ÅÁ¬½Ó×ÊÔ´
+// Êµï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½
+//   1. ï¿½ï¿½ï¿½Óµï¿½ï¿½ï¿½ï¿½ï¿½Redisï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë¿ï¿½6380ï¿½ï¿½
+//   2. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½: 123456ï¿½ï¿½
+//   3. Ö´ï¿½Ð»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½SETï¿½ï¿½GETï¿½ï¿½STRLENï¿½ï¿½ï¿½ï¿½
+//   4. ï¿½Í·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´
 // 
-// ×¢Òâ£º
-//   ÐèÒªÆô¶¯Redis·þÎñÆ÷²ÅÄÜ½øÐÐÁ¬½Ó
-//   RedisÄ¬ÈÏ¶Ë¿ÚÎª6379£¬ÕâÀïÊ¹ÓÃµÄÊÇ6380
+// ×¢ï¿½â£º
+//   ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½Redisï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ü½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   RedisÄ¬ï¿½Ï¶Ë¿ï¿½Îª6379ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¹ï¿½Ãµï¿½ï¿½ï¿½6380
 void TestRedis() {
-    // Á¬½ÓRedis·þÎñÆ÷£¨Ä¬ÈÏ¶Ë¿Ú¿ÉÄÜ²»Í¬£¬ÐèÒª¼ì²éÅäÖÃ£©
-    // RedisÄ¬ÈÏ¼àÌý¶Ë¿ÚÎª6387£¬¿ÉÒÔÔÚÅäÖÃÎÄ¼þÖÐÐÞ¸Ä
+    // ï¿½ï¿½ï¿½ï¿½Redisï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¬ï¿½Ï¶Ë¿Ú¿ï¿½ï¿½Ü²ï¿½Í¬ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã£ï¿½
+    // RedisÄ¬ï¿½Ï¼ï¿½ï¿½ï¿½ï¿½Ë¿ï¿½Îª6387ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½Þ¸ï¿½
     redisContext* c = redisConnect("127.0.0.1", 6380);
     if (c->err)
     {
@@ -42,23 +42,23 @@ void TestRedis() {
     }
     printf("Connect to redisServer Success\n");
 
-    // ½øÐÐRedisÉí·ÝÈÏÖ¤
+    // ï¿½ï¿½ï¿½ï¿½Redisï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¤
     std::string redis_password = "123456";
     redisReply* r = (redisReply*)redisCommand(c, "AUTH %s", redis_password.c_str());
     if (r->type == REDIS_REPLY_ERROR) {
-        printf("RedisÈÏÖ¤Ê§°Ü£¡\n");
+        printf("Redisï¿½ï¿½Ö¤Ê§ï¿½Ü£ï¿½\n");
     }
     else {
-        printf("RedisÈÏÖ¤³É¹¦£¡\n");
+        printf("Redisï¿½ï¿½Ö¤ï¿½É¹ï¿½ï¿½ï¿½\n");
     }
 
-    // ²âÊÔSETÃüÁî£ºÎªRedisÉèÖÃkey-value
+    // ï¿½ï¿½ï¿½ï¿½SETï¿½ï¿½ï¿½î£ºÎªRedisï¿½ï¿½ï¿½ï¿½key-value
     const char* command1 = "set stest1 value1";
 
-    // Ö´ÐÐredisÃüÁîÐÐ
+    // Ö´ï¿½ï¿½redisï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     r = (redisReply*)redisCommand(c, command1);
 
-    // Èç¹û·µ»ØNULLÔòËµÃ÷Ö´ÐÐÊ§°Ü
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½NULLï¿½ï¿½Ëµï¿½ï¿½Ö´ï¿½ï¿½Ê§ï¿½ï¿½
     if (NULL == r)
     {
         printf("Execut command1 failure\n");
@@ -66,7 +66,7 @@ void TestRedis() {
         return;
     }
 
-    // Èç¹ûÖ´ÐÐÊ§°ÜÔòÊÍ·ÅÁ¬½Ó
+    // ï¿½ï¿½ï¿½Ö´ï¿½ï¿½Ê§ï¿½ï¿½ï¿½ï¿½ï¿½Í·ï¿½ï¿½ï¿½ï¿½ï¿½
     if (!(r->type == REDIS_REPLY_STATUS && (strcmp(r->str, "OK") == 0 || strcmp(r->str, "ok") == 0)))
     {
         printf("Failed to execute command[%s]\n", command1);
@@ -75,15 +75,15 @@ void TestRedis() {
         return;
     }
 
-    // Ö´ÐÐ³É¹¦£¬ÊÍ·ÅredisCommandÖ´ÐÐºó·µ»ØµÄredisReplyËùÕ¼ÓÃµÄÄÚ´æ
+    // Ö´ï¿½Ð³É¹ï¿½ï¿½ï¿½ï¿½Í·ï¿½redisCommandÖ´ï¿½Ðºó·µ»Øµï¿½redisReplyï¿½ï¿½Õ¼ï¿½Ãµï¿½ï¿½Ú´ï¿½
     freeReplyObject(r);
     printf("Succeed to execute command[%s]\n", command1);
 
-    // ²âÊÔSTRLENÃüÁî£º»ñÈ¡×Ö·û´®³¤¶È
+    // ï¿½ï¿½ï¿½ï¿½STRLENï¿½ï¿½ï¿½î£ºï¿½ï¿½È¡ï¿½Ö·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     const char* command2 = "strlen stest1";
     r = (redisReply*)redisCommand(c, command2);
 
-    // Èç¹û·µ»ØÀàÐÍ²»ÊÇÕûÐÍÔòÊÍ·ÅÁ¬½Ó
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í·ï¿½ï¿½ï¿½ï¿½ï¿½
     if (r->type != REDIS_REPLY_INTEGER)
     {
         printf("Failed to execute command[%s]\n", command2);
@@ -92,13 +92,13 @@ void TestRedis() {
         return;
     }
 
-    // »ñÈ¡×Ö·û´®³¤¶È
+    // ï¿½ï¿½È¡ï¿½Ö·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     int length = r->integer;
     freeReplyObject(r);
     printf("The length of 'stest1' is %d.\n", length);
     printf("Succeed to execute command[%s]\n", command2);
 
-    // ²âÊÔGETÃüÁî£º»ñÈ¡redis¼üÖµ¶ÔÐÅÏ¢
+    // ï¿½ï¿½ï¿½ï¿½GETï¿½ï¿½ï¿½î£ºï¿½ï¿½È¡redisï¿½ï¿½Öµï¿½ï¿½ï¿½ï¿½Ï¢
     const char* command3 = "get stest1";
     r = (redisReply*)redisCommand(c, command3);
     if (r->type != REDIS_REPLY_STRING)
@@ -112,7 +112,7 @@ void TestRedis() {
     freeReplyObject(r);
     printf("Succeed to execute command[%s]\n", command3);
 
-    // ²âÊÔ»ñÈ¡²»´æÔÚµÄkey
+    // ï¿½ï¿½ï¿½Ô»ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½Úµï¿½key
     const char* command4 = "get stest2";
     r = (redisReply*)redisCommand(c, command4);
     if (r->type != REDIS_REPLY_NIL)
@@ -125,26 +125,26 @@ void TestRedis() {
     freeReplyObject(r);
     printf("Succeed to execute command[%s]\n", command4);
 
-    // ÊÍ·ÅÁ¬½Ó×ÊÔ´
+    // ï¿½Í·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´
     redisFree(c);
 
 }
 
-// ²âÊÔRedis¹ÜÀíÆ÷¹¦ÄÜ
+// ï¿½ï¿½ï¿½ï¿½Redisï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 // 
-// ×÷ÓÃ£º
-//   ²âÊÔRedisMgr·â×°µÄ¸ß²ãRedis²Ù×÷½Ó¿Ú
+// ï¿½ï¿½ï¿½Ã£ï¿½
+//   ï¿½ï¿½ï¿½ï¿½RedisMgrï¿½ï¿½×°ï¿½Ä¸ß²ï¿½Redisï¿½ï¿½ï¿½ï¿½ï¿½Ó¿ï¿½
 // 
-// ÊµÏÖÂß¼­£º
-//   ²âÊÔÒÔÏÂ¹¦ÄÜ£º
-//   1. Set/Get - ¼òµ¥µÄkey-value²Ù×÷
-//   2. HSet/HGet - Hash±í²Ù×÷
-//   3. ExistsKey - ¼ì²ékeyÊÇ·ñ´æÔÚ
-//   4. Del - É¾³ýkey
-//   5. LPush/RPop/LPop - ÁÐ±í²Ù×÷£¨¶ÓÁÐ£©
+// Êµï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½
+//   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â¹ï¿½ï¿½Ü£ï¿½
+//   1. Set/Get - ï¿½òµ¥µï¿½key-valueï¿½ï¿½ï¿½ï¿½
+//   2. HSet/HGet - Hashï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   3. ExistsKey - ï¿½ï¿½ï¿½keyï¿½Ç·ï¿½ï¿½ï¿½ï¿½
+//   4. Del - É¾ï¿½ï¿½key
+//   5. LPush/RPop/LPop - ï¿½Ð±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð£ï¿½
 // 
-// ×¢Òâ£º
-//   Ê¹ÓÃ¶ÏÑÔÈ·±£Ã¿¸ö²Ù×÷¶¼³É¹¦Ö´ÐÐ
+// ×¢ï¿½â£º
+//   Ê¹ï¿½Ã¶ï¿½ï¿½ï¿½È·ï¿½ï¿½Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½É¹ï¿½Ö´ï¿½ï¿½
 void TestRedisMgr() {
 
     assert(RedisMgr::GetInstance()->Set("blogwebsite", "llfc.club"));
@@ -167,32 +167,32 @@ void TestRedisMgr() {
 
 }
 
-// Ö÷º¯Êý£º³ÌÐòÈë¿Ú
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 // 
-// ×÷ÓÃ£º
-//   1. ³õÊ¼»¯MySQLÁ¬½Ó³Ø
-//   2. Æô¶¯HTTP·þÎñÆ÷£¨GateServer£©
+// ï¿½ï¿½ï¿½Ã£ï¿½
+//   1. ï¿½ï¿½Ê¼ï¿½ï¿½MySQLï¿½ï¿½ï¿½Ó³ï¿½
+//   2. ï¿½ï¿½ï¿½ï¿½HTTPï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½GateServerï¿½ï¿½
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ´ÓÅäÖÃÎÄ¼þ¶ÁÈ¡MySQLÁ¬½ÓÐÅÏ¢
-//   2. ³õÊ¼»¯MySQLÁ¬½Ó³Ø£¨10¸öÁ¬½Ó£©
-//   3. ´ÓÅäÖÃÎÄ¼þ¶ÁÈ¡GateServer¶Ë¿Ú
-//   4. ´´½¨io_contextºÍÐÅºÅ´¦ÀíÆ÷£¨´¦ÀíSIGINT¡¢SIGTERM£©
-//   5. ´´½¨HTTP·þÎñÆ÷²¢Æô¶¯
-//   6. ÔËÐÐÊÂ¼þÑ­»·
+// Êµï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½
+//   1. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½È¡MySQLï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢
+//   2. ï¿½ï¿½Ê¼ï¿½ï¿½MySQLï¿½ï¿½ï¿½Ó³Ø£ï¿½10ï¿½ï¿½ï¿½ï¿½ï¿½Ó£ï¿½
+//   3. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½È¡GateServerï¿½Ë¿ï¿½
+//   4. ï¿½ï¿½ï¿½ï¿½io_contextï¿½ï¿½ï¿½ÅºÅ´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½SIGINTï¿½ï¿½SIGTERMï¿½ï¿½
+//   5. ï¿½ï¿½ï¿½ï¿½HTTPï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   6. ï¿½ï¿½ï¿½ï¿½ï¿½Â¼ï¿½Ñ­ï¿½ï¿½
 // 
-// Ö´ÐÐÁ÷³Ì£º
-//   main() -> ¶ÁÈ¡ÅäÖÃ -> ³õÊ¼»¯MySQL³Ø -> ´´½¨HTTP·þÎñÆ÷ -> ÔËÐÐÊÂ¼þÑ­»·
+// Ö´ï¿½ï¿½ï¿½ï¿½ï¿½Ì£ï¿½
+//   main() -> ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ -> ï¿½ï¿½Ê¼ï¿½ï¿½MySQLï¿½ï¿½ -> ï¿½ï¿½ï¿½ï¿½HTTPï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ -> ï¿½ï¿½ï¿½ï¿½ï¿½Â¼ï¿½Ñ­ï¿½ï¿½
 int main()
 {
-    // ²âÊÔº¯Êý£¨ÒÑ×¢ÊÍ£¬ÈçÐèÒª¿ÉÒÔÈ¡Ïû×¢ÊÍ½øÐÐ²âÊÔ£©
+    // ï¿½ï¿½ï¿½Ôºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×¢ï¿½Í£ï¿½ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½È¡ï¿½ï¿½×¢ï¿½Í½ï¿½ï¿½Ð²ï¿½ï¿½Ô£ï¿½
     //TestRedis();
     //TestRedisMgr();
 
-    // »ñÈ¡ÅäÖÃ¹ÜÀíÆ÷µ¥Àý
+    // ï¿½ï¿½È¡ï¿½ï¿½ï¿½Ã¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     auto& gCfgMgr = ConfigMgr::Inst();
 
-    // ´ÓÅäÖÃÎÄ¼þ¶ÁÈ¡MySQLÁ¬½ÓÐÅÏ¢
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½È¡MySQLï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢
     std::string host = gCfgMgr["Mysql"]["Host"];
     std::string port = gCfgMgr["Mysql"]["Port"];
     std::string user = gCfgMgr["Mysql"]["User"];
@@ -202,13 +202,13 @@ int main()
     std::cout << "[main] MySQL config host=" << host << " port=" << port
         << " user=" << user << " schema=" << schema << std::endl;
 
-    // ¹¹½¨MySQLÁ¬½ÓURL
+    // ï¿½ï¿½ï¿½ï¿½MySQLï¿½ï¿½ï¿½ï¿½URL
     std::string url = "tcp://" + host + ":" + port;
 
-    // »ñÈ¡MySQLÁ¬½Ó³Øµ¥Àý²¢³õÊ¼»¯
+    // ï¿½ï¿½È¡MySQLï¿½ï¿½ï¿½Ó³Øµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¼ï¿½ï¿½
     auto pool = MySqlPoolSingleton::GetInstance();
     try {
-        // ³õÊ¼»¯Á¬½Ó³Ø£¬²ÎÊý£ºURL, ÓÃ»§Ãû, ÃÜÂë, Êý¾Ý¿âÃû, Á¬½ÓÊý
+        // ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½Ó³Ø£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½URL, ï¿½Ã»ï¿½ï¿½ï¿½, ï¿½ï¿½ï¿½ï¿½, ï¿½ï¿½ï¿½Ý¿ï¿½ï¿½ï¿½, ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         pool->Init(url, user, passwd, schema, 10);
     }
     catch (const sql::SQLException& e) {
@@ -226,34 +226,34 @@ int main()
         return -1;
     }
 
-    // ´ÓÅäÖÃÎÄ¼þ¶ÁÈ¡GateServer¶Ë¿Ú
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½È¡GateServerï¿½Ë¿ï¿½
     std::string gate_port_str = gCfgMgr["GateServer"]["Port"];
     unsigned short gate_port = atoi(gate_port_str.c_str());
 
     try {
-        // ÉèÖÃHTTP·þÎñÆ÷¶Ë¿Ú£¨8080£©
+        // ï¿½ï¿½ï¿½ï¿½HTTPï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë¿Ú£ï¿½8080ï¿½ï¿½
         unsigned short port = static_cast<unsigned short>(gate_port);
 
-        // ´´½¨IOÉÏÏÂÎÄ£¨1¸öÏß³Ì£©
+        // ï¿½ï¿½ï¿½ï¿½IOï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½1ï¿½ï¿½ï¿½ß³Ì£ï¿½
         net::io_context ioc{ 1 };
 
-        // ´´½¨ÐÅºÅ¼¯´¦ÀíÆ÷£¬´¦ÀíSIGINT£¨Ctrl+C£©ºÍSIGTERMÐÅºÅ
+        // ï¿½ï¿½ï¿½ï¿½ï¿½ÅºÅ¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½SIGINTï¿½ï¿½Ctrl+Cï¿½ï¿½ï¿½ï¿½SIGTERMï¿½Åºï¿½
         boost::asio::signal_set signals(ioc, SIGINT, SIGTERM);
 
-        // Òì²½µÈ´ýÐÅºÅ£¬µ±ÊÕµ½ÐÅºÅÊ±Í£Ö¹IOÉÏÏÂÎÄ
+        // ï¿½ì²½ï¿½È´ï¿½ï¿½ÅºÅ£ï¿½ï¿½ï¿½ï¿½Õµï¿½ï¿½Åºï¿½Ê±Í£Ö¹IOï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         signals.async_wait([&ioc](const boost::system::error_code& error, int signal_number) {
             if (error) {
                 return;
             }
-            // Í£Ö¹ÊÂ¼þÑ­»·£¬ÓÅÑÅµØ¹Ø±Õ·þÎñÆ÷
+            // Í£Ö¹ï¿½Â¼ï¿½Ñ­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÅµØ¹Ø±Õ·ï¿½ï¿½ï¿½ï¿½ï¿½
             ioc.stop();
             });
 
-        // ´´½¨HTTP·þÎñÆ÷²¢Æô¶¯
-        // CServer»á×Ô¶¯¿ªÊ¼½ÓÊÜ¿Í»§¶ËÁ¬½Ó
+        // ï¿½ï¿½ï¿½ï¿½HTTPï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+        // CServerï¿½ï¿½ï¿½Ô¶ï¿½ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½Ü¿Í»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         std::make_shared<CServer>(ioc, port)->Start();
 
-        // ÔËÐÐÊÂ¼þÑ­»·£¨×èÈûÖ±µ½µ÷ÓÃioc.stop()£©
+        // ï¿½ï¿½ï¿½ï¿½ï¿½Â¼ï¿½Ñ­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ioc.stop()ï¿½ï¿½
         ioc.run();
     }
     catch (std::exception& e) {

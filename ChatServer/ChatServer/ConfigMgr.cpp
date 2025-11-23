@@ -2,20 +2,20 @@
 
 std::string ConfigMgr::GetValue(const std::string& section, const std::string& key)
 {
-	// ¼ì²é section ÊÇ·ñ´æÔÚ
+	// ï¿½ï¿½ï¿½ section ï¿½Ç·ï¿½ï¿½ï¿½ï¿½
 	if (_config_map.find(section) == _config_map.end()) {
 		std::cerr << "[ConfigMgr] Section not found: " << section << std::endl;
 		return "";
 	}
 
-	// Ê¹ÓÃ SectionInfo µÄ operator[] »ñÈ¡ key µÄÖµ
+	// Ê¹ï¿½ï¿½ SectionInfo ï¿½ï¿½ operator[] ï¿½ï¿½È¡ key ï¿½ï¿½Öµ
 	return _config_map[section][key];
 }
 
 ConfigMgr::ConfigMgr()
 {
 	boost::filesystem::path current_path = boost::filesystem::current_path();
-	boost::filesystem::path config_path = current_path / "config.ini";
+	boost::filesystem::path config_path = current_path / "config_chat1.ini";
 	std::cout << "Config path: " << config_path << std::endl;
 
 	boost::property_tree::ptree pt;
@@ -35,7 +35,7 @@ ConfigMgr::ConfigMgr()
 		sectionInfo._section_datas = section_config;
 		_config_map[section_name] = sectionInfo;
 
-		// Êä³öËùÓÐµÄsectionºÍkey-value¶Ô  
+		// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ðµï¿½sectionï¿½ï¿½key-valueï¿½ï¿½  
 		for (const auto& section_entry : _config_map) {
 			const std::string& section_name = section_entry.first;
 			SectionInfo section_config = section_entry.second;

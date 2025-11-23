@@ -1,5 +1,5 @@
 #pragma once
-#include <jdbc/cppconn/connection.h>
+#include <cppconn/connection.h>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -11,7 +11,7 @@
 #include <vector>
 #include <string>
 
-// ±£ÁôÔ­À´µÄÏîÄ¿Í·
+// ï¿½ï¿½ï¿½ï¿½Ô­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¿Í·
 #include "const.h"
 #include "data.h"
 
@@ -19,17 +19,17 @@
 class MySqlPool {
 public:
     MySqlPool();
-    // Init ½ÓÊÜ url£¬ÀýÈç "tcp://127.0.0.1:3306"
+    // Init ï¿½ï¿½ï¿½ï¿½ urlï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ "tcp://127.0.0.1:3306"
     void Init(const std::string& url,
         const std::string& user,
         const std::string& pass,
         const std::string& schema,
         int poolSize);
 
-    // ´Ó³Ø×ÓÀïÈ¡Ò»¸öÁ¬½Ó£¨Èç¹ûÃ»ÓÐ£¬¾Í×èÈûµÈ´ý£©
+    // ï¿½Ó³ï¿½ï¿½ï¿½ï¿½ï¿½È¡Ò»ï¿½ï¿½ï¿½ï¿½ï¿½Ó£ï¿½ï¿½ï¿½ï¿½Ã»ï¿½Ð£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È´ï¿½ï¿½ï¿½
     std::unique_ptr<sql::Connection> getConnection();
 
-    // ÓÃÍê°ÑÁ¬½Ó·Å»Ø³Ø×Ó
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó·Å»Ø³ï¿½ï¿½ï¿½
     void returnConnection(std::unique_ptr<sql::Connection> con);
 
     void Close();
@@ -63,11 +63,11 @@ public:
     bool CheckEmail(const std::string& name, const std::string& email);
     bool UpdatePwd(const std::string& name, const std::string& newpwd);
     bool CheckPwd(const std::string& email, const std::string& pwd, UserInfo& userInfo);
-    // ¡¾ÐÂÔö¡¿°´ÓÊÏä¸üÐÂÃÜÂë£¨ÓëÉÏ²ã½Ó¿ÚÆ¥Åä£©
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ë£¨ï¿½ï¿½ï¿½Ï²ï¿½Ó¿ï¿½Æ¥ï¿½ä£©
     bool UpdatePwdByEmail(const std::string& email, const std::string& newpwdPlain);
 
-    // ¡¾ÐÂÔö¡¿ºÃÓÑ/ËÑË÷Ïà¹Ø½Ó¿ÚÉùÃ÷£¨Óë ChatServer ¶ÔÆë£©
-    // ¡¾±ä¸üËµÃ÷¡¿ÎªÖ§³Ö /search_friends µÈ½Ó¿Ú£¬²¹Æë DAO ²ã·½·¨
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø½Ó¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ChatServer ï¿½ï¿½ï¿½ë£©
+    // ï¿½ï¿½ï¿½ï¿½ï¿½Ëµï¿½ï¿½ï¿½ï¿½ÎªÖ§ï¿½ï¿½ /search_friends ï¿½È½Ó¿Ú£ï¿½ï¿½ï¿½ï¿½ï¿½ DAO ï¿½ã·½ï¿½ï¿½
     std::vector<UserInfo> SearchUsers(const std::string& keyword);
     bool AddFriendRequest(int fromUid, int toUid, const std::string& desc);
     std::vector<ApplyInfo> GetFriendRequests(int uid);

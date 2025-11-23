@@ -597,3 +597,29 @@ bool MysqlDao::DeleteChatMessagesByIds(const std::vector<long long>& ids)
         return false;
     }
 }
+
+bool MysqlDao::AckOfflineMessages(int uid, long long max_msg_id)
+{
+    auto con = pool_->getConnection();
+    if (!con) {
+        std::cerr << "[MysqlDao] Failed to get connection from pool." << std::endl;
+        return false;
+    }
+
+    try {
+        std::unique_ptr<sql::PreparedStatement> pstmt(
+            con->prepareStatement("UPDATE messages SET status=1 WHERE to_uid = ? AND id <= ?")
+        );
+        pstmt->setInt(1, uid);
+        pstmt->setInt64(2, max_msg_id);
+        pstmt->executeUpdate();
+
+        pool_->returnConnection(std::move(con));
+        return true;
+    }
+    catch (sql::SQLException& e) {
+        pool_->returnConnection(std::move(con));
+        std::cerr << "[MysqlDao] SQLException in AckOfflineMessages: " << e.what() << std::endl;
+        return false;
+    }
+}

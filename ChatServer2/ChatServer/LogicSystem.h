@@ -11,61 +11,61 @@
 #include"StatusGrpcClient.h"
 #include "CSession.h"
 
-// Ç°ÏòÉùÃ÷
+// å‰å‘å£°æ˜
 class CSession;
 class LogicNode;
 
-// ÏûÏ¢½ÚµãÀàĞÍ¶¨Òå£ºÓÃÓÚ´¦ÀíÏûÏ¢µÄ»Øµ÷º¯Êı
-// ²ÎÊı£º
-//   - session: CSession¶ÔÏó
-//   - msg_id: ÏûÏ¢ID
-//   - msg_data: ÏûÏ¢Êı¾İ
+// æ¶ˆæ¯èŠ‚ç‚¹ç±»å‹å®šä¹‰ï¼šç”¨äºå¤„ç†æ¶ˆæ¯çš„å›è°ƒå‡½æ•°
+// å‚æ•°ï¼š
+//   - session: CSessionå¯¹è±¡
+//   - msg_id: æ¶ˆæ¯ID
+//   - msg_data: æ¶ˆæ¯æ•°æ®
 typedef std::function<void(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data)> FunCallBack;
 
-// LogicSystemÀà£ºÂß¼­ÏµÍ³£¬´¦ÀíÒµÎñÂß¼­
+// LogicSystemç±»ï¼šé€»è¾‘ç³»ç»Ÿï¼Œå¤„ç†ä¸šåŠ¡é€»è¾‘
 // 
-// ×÷ÓÃ£º
-//   1. ½ÓÊÕÍøÂç²ãÍ¶µİµÄÏûÏ¢
-//   2. ÔÚ¶ÀÁ¢µÄ¹¤×÷Ïß³ÌÖĞ´¦ÀíÏûÏ¢
-//   3. ¸ù¾İÏûÏ¢IDµ÷ÓÃ¶ÔÓ¦µÄ´¦Àíº¯Êı
+// ä½œç”¨ï¼š
+//   1. æ¥æ”¶ç½‘ç»œå±‚æŠ•é€’çš„æ¶ˆæ¯
+//   2. åœ¨ç‹¬ç«‹çš„å·¥ä½œçº¿ç¨‹ä¸­å¤„ç†æ¶ˆæ¯
+//   3. æ ¹æ®æ¶ˆæ¯IDè°ƒç”¨å¯¹åº”çš„å¤„ç†å‡½æ•°
 // 
-// Éè¼ÆÄ£Ê½£º
-//   µ¥ÀıÄ£Ê½ - È·±£È«¾ÖÎ¨Ò»µÄÂß¼­ÏµÍ³ÊµÀı
-//   Éú²úÕß-Ïû·ÑÕßÄ£Ê½ - ÍøÂç²ãÉú²úÏûÏ¢£¬¹¤×÷Ïß³ÌÏû·ÑÏûÏ¢
+// è®¾è®¡æ¨¡å¼ï¼š
+//   å•ä¾‹æ¨¡å¼ - ç¡®ä¿å…¨å±€å”¯ä¸€çš„é€»è¾‘ç³»ç»Ÿå®ä¾‹
+//   ç”Ÿäº§è€…-æ¶ˆè´¹è€…æ¨¡å¼ - ç½‘ç»œå±‚ç”Ÿäº§æ¶ˆæ¯ï¼Œå·¥ä½œçº¿ç¨‹æ¶ˆè´¹æ¶ˆæ¯
 // 
-// Ö÷Òª¹¦ÄÜ£º
-//   - ×¢²áºÍµ÷ÓÃÏûÏ¢´¦Àí»Øµ÷º¯Êı
-//   - Òì²½´¦ÀíÏûÏ¢£¨Ê¹ÓÃ¶ÓÁĞºÍÌõ¼ş±äÁ¿£©
-//   - ÓÃ»§µÇÂ¼ÑéÖ¤
+// ä¸»è¦åŠŸèƒ½ï¼š
+//   - æ³¨å†Œå’Œè°ƒç”¨æ¶ˆæ¯å¤„ç†å›è°ƒå‡½æ•°
+//   - å¼‚æ­¥å¤„ç†æ¶ˆæ¯ï¼ˆä½¿ç”¨é˜Ÿåˆ—å’Œæ¡ä»¶å˜é‡ï¼‰
+//   - ç”¨æˆ·ç™»å½•éªŒè¯
 class LogicSystem : public Singleton<LogicSystem>
 {
-    friend class Singleton<LogicSystem>;  // ÔÊĞíSingleton·ÃÎÊË½ÓĞ¹¹Ôìº¯Êı
+    friend class Singleton<LogicSystem>;  // å…è®¸Singletonè®¿é—®ç§æœ‰æ„é€ å‡½æ•°
 public:
-    // Îö¹¹º¯Êı£ºÇåÀí×ÊÔ´
+    // ææ„å‡½æ•°ï¼šæ¸…ç†èµ„æº
     ~LogicSystem();
 
-    // Í¶µİÏûÏ¢µ½¶ÓÁĞ
-    // ²ÎÊı£º
-    //   - msg: ÏûÏ¢½ÚµãÖ¸Õë
-    // ×÷ÓÃ£º
-    //   ½«ÏûÏ¢¼ÓÈëµ½´¦Àí¶ÓÁĞ£¬Í¨Öª¹¤×÷Ïß³Ì´¦Àí
+    // æŠ•é€’æ¶ˆæ¯åˆ°é˜Ÿåˆ—
+    // å‚æ•°ï¼š
+    //   - msg: æ¶ˆæ¯èŠ‚ç‚¹æŒ‡é’ˆ
+    // ä½œç”¨ï¼š
+    //   å°†æ¶ˆæ¯åŠ å…¥åˆ°å¤„ç†é˜Ÿåˆ—ï¼Œé€šçŸ¥å·¥ä½œçº¿ç¨‹å¤„ç†
     void PostMsgToQue(std::shared_ptr<LogicNode> msg);
 
 private:
-    // Ë½ÓĞ¹¹Ôìº¯Êı£º³õÊ¼»¯Âß¼­ÏµÍ³
+    // ç§æœ‰æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–é€»è¾‘ç³»ç»Ÿ
     LogicSystem();
 
-    // ×¢²á»Øµ÷º¯Êı
+    // æ³¨å†Œå›è°ƒå‡½æ•°
     void RegisterCallBacks();
 
-    // ´¦ÀíÏûÏ¢£¨ÔÚ¹¤×÷Ïß³ÌÖĞÔËĞĞ£©
+    // å¤„ç†æ¶ˆæ¯ï¼ˆåœ¨å·¥ä½œçº¿ç¨‹ä¸­è¿è¡Œï¼‰
     void DealMsg();
 
-    // µÇÂ¼´¦Àíº¯Êı
-    // ²ÎÊı£º
-    //   - session: »á»°¶ÔÏó
-    //   - msg_id: ÏûÏ¢ID
-    //   - msg_data: ÏûÏ¢Êı¾İ£¨JSON¸ñÊ½£©
+    // ç™»å½•å¤„ç†å‡½æ•°
+    // å‚æ•°ï¼š
+    //   - session: ä¼šè¯å¯¹è±¡
+    //   - msg_id: æ¶ˆæ¯ID
+    //   - msg_data: æ¶ˆæ¯æ•°æ®ï¼ˆJSONæ ¼å¼ï¼‰
     void LoginHandler(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
 
     void SearchInfo(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
@@ -78,22 +78,23 @@ private:
     void DealChatTextMsg(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
 
     void GetOfflineMsgHandler(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
+    void OfflineMsgAckHandler(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
 
-    // »ñÈ¡ÓÃ»§»ù´¡ĞÅÏ¢
-    // ²ÎÊı£º
-    //   - base_key: »ù´¡¼üÃû
-    //   - uid: ÓÃ»§ID
-    //   - userinfo: Êä³ö²ÎÊı£¬ÓÃ»§ĞÅÏ¢
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // è·å–ç”¨æˆ·åŸºç¡€ä¿¡æ¯
+    // å‚æ•°ï¼š
+    //   - base_key: åŸºç¡€é”®å
+    //   - uid: ç”¨æˆ·ID
+    //   - userinfo: è¾“å‡ºå‚æ•°ï¼Œç”¨æˆ·ä¿¡æ¯
+    // è¿”å›å€¼ï¼š
+    //   æˆåŠŸè¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool GetBaseInfo(std::string base_key, int uid, std::shared_ptr<UserInfo>& userinfo);
 
-    std::queue<std::shared_ptr<LogicNode>> _msg_que;  // ÏûÏ¢¶ÓÁĞ
-    std::mutex _mutex;                                 // »¥³âËø
-    std::condition_variable _consume;                 // Ìõ¼ş±äÁ¿£¨ÓÃÓÚ»½ĞÑ¹¤×÷Ïß³Ì£©
-    std::thread _worker_thread;                       // ¹¤×÷Ïß³Ì
-    bool _b_stop;                                     // Í£Ö¹±êÖ¾
-    std::map<short, FunCallBack> _fun_callbacks;     // »Øµ÷º¯ÊıÓ³Éä±í£¨ÏûÏ¢ID -> ´¦Àíº¯Êı£©
+    std::queue<std::shared_ptr<LogicNode>> _msg_que;  // æ¶ˆæ¯é˜Ÿåˆ—
+    std::mutex _mutex;                                 // äº’æ–¥é”
+    std::condition_variable _consume;                 // æ¡ä»¶å˜é‡ï¼ˆç”¨äºå”¤é†’å·¥ä½œçº¿ç¨‹ï¼‰
+    std::thread _worker_thread;                       // å·¥ä½œçº¿ç¨‹
+    bool _b_stop;                                     // åœæ­¢æ ‡å¿—
+    std::map<short, FunCallBack> _fun_callbacks;     // å›è°ƒå‡½æ•°æ˜ å°„è¡¨ï¼ˆæ¶ˆæ¯ID -> å¤„ç†å‡½æ•°ï¼‰
 };
 
 

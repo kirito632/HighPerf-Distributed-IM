@@ -14,7 +14,7 @@
 #include<boost/filesystem.hpp>
 #include<boost/property_tree/ptree.hpp>
 #include<boost/property_tree/ini_parser.hpp>
-#include <hiredis/hiredis.h> // ÐÞ¸ÄÎªÕýÈ·µÄÂ·¾¶ 
+#include <hiredis/hiredis.h> // ï¿½Þ¸ï¿½Îªï¿½ï¿½È·ï¿½ï¿½Â·ï¿½ï¿½ 
 #include<cassert>
 #include<atomic>
 #include<queue>
@@ -26,11 +26,11 @@ using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
 enum ErrorCodes {
     Success = 0,
-    Error_Json = 1001,           // json½âÎö´íÎó
-    RPCFailed = 1002,           // RPCÇëÇó´íÎó
-    VerifyExpired = 1003,       // ÑéÖ¤ÂëÒÑ¹ýÆÚ
-    VerifyCodeErr = 1004,         // ÑéÖ¤Âë´íÎó
-    UserExist = 1005,       // ÓÃ»§ÒÑ´æÔÚ
+    Error_Json = 1001,           // jsonï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+    RPCFailed = 1002,           // RPCï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+    VerifyExpired = 1003,       // ï¿½ï¿½Ö¤ï¿½ï¿½ï¿½Ñ¹ï¿½ï¿½ï¿½
+    VerifyCodeErr = 1004,         // ï¿½ï¿½Ö¤ï¿½ï¿½ï¿½ï¿½ï¿½
+    UserExist = 1005,       // ï¿½Ã»ï¿½ï¿½Ñ´ï¿½ï¿½ï¿½
     PasswdErr = 1006,
     EmailNotMatch = 1007,
     PasswdUpFailed = 1008,
@@ -38,7 +38,7 @@ enum ErrorCodes {
     RPCGetFailed = 1010,
     UidInvalid = 1011,
     TokenInvalid = 1012,
-    RecipientOffline = 1020       // ÏûÏ¢½ÓÊÕ·½ÀëÏß
+    RecipientOffline = 1020       // ï¿½ï¿½Ï¢ï¿½ï¿½ï¿½Õ·ï¿½ï¿½ï¿½ï¿½ï¿½
 };
 
 enum MSG_IDS {
@@ -55,6 +55,7 @@ enum MSG_IDS {
     ID_TEXT_CHAT_MSG_REQ = 1017,
     ID_TEXT_CHAT_MSG_RSP = 1018,
     ID_NOTIFY_TEXT_CHAT_MSG_REQ = 1019,
+    ID_NOTIFY_TEXT_CHAT_MSG_RSP = 1024,
     ID_GET_OFFLINE_MSG_REQ = 1023,
     // [Cascade Change][FriendNotify] Align with Qt client
     ID_NOTIFY_ADD_FRIEND_REQ = 1021,
@@ -63,7 +64,7 @@ enum MSG_IDS {
 
 class Defer {
 public:
-    // ½ÓÊÜÒ»¸ölambda±í´ïÊ½»òº¯ÊýÖ¸Õë
+    // ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½lambdaï¿½ï¿½ï¿½ï¿½Ê½ï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½
     Defer(std::function<void()> func) :func_(func) {}
 
     ~Defer() {

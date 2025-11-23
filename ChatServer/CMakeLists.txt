@@ -23,6 +23,9 @@ target_link_libraries(chat_server PRIVATE
 
 if(HIREDIS_TARGET)
     target_link_libraries(chat_server PRIVATE ${HIREDIS_TARGET})
+elseif(UNIX)
+    # Linux 下直接链接系统的 hiredis 库
+    target_link_libraries(chat_server PRIVATE hiredis)
 endif()
 
 if(JSONCPP_TARGET)

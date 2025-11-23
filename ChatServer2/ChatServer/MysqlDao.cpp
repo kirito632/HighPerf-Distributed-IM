@@ -25,7 +25,7 @@ int MysqlDao::RegUser(const std::string& name,
 
     try {
         std::unique_ptr<sql::PreparedStatement> stmt(
-            con->prepareStatement("CALL reg_user(?,?,?,@result)")  // ??›¥????
+            con->prepareStatement("CALL reg_user(?,?,?,@result)")  // ??æ´¢????
         );
         stmt->setString(1, name);
         stmt->setString(2, email);
@@ -260,7 +260,7 @@ std::shared_ptr<UserInfo> MysqlDao::GetUserByName(const std::string& name)
     }
 }
 
-// ËÑË÷ÓÃ»§
+// æœç´¢ç”¨æˆ·
 std::vector<UserInfo> MysqlDao::SearchUsers(const std::string& keyword) {
     std::vector<UserInfo> users;
     auto con = pool_->getConnection();
@@ -301,7 +301,7 @@ std::vector<UserInfo> MysqlDao::SearchUsers(const std::string& keyword) {
     return users;
 }
 
-// Ìí¼ÓºÃÓÑÉêÇë
+// æ·»åŠ å¥½å‹ç”³è¯·
 bool MysqlDao::AddFriendRequest(int fromUid, int toUid, const std::string& desc) {
     auto con = pool_->getConnection();
     if (!con) {
@@ -310,7 +310,7 @@ bool MysqlDao::AddFriendRequest(int fromUid, int toUid, const std::string& desc)
     }
 
     try {
-        // ¼ì²éÊÇ·ñÒÑ¾­·¢ËÍ¹ıÉêÇë
+        // æ£€æŸ¥æ˜¯å¦å·²ç»å‘é€è¿‡ç”³è¯·
         std::unique_ptr<sql::PreparedStatement> checkStmt(
             con->prepareStatement("SELECT id FROM friend_requests WHERE from_uid = ? AND to_uid = ? AND status = 0")
         );
@@ -320,10 +320,10 @@ bool MysqlDao::AddFriendRequest(int fromUid, int toUid, const std::string& desc)
 
         if (checkRes->next()) {
             pool_->returnConnection(std::move(con));
-            return false; // ÒÑ¾­·¢ËÍ¹ıÉêÇë
+            return false; // å·²ç»å‘é€è¿‡ç”³è¯·
         }
 
-        // ²åÈëĞÂµÄºÃÓÑÉêÇë
+        // æ’å…¥æ–°çš„å¥½å‹ç”³è¯·
         std::unique_ptr<sql::PreparedStatement> insertStmt(
             con->prepareStatement("INSERT INTO friend_requests (from_uid, to_uid, desc, status, create_time) VALUES (?, ?, ?, 0, NOW())")
         );
@@ -342,7 +342,7 @@ bool MysqlDao::AddFriendRequest(int fromUid, int toUid, const std::string& desc)
     }
 }
 
-// »ñÈ¡ºÃÓÑÉêÇëÁĞ±í
+// è·å–å¥½å‹ç”³è¯·åˆ—è¡¨
 std::vector<ApplyInfo> MysqlDao::GetFriendRequests(int uid) {
     std::vector<ApplyInfo> requests;
     auto con = pool_->getConnection();
@@ -387,7 +387,7 @@ std::vector<ApplyInfo> MysqlDao::GetFriendRequests(int uid) {
     return requests;
 }
 
-// »Ø¸´ºÃÓÑÉêÇë
+// å›å¤å¥½å‹ç”³è¯·
 bool MysqlDao::ReplyFriendRequest(int fromUid, int toUid, bool agree) {
     auto con = pool_->getConnection();
     if (!con) {
@@ -396,7 +396,7 @@ bool MysqlDao::ReplyFriendRequest(int fromUid, int toUid, bool agree) {
     }
 
     try {
-        // ¸üĞÂÉêÇë×´Ì¬
+        // æ›´æ–°ç”³è¯·çŠ¶æ€
         std::unique_ptr<sql::PreparedStatement> updateStmt(
             con->prepareStatement("UPDATE friend_requests SET status = ? WHERE from_uid = ? AND to_uid = ? AND status = 0")
         );
@@ -406,7 +406,7 @@ bool MysqlDao::ReplyFriendRequest(int fromUid, int toUid, bool agree) {
         int updateCount = updateStmt->executeUpdate();
 
         if (updateCount > 0 && agree) {
-            // Èç¹ûÍ¬Òâ£¬Ìí¼ÓºÃÓÑ¹ØÏµ
+            // å¦‚æœåŒæ„ï¼Œæ·»åŠ å¥½å‹å…³ç³»
             std::unique_ptr<sql::PreparedStatement> insertFriendStmt(
                 con->prepareStatement("INSERT INTO friends (uid1, uid2, create_time) VALUES (?, ?, NOW()), (?, ?, NOW())")
             );
@@ -427,7 +427,7 @@ bool MysqlDao::ReplyFriendRequest(int fromUid, int toUid, bool agree) {
     }
 }
 
-// »ñÈ¡ÎÒµÄºÃÓÑÁĞ±í
+// è·å–æˆ‘çš„å¥½å‹åˆ—è¡¨
 std::vector<UserInfo> MysqlDao::GetMyFriends(int uid) {
     std::vector<UserInfo> friends;
     auto con = pool_->getConnection();
@@ -471,7 +471,7 @@ std::vector<UserInfo> MysqlDao::GetMyFriends(int uid) {
     return friends;
 }
 
-// ¼ì²éÊÇ·ñÎªºÃÓÑ
+// æ£€æŸ¥æ˜¯å¦ä¸ºå¥½å‹
 bool MysqlDao::IsFriend(int uid1, int uid2) {
     auto con = pool_->getConnection();
     if (!con) {
@@ -565,6 +565,7 @@ bool MysqlDao::GetUnreadChatMessagesWithIds(int uid, std::vector<long long>& ids
 
 bool MysqlDao::DeleteChatMessagesByIds(const std::vector<long long>& ids)
 {
+    // å†å²ä¿ç•™ï¼šå°†æ¶ˆæ¯æ ‡è®°ä¸ºå·²è¯»ï¼ˆstatus=1ï¼‰ï¼Œè€Œä¸æ˜¯ç‰©ç†åˆ é™¤
     if (ids.empty()) return true;
     auto con = pool_->getConnection();
     if (!con) {
@@ -574,7 +575,7 @@ bool MysqlDao::DeleteChatMessagesByIds(const std::vector<long long>& ids)
 
     try {
         std::ostringstream oss;
-        oss << "DELETE FROM messages WHERE id IN (";
+        oss << "UPDATE messages SET status=1 WHERE id IN (";
         for (size_t i = 0; i < ids.size(); ++i) {
             if (i) oss << ",";
             oss << "?";
@@ -593,6 +594,32 @@ bool MysqlDao::DeleteChatMessagesByIds(const std::vector<long long>& ids)
     catch (sql::SQLException& e) {
         pool_->returnConnection(std::move(con));
         std::cerr << "[MysqlDao] SQLException in DeleteChatMessagesByIds: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool MysqlDao::AckOfflineMessages(int uid, long long max_msg_id)
+{
+    auto con = pool_->getConnection();
+    if (!con) {
+        std::cerr << "[MysqlDao] Failed to get connection from pool." << std::endl;
+        return false;
+    }
+
+    try {
+        std::unique_ptr<sql::PreparedStatement> pstmt(
+            con->prepareStatement("UPDATE messages SET status=1 WHERE to_uid = ? AND id <= ?")
+        );
+        pstmt->setInt(1, uid);
+        pstmt->setInt64(2, max_msg_id);
+        pstmt->executeUpdate();
+
+        pool_->returnConnection(std::move(con));
+        return true;
+    }
+    catch (sql::SQLException& e) {
+        pool_->returnConnection(std::move(con));
+        std::cerr << "[MysqlDao] SQLException in AckOfflineMessages: " << e.what() << std::endl;
         return false;
     }
 }

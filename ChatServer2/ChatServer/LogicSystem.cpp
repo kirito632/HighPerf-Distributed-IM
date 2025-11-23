@@ -2,15 +2,16 @@
 #include "RedisMgr.h"
 #include "MysqlMgr.h"
 #include "UserMgr.h"
+#include "AsyncDBPool.h"
 
 #include "ChatGrpcClient.h"
 
-// Îö¹¹º¯Êı£ºÇåÀí×ÊÔ´
+// ææ„å‡½æ•°ï¼šæ¸…ç†èµ„æº
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ÉèÖÃÍ£Ö¹±êÖ¾
-//   2. Í¨Öª¹¤×÷Ïß³ÌÍË³ö
-//   3. µÈ´ı¹¤×÷Ïß³Ì½áÊø
+// å®ç°é€»è¾‘ï¼š
+//   1. è®¾ç½®åœæ­¢æ ‡å¿—
+//   2. é€šçŸ¥å·¥ä½œçº¿ç¨‹é€€å‡º
+//   3. ç­‰å¾…å·¥ä½œçº¿ç¨‹ç»“æŸ
 LogicSystem::~LogicSystem()
 {
 	_b_stop = true;
@@ -18,42 +19,43 @@ LogicSystem::~LogicSystem()
 	_worker_thread.join();
 }
 
-// Í¶µİÏûÏ¢µ½¶ÓÁĞ
+// æŠ•é€’æ¶ˆæ¯åˆ°é˜Ÿåˆ—
 // 
-// ²ÎÊı£º
-//   - msg: ÏûÏ¢½ÚµãÖ¸Õë
+// å‚æ•°ï¼š
+//   - msg: æ¶ˆæ¯èŠ‚ç‚¹æŒ‡é’ˆ
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ¼ÓËø±£Ö¤Ïß³Ì°²È«
-//   2. ½«ÏûÏ¢¼ÓÈëµ½¶ÓÁĞ
-//   3. Èç¹û¶ÓÁĞÖ»ÓĞÒ»ÌõÏûÏ¢£¬Í¨Öª¹¤×÷Ïß³Ì´¦Àí
+// å®ç°é€»è¾‘ï¼š
+//   1. åŠ é”ä¿è¯çº¿ç¨‹å®‰å…¨
+//   2. å°†æ¶ˆæ¯åŠ å…¥åˆ°é˜Ÿåˆ—
+//   3. å¦‚æœé˜Ÿåˆ—åªæœ‰ä¸€æ¡æ¶ˆæ¯ï¼Œé€šçŸ¥å·¥ä½œçº¿ç¨‹å¤„ç†
 void LogicSystem::PostMsgToQue(std::shared_ptr<LogicNode> msg)
 {
 	std::unique_lock<std::mutex> unique_lk(_mutex);
 	_msg_que.push(msg);
 
-	// Èç¹û¶ÓÁĞÖ»ÓĞÒ»ÌõÏûÏ¢£¬Í¨Öª¹¤×÷Ïß³Ì
+	// å¦‚æœé˜Ÿåˆ—åªæœ‰ä¸€æ¡æ¶ˆæ¯ï¼Œé€šçŸ¥å·¥ä½œçº¿ç¨‹
 	if (_msg_que.size() == 1) {
 		_consume.notify_one();
 	}
 }
 
-// ¹¹Ôìº¯Êı£º³õÊ¼»¯Âß¼­ÏµÍ³
+// æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–é€»è¾‘ç³»ç»Ÿ
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ×¢²á»Øµ÷º¯Êı
-//   2. Æô¶¯¹¤×÷Ïß³Ì
+// å®ç°é€»è¾‘ï¼š
+//   1. æ³¨å†Œå›è°ƒå‡½æ•°
+//   2. å¯åŠ¨å·¥ä½œçº¿ç¨‹
 LogicSystem::LogicSystem() :_b_stop(false) {
 	RegisterCallBacks();
 	_worker_thread = std::thread(&LogicSystem::DealMsg, this);
+	AsyncDBPool::GetInstance()->Init();
 }
 
-// ×¢²á»Øµ÷º¯Êı
+// æ³¨å†Œå›è°ƒå‡½æ•°
 // 
-// ×÷ÓÃ£º
-//   ½«ÏûÏ¢IDºÍ¶ÔÓ¦µÄ´¦Àíº¯Êı½¨Á¢Ó³Éä¹ØÏµ
+// ä½œç”¨ï¼š
+//   å°†æ¶ˆæ¯IDå’Œå¯¹åº”çš„å¤„ç†å‡½æ•°å»ºç«‹æ˜ å°„å…³ç³»
 // 
-// µ±Ç°×¢²áµÄ»Øµ÷£º
+// å½“å‰æ³¨å†Œçš„å›è°ƒï¼š
 //   MSG_CHAT_LOGIN -> LoginHandler
 void LogicSystem::RegisterCallBacks() {
 	_fun_callbacks[MSG_CHAT_LOGIN] = std::bind(&LogicSystem::LoginHandler, this,
@@ -67,20 +69,23 @@ void LogicSystem::RegisterCallBacks() {
 
 	_fun_callbacks[ID_GET_OFFLINE_MSG_REQ] = std::bind(&LogicSystem::GetOfflineMsgHandler, this,
 		std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+
+	_fun_callbacks[ID_NOTIFY_TEXT_CHAT_MSG_RSP] = std::bind(&LogicSystem::OfflineMsgAckHandler, this,
+		std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 }
 
-// µÇÂ¼´¦Àíº¯Êı
+// ç™»å½•å¤„ç†å‡½æ•°
 // 
-// ¹¦ÄÜ£º
-//   ÑéÖ¤ÓÃ»§token£¬»ñÈ¡ÓÃ»§ĞÅÏ¢£¬½¨Á¢»á»°
+// åŠŸèƒ½ï¼š
+//   éªŒè¯ç”¨æˆ·tokenï¼Œè·å–ç”¨æˆ·ä¿¡æ¯ï¼Œå»ºç«‹ä¼šè¯
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ½âÎöJSONÏûÏ¢£¬»ñÈ¡uidºÍtoken
-//   2. ´ÓRedisÑéÖ¤token
-//   3. »ñÈ¡ÓÃ»§»ù´¡ĞÅÏ¢£¨ÓÅÏÈ´ÓRedis»ñÈ¡£¬Ã»ÓĞÔò´ÓMySQL»ñÈ¡£©
-//   4. ¸üĞÂµÇÂ¼¼ÆÊı£¨RedisÖĞµÄLOGIN_COUNT£©
-//   5. ½¨Á¢ÓÃ»§»á»°Ó³Éä£¨UserMgr¡¢CSession¡¢Redis£©
-//   6. ·¢ËÍµÇÂ¼³É¹¦ÏìÓ¦
+// å®ç°é€»è¾‘ï¼š
+//   1. è§£æJSONæ¶ˆæ¯ï¼Œè·å–uidå’Œtoken
+//   2. ä»RediséªŒè¯token
+//   3. è·å–ç”¨æˆ·åŸºç¡€ä¿¡æ¯ï¼ˆä¼˜å…ˆä»Redisè·å–ï¼Œæ²¡æœ‰åˆ™ä»MySQLè·å–ï¼‰
+//   4. æ›´æ–°ç™»å½•è®¡æ•°ï¼ˆRedisä¸­çš„LOGIN_COUNTï¼‰
+//   5. å»ºç«‹ç”¨æˆ·ä¼šè¯æ˜ å°„ï¼ˆUserMgrã€CSessionã€Redisï¼‰
+//   6. å‘é€ç™»å½•æˆåŠŸå“åº”
 void LogicSystem::LoginHandler(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
 	Json::Reader reader;
 	Json::Value root;
@@ -90,7 +95,7 @@ void LogicSystem::LoginHandler(std::shared_ptr<CSession> session, const short& m
 	std::cout << "[LoginHandler] recv uid=" << uid << " token=" << token << std::endl;
 
 	Json::Value rtvalue;
-	// Ğ£Ñé token ÊÇ·ñ´æÔÚÓÚ redis
+	// æ ¡éªŒ token æ˜¯å¦å­˜åœ¨äº redis
 	std::string uid_str = std::to_string(uid);
 	std::string token_key = USERTOKENPREFIX + uid_str;
 	std::string token_value;
@@ -103,7 +108,7 @@ void LogicSystem::LoginHandler(std::shared_ptr<CSession> session, const short& m
 		session->Send(return_str, MSG_CHAT_LOGIN_RSP);
 		return;
 	}
-	// ÑéÖ¤tokenÊÇ·ñÆ¥Åä
+	// éªŒè¯tokenæ˜¯å¦åŒ¹é…
 	if (token_value != token) {
 		rtvalue["error"] = ErrorCodes::TokenInvalid;
 		std::string return_str = rtvalue.toStyledString();
@@ -113,7 +118,7 @@ void LogicSystem::LoginHandler(std::shared_ptr<CSession> session, const short& m
 		return;
 	}
 
-	// token ÑéÖ¤³É¹¦£¬»ñÈ¡ÓÃ»§ĞÅÏ¢
+	// token éªŒè¯æˆåŠŸï¼Œè·å–ç”¨æˆ·ä¿¡æ¯
 	rtvalue["error"] = ErrorCodes::Success;
 
 	std::string base_key = USER_BASE_INFO + uid_str;
@@ -128,7 +133,7 @@ void LogicSystem::LoginHandler(std::shared_ptr<CSession> session, const short& m
 		return;
 	}
 
-	// ÉèÖÃ·µ»ØµÄÓÃ»§ĞÅÏ¢
+	// è®¾ç½®è¿”å›çš„ç”¨æˆ·ä¿¡æ¯
 	rtvalue["uid"] = uid;
 	rtvalue["pwd"] = user_info->pwd;
 	rtvalue["name"] = user_info->name;
@@ -138,11 +143,11 @@ void LogicSystem::LoginHandler(std::shared_ptr<CSession> session, const short& m
 	rtvalue["sex"] = user_info->sex;
 	rtvalue["icon"] = user_info->icon;
 
-	// ¸üĞÂµÇÂ¼¼ÆÊıºÍ×´Ì¬
+	// æ›´æ–°ç™»å½•è®¡æ•°å’ŒçŠ¶æ€
 	auto server_name = ConfigMgr::Inst().GetValue("SelfServer", "Name");
 	std::transform(server_name.begin(), server_name.end(), server_name.begin(), ::tolower);
 
-	// ´ÓRedis¶ÁÈ¡µ±Ç°µÇÂ¼¼ÆÊı²¢¼Ó1
+	// ä»Redisè¯»å–å½“å‰ç™»å½•è®¡æ•°å¹¶åŠ 1
 	auto rd_res = RedisMgr::GetInstance()->HGet(LOGIN_COUNT, server_name);
 	int count = 0;
 	if (!rd_res.empty()) {
@@ -152,13 +157,13 @@ void LogicSystem::LoginHandler(std::shared_ptr<CSession> session, const short& m
 	++count;
 	RedisMgr::GetInstance()->HSet(LOGIN_COUNT, server_name, std::to_string(count));
 
-	// ÔÚ sessionÖĞĞ´Èë ipkey£¬Í¬Ê±ÔÚ session ºÍ UserMgr ½¨Á¢Ó³Éä
+	// åœ¨ sessionä¸­å†™å…¥ ipkeyï¼ŒåŒæ—¶åœ¨ session å’Œ UserMgr å»ºç«‹æ˜ å°„
 	session->SetUserId(uid);
 	std::string ipkey = USERIPPREFIX + uid_str;
 	RedisMgr::GetInstance()->Set(ipkey, server_name);
 	UserMgr::GetInstance()->SetUserSession(uid, session);
 
-	// Í³Ò»·µ»ØÍ³Ò»·¢ËÍ³É¹¦°ü
+	// ç»Ÿä¸€è¿”å›ç»Ÿä¸€å‘é€æˆåŠŸåŒ…
 	std::string return_str = rtvalue.toStyledString();
 	std::cout << "[LoginHandler TEST] send success, uid=" << uid
 		<< " body=" << return_str << " msgid=" << MSG_CHAT_LOGIN_RSP << std::endl;
@@ -204,7 +209,7 @@ void LogicSystem::GetUserByUid(const std::string& uid_str, Json::Value& rtvalue)
 {
 	rtvalue["error"] = ErrorCodes::Success;
 	std::string base_key = USER_BASE_INFO + uid_str;
-	// ÓÅÏÈ²éredisÖĞ²éÑ¯ÓÃ»§ĞÅÏ¢
+	// ä¼˜å…ˆæŸ¥redisä¸­æŸ¥è¯¢ç”¨æˆ·ä¿¡æ¯
 	std::string info_str = "";
 	bool b_base = RedisMgr::GetInstance()->Get(base_key, info_str);
 	if (b_base) {
@@ -233,7 +238,7 @@ void LogicSystem::GetUserByUid(const std::string& uid_str, Json::Value& rtvalue)
 	}
 
 	auto uid = std::stoi(uid_str);
-	// redisÖĞÃ»ÓĞ£¬´Ómysql²éÑ¯
+	// redisä¸­æ²¡æœ‰ï¼Œä»mysqlæŸ¥è¯¢
 	std::shared_ptr<UserInfo> user_info = nullptr;
 	user_info = MysqlMgr::GetInstance()->GetUser(uid);
 	if (user_info == nullptr) {
@@ -241,16 +246,16 @@ void LogicSystem::GetUserByUid(const std::string& uid_str, Json::Value& rtvalue)
 		return;
 	}
 
-	// ½«Êı¾İ¿âÄÚÈİĞ´Èëredis»º´æ
+	// å°†æ•°æ®åº“å†…å®¹å†™å…¥redisç¼“å­˜
 	Json::Value redis_root;
 	redis_root["uid"] = user_info->uid;
 	redis_root["name"] = user_info->name;
 	redis_root["email"] = user_info->email;
 	redis_root["pwd"] = user_info->pwd;
-	redis_root["nick"] = user_info->nick; // ¿ÕÖµ
-	redis_root["desc"] = user_info->desc; // ¿ÕÖµ
+	redis_root["nick"] = user_info->nick; // ç©ºå€¼
+	redis_root["desc"] = user_info->desc; // ç©ºå€¼
 	redis_root["sex"] = user_info->sex;
-	redis_root["icon"] = user_info->icon; // ¿ÕÖµ
+	redis_root["icon"] = user_info->icon; // ç©ºå€¼
 
 	RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
 }
@@ -259,7 +264,7 @@ void LogicSystem::GetUserByName(const std::string& name, Json::Value& rtvalue)
 {
 	rtvalue["error"] = ErrorCodes::Success;
 	std::string base_key = NAME_INFO + name;
-	// ÓÅÏÈ²éredisÖĞ²éÑ¯ÓÃ»§ĞÅÏ¢
+	// ä¼˜å…ˆæŸ¥redisä¸­æŸ¥è¯¢ç”¨æˆ·ä¿¡æ¯
 	std::string info_str = "";
 	bool b_base = RedisMgr::GetInstance()->Get(base_key, info_str);
 	if (b_base) {
@@ -288,7 +293,7 @@ void LogicSystem::GetUserByName(const std::string& name, Json::Value& rtvalue)
 		return;
 	}
 
-	// redisÖĞÃ»ÓĞ£¬´Ómysql²éÑ¯
+	// redisä¸­æ²¡æœ‰ï¼Œä»mysqlæŸ¥è¯¢
 	std::shared_ptr<UserInfo> user_info = nullptr;
 	user_info = MysqlMgr::GetInstance()->GetUserByName(name);
 	if (user_info == nullptr) {
@@ -296,19 +301,19 @@ void LogicSystem::GetUserByName(const std::string& name, Json::Value& rtvalue)
 		return;
 	}
 
-	// ½«Êı¾İ¿âÄÚÈİĞ´Èëredis»º´æ
+	// å°†æ•°æ®åº“å†…å®¹å†™å…¥redisç¼“å­˜
 	Json::Value redis_root;
 	redis_root["uid"] = user_info->uid;
 	redis_root["name"] = user_info->name;
 	redis_root["email"] = user_info->email;
 	redis_root["pwd"] = user_info->pwd;
-	redis_root["nick"] = user_info->nick; // ¿ÕÖµ
-	redis_root["desc"] = user_info->desc; // ¿ÕÖµ
+	redis_root["nick"] = user_info->nick; // ç©ºå€¼
+	redis_root["desc"] = user_info->desc; // ç©ºå€¼
 	redis_root["sex"] = user_info->sex;
 
 	RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
 
-	// ·µ»ØÊı¾İ
+	// è¿”å›æ•°æ®
 	rtvalue["uid"] = user_info->uid;
 	rtvalue["name"] = user_info->name;
 	rtvalue["email"] = user_info->email;
@@ -318,7 +323,7 @@ void LogicSystem::GetUserByName(const std::string& name, Json::Value& rtvalue)
 	rtvalue["desc"] = user_info->desc;
 }
 
-// Õâ¸ö¹¦ÄÜ¸Ğ¾õÖØ¸´ÁË
+// è¿™ä¸ªåŠŸèƒ½æ„Ÿè§‰é‡å¤äº†
 void LogicSystem::AddFriendApply(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data)
 {
 	Json::Reader reader;
@@ -345,7 +350,7 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 	rtvalue["fromuid"] = uid;
 	rtvalue["touid"] = touid;
 
-	// Í³Ò»¹¹ÔìÓÃÓÚÏÂ·¢ºÍ³Ö¾Ã»¯µÄ JSON ÎÄ±¾
+	// ç»Ÿä¸€æ„é€ ç”¨äºä¸‹å‘å’ŒæŒä¹…åŒ–çš„ JSON æ–‡æœ¬
 	std::string notify_str_cache = rtvalue.toStyledString();
 
 	Defer defer([this, &rtvalue, session]() {
@@ -353,13 +358,18 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 		session->Send(return_str, ID_TEXT_CHAT_MSG_RSP);
 		});
 
+	// [Cascade Change][Sync] æ ¸å¿ƒä¿®æ”¹ï¼šå…ˆæŒä¹…åŒ–ï¼Œå†æŠ•é€’ã€‚
+	// æ— è®ºå¯¹æ–¹æ˜¯åœ¨çº¿ã€ç¦»çº¿è¿˜æ˜¯è·¨æœï¼Œå…ˆå°†æ¶ˆæ¯å…¥åº“ (Status=0)ã€‚
+	// è¿™æ ·ä¿è¯äº†æ¶ˆæ¯ä¸ä¸¢å¤±ã€‚å½“å¯¹æ–¹æ”¶åˆ°æ¶ˆæ¯å› ACK æ—¶ï¼Œå†å°†å…¶åˆ é™¤ã€‚
+	AsyncDBPool::GetInstance()->PostTask([uid, touid, notify_str_cache]() {
+		MysqlMgr::GetInstance()->SaveChatMessage(uid, touid, notify_str_cache);
+		});
+
 	std::string to_ip_key = USERIPPREFIX + std::to_string(touid);
 	std::string to_ip_value;
 	bool b_ip = RedisMgr::GetInstance()->Get(to_ip_key, to_ip_value);
 	if (!b_ip) {
-		std::cout << "[TextChat][Route] redis miss key=" << to_ip_key << " -> no route, save to DB as offline" << std::endl;
-		// ¶Ô·½ÎŞÂ·ÓÉ£¬ÅĞ¶¨ÀëÏß£º³Ö¾Ã»¯µ½ MySQL
-		MysqlMgr::GetInstance()->SaveChatMessage(uid, touid, notify_str_cache);
+		std::cout << "[TextChat][Route] redis miss key=" << to_ip_key << " -> no route (msg saved)" << std::endl;
 		return;
 	}
 
@@ -376,12 +386,10 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 			to_sess->Send(notify_str_cache, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
 		}
 		else {
-			// ÓÃ»§ÔÚ±¾»ú£¬µ«ÀëÏß£¬´æÈëRedisÀëÏßÏûÏ¢
+			// ç”¨æˆ·åœ¨æœ¬æœºï¼Œä½†ç¦»çº¿ï¼Œå­˜å…¥Redisç¦»çº¿æ¶ˆæ¯ï¼ˆåŠ é€Ÿæ‹‰å–ï¼‰
 			std::string offline_key = OFFLINE_MSG_PREFIX + std::to_string(touid);
 			RedisMgr::GetInstance()->LPush(offline_key, notify_str_cache);
 			std::cout << "[OfflineMsg] user " << touid << " is offline, saved message to redis key=" << offline_key << std::endl;
-			// Í¬Ê±³Ö¾Ã»¯µ½ MySQL£¬±ÜÃâ Redis ¶ªÊ§µ¼ÖÂÏûÏ¢¶ªÊ§
-			MysqlMgr::GetInstance()->SaveChatMessage(uid, touid, notify_str_cache);
 		}
 		return;
 	}
@@ -402,14 +410,12 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 		<< " msgs=" << arrays.size() << std::endl;
 	auto rsp = ChatGrpcClient::GetInstance()->NotifyTextChatMsg(to_ip_value, text_msg_req);
 
-	// Èç¹ûRPCµ÷ÓÃ³É¹¦£¬µ«ÒµÎñÂß¼­·µ»Ø¶Ô·½ÀëÏß
+	// å¦‚æœRPCè°ƒç”¨æˆåŠŸï¼Œä½†ä¸šåŠ¡é€»è¾‘è¿”å›å¯¹æ–¹ç¦»çº¿
 	if (rsp.error() == ErrorCodes::RecipientOffline) {
 		std::cout << "[TextChat][Route] gRPC target offline, saving to local redis" << std::endl;
-		// ½«ÏûÏ¢´æÈë±¾µØRedisµÄÀëÏßÏûÏ¢¶ÓÁĞ
+		// å°†æ¶ˆæ¯å­˜å…¥æœ¬åœ°Redisçš„ç¦»çº¿æ¶ˆæ¯é˜Ÿåˆ—ï¼ˆåŠ é€Ÿæ‹‰å–ï¼‰
 		std::string offline_key = OFFLINE_MSG_PREFIX + std::to_string(touid);
 		RedisMgr::GetInstance()->LPush(offline_key, notify_str_cache);
-		// Í¬²½Ğ´Èë MySQL£¬±£Ö¤ÖØÆô/¿ç·ş¿ÉÈ¡»Ø
-		MysqlMgr::GetInstance()->SaveChatMessage(uid, touid, notify_str_cache);
 	}
 }
 
@@ -428,47 +434,72 @@ void LogicSystem::GetOfflineMsgHandler(std::shared_ptr<CSession> session, const 
 
 	std::cout << "[OfflineMsg] get " << messages.size() << " offline messages for uid=" << uid << std::endl;
 
-	// ÏÈÏÂ·¢ Redis Ôİ´æµÄÀëÏßÏûÏ¢
-	for (const auto& msg : messages) {
-		session->Send(msg, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
-		std::cout << "[OfflineMsg] sent offline msg to uid=" << uid << " body_len=" << msg.length() << std::endl;
-	}
+	// ä½¿ç”¨ weak_ptr é˜²æ­¢å›è°ƒæ—¶ session å·²é”€æ¯
+	std::weak_ptr<CSession> weak_sess = session;
 
-	// ÔÙ´Ó MySQL »ñÈ¡Î´¶ÁÏûÏ¢²¢ÏÂ·¢£¬ÏÂ·¢ºóÉ¾³ı
-	std::vector<long long> ids;
-	std::vector<std::string> db_payloads;
-	if (MysqlMgr::GetInstance()->GetUnreadChatMessages(uid, ids, db_payloads)) {
-		std::cout << "[OfflineMsg][DB] get " << db_payloads.size() << " unread messages for uid=" << uid << std::endl;
-		for (const auto& payload : db_payloads) {
-			session->Send(payload, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+	// æŠ•é€’å¼‚æ­¥ä»»åŠ¡åˆ° DB çº¿ç¨‹æ± 
+	AsyncDBPool::GetInstance()->PostTask([uid, weak_sess]() {
+		// åœ¨ DB çº¿ç¨‹ä¸­æ‰§è¡Œ
+		std::shared_ptr<CSession> shared_sess = weak_sess.lock();
+		if (!shared_sess) {
+			std::cout << "[OfflineMsg][Async] session expired, abort db query for uid=" << uid << std::endl;
+			return;
 		}
-		if (!ids.empty()) {
-			MysqlMgr::GetInstance()->DeleteChatMessagesByIds(ids);
+
+		std::vector<long long> ids;
+		std::vector<std::string> db_payloads;
+		
+		// é˜»å¡å¼æŸ¥è¯¢ï¼Œä½†ç°åœ¨æ˜¯åœ¨ Worker çº¿ç¨‹ä¸­ï¼Œä¸ä¼šé˜»å¡ä¸» Logic çº¿ç¨‹
+		if (MysqlMgr::GetInstance()->GetUnreadChatMessages(uid, ids, db_payloads)) {
+			std::cout << "[OfflineMsg][Async] get " << db_payloads.size() << " unread messages for uid=" << uid << std::endl;
+			
+			// å‘é€æ¶ˆæ¯ (Session::Send æ˜¯çº¿ç¨‹å®‰å…¨çš„)
+			for (const auto& payload : db_payloads) {
+				shared_sess->Send(payload, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+			}
+			// ç§»é™¤åˆ é™¤é€»è¾‘ï¼Œç­‰å¾…å®¢æˆ·ç«¯ACKç¡®è®¤åå†åˆ é™¤
 		}
-	}
+	});
 }
 
-// »ñÈ¡ÓÃ»§»ù´¡ĞÅÏ¢
+void LogicSystem::OfflineMsgAckHandler(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data)
+{
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	// å®¢æˆ·ç«¯å›åŒ…æ ¼å¼: { "uid": 1001, "max_msg_id": 10005 }
+	int uid = root["uid"].asInt();
+	long long max_msg_id = root["max_msg_id"].asInt64();
+	
+	std::cout << "[OfflineMsg][Ack] recv ack for uid=" << uid << " max_msg_id=" << max_msg_id << std::endl;
+
+	// å¼‚æ­¥æ›´æ–° DB çŠ¶æ€
+	AsyncDBPool::GetInstance()->PostTask([uid, max_msg_id]() {
+		MysqlMgr::GetInstance()->AckOfflineMessages(uid, max_msg_id);
+		});
+}
+
+// è·å–ç”¨æˆ·åŸºç¡€ä¿¡æ¯
 // 
-// ²ÎÊı£º
-//   - base_key: Redis¼üÃû£¨USER_BASE_INFO + uid£©
-//   - uid: ÓÃ»§ID
-//   - userinfo: Êä³ö²ÎÊı£¬ÓÃ»§ĞÅÏ¢
+// å‚æ•°ï¼š
+//   - base_key: Redisé”®åï¼ˆUSER_BASE_INFO + uidï¼‰
+//   - uid: ç”¨æˆ·ID
+//   - userinfo: è¾“å‡ºå‚æ•°ï¼Œç”¨æˆ·ä¿¡æ¯
 // 
-// ·µ»ØÖµ£º
-//   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+// è¿”å›å€¼ï¼š
+//   æˆåŠŸè¿”å›trueï¼Œå¦åˆ™è¿”å›false
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ÏÈ´ÓRedis»ñÈ¡ÓÃ»§ĞÅÏ¢£¨Ìá¸ßĞÔÄÜ£©
-//   2. Èç¹ûRedisÃ»ÓĞ£¬´ÓMySQL²éÑ¯
-//   3. ½«´ÓMySQL²éÑ¯µ½µÄÓÃ»§ĞÅÏ¢Ğ´ÈëRedis£¨»º´æ£©
+// å®ç°é€»è¾‘ï¼š
+//   1. å…ˆä»Redisè·å–ç”¨æˆ·ä¿¡æ¯ï¼ˆæé«˜æ€§èƒ½ï¼‰
+//   2. å¦‚æœRedisæ²¡æœ‰ï¼Œä»MySQLæŸ¥è¯¢
+//   3. å°†ä»MySQLæŸ¥è¯¢åˆ°çš„ç”¨æˆ·ä¿¡æ¯å†™å…¥Redisï¼ˆç¼“å­˜ï¼‰
 bool LogicSystem::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<UserInfo>& userinfo)
 {
-	// ÏÈ²é Redis
+	// å…ˆæŸ¥ Redis
 	std::string info_str = "";
 	bool b_base = RedisMgr::GetInstance()->Get(base_key, info_str);
 	if (b_base) {
-		// RedisÖĞÓĞÊı¾İ£¬½âÎöJSON
+		// Redisä¸­æœ‰æ•°æ®ï¼Œè§£æJSON
 		Json::Reader reader;
 		Json::Value root;
 		reader.parse(info_str, root);
@@ -477,7 +508,7 @@ bool LogicSystem::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<Use
 		userinfo->name = root["name"].asString();
 		userinfo->email = root["email"].asString();
 		userinfo->pwd = root["pwd"].asString();
-		// Ä¬ÈÏÌî³ä×Ö¶Î£¬·ÀÖ¹ JSON È±Ê§×Ö¶Îµ¼ÖÂ´íÎó
+		// é»˜è®¤å¡«å……å­—æ®µï¼Œé˜²æ­¢ JSON ç¼ºå¤±å­—æ®µå¯¼è‡´é”™è¯¯
 		userinfo->nick = root.isMember("nick") ? root["nick"].asString() : "";
 		userinfo->desc = root.isMember("desc") ? root["desc"].asString() : "";
 		userinfo->sex = root.isMember("sex") ? root["sex"].asInt() : 0;
@@ -486,46 +517,46 @@ bool LogicSystem::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<Use
 			<< " user email is " << userinfo->email << " pwd is " << userinfo->pwd << std::endl;
 	}
 	else {
-		// Redis Ã»ÓĞÊı¾İ£¬´Ó MySQL ²éÑ¯
+		// Redis æ²¡æœ‰æ•°æ®ï¼Œä» MySQL æŸ¥è¯¢
 		userinfo = MysqlMgr::GetInstance()->GetUser(uid);
 		if (userinfo == nullptr) {
 			return false;
 		}
 
-		// Ğ´Èë Redis
+		// å†™å…¥ Redis
 		Json::Value redis_root;
 		redis_root["uid"] = userinfo->uid;
 		redis_root["name"] = userinfo->name;
 		redis_root["email"] = userinfo->email;
 		redis_root["pwd"] = userinfo->pwd;
-		redis_root["nick"] = userinfo->nick; // ¿ÕÖµ
-		redis_root["desc"] = userinfo->desc; // ¿ÕÖµ
+		redis_root["nick"] = userinfo->nick; // ç©ºå€¼
+		redis_root["desc"] = userinfo->desc; // ç©ºå€¼
 		redis_root["sex"] = userinfo->sex;   // 0
-		redis_root["icon"] = userinfo->icon; // ¿ÕÖµ
+		redis_root["icon"] = userinfo->icon; // ç©ºå€¼
 		RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
 	}
 	return true;
 }
 
-// ´¦ÀíÏûÏ¢£¨ÔÚ¹¤×÷Ïß³ÌÖĞÔËĞĞ£©
+// å¤„ç†æ¶ˆæ¯ï¼ˆåœ¨å·¥ä½œçº¿ç¨‹ä¸­è¿è¡Œï¼‰
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ÎŞÏŞÑ­»·£¬µÈ´ıÏûÏ¢
-//   2. ¶ÓÁĞÎª¿ÕÇÒÎ´Í£Ö¹Ê±£¬µÈ´ıÌõ¼ş±äÁ¿
-//   3. Èç¹ûÒÑÍ£Ö¹£¬´¦ÀíÍêÊ£ÓàÏûÏ¢ºóÍË³ö
-//   4. ´Ó¶ÓÁĞÖĞÈ¡³öÏûÏ¢£¬¸ù¾İÏûÏ¢ID²éÕÒ»Øµ÷º¯Êı
-//   5. µ÷ÓÃ»Øµ÷º¯Êı´¦ÀíÏûÏ¢
+// å®ç°é€»è¾‘ï¼š
+//   1. æ— é™å¾ªç¯ï¼Œç­‰å¾…æ¶ˆæ¯
+//   2. é˜Ÿåˆ—ä¸ºç©ºä¸”æœªåœæ­¢æ—¶ï¼Œç­‰å¾…æ¡ä»¶å˜é‡
+//   3. å¦‚æœå·²åœæ­¢ï¼Œå¤„ç†å®Œå‰©ä½™æ¶ˆæ¯åé€€å‡º
+//   4. ä»é˜Ÿåˆ—ä¸­å–å‡ºæ¶ˆæ¯ï¼Œæ ¹æ®æ¶ˆæ¯IDæŸ¥æ‰¾å›è°ƒå‡½æ•°
+//   5. è°ƒç”¨å›è°ƒå‡½æ•°å¤„ç†æ¶ˆæ¯
 void LogicSystem::DealMsg()
 {
 	for (;;) {
 		std::unique_lock<std::mutex> unique_lk(_mutex);
 
-		// ÅĞ¶Ï¶ÓÁĞÎª¿Õ£¬µÈ´ıÌõ¼ş±äÁ¿»½ĞÑ
+		// åˆ¤æ–­é˜Ÿåˆ—ä¸ºç©ºï¼Œç­‰å¾…æ¡ä»¶å˜é‡å”¤é†’
 		while (_msg_que.empty() && !_b_stop) {
 			_consume.wait(unique_lk);
 		}
 
-		// ÅĞ¶ÏÏµÍ³Îª¹Ø±Õ×´Ì¬£¬È¡³öÏûÏ¢¶ÓÁĞÖĞµÄËùÓĞÊ£ÓàÊı¾İ£¬´¦ÀíÍêÔÙÍË³öÑ­»·
+		// åˆ¤æ–­ç³»ç»Ÿä¸ºå…³é—­çŠ¶æ€ï¼Œå–å‡ºæ¶ˆæ¯é˜Ÿåˆ—ä¸­çš„æ‰€æœ‰å‰©ä½™æ•°æ®ï¼Œå¤„ç†å®Œå†é€€å‡ºå¾ªç¯
 		if (_b_stop) {
 			while (!_msg_que.empty()) {
 				auto msg_node = _msg_que.front();
@@ -543,7 +574,7 @@ void LogicSystem::DealMsg()
 			break;
 		}
 
-		// Èç¹ûÃ»ÓĞÍ£Ö¹£¬ÇÒÏûÏ¢¶ÓÁĞ²»¿Õ£¬È¡³öÒ»Ìõ´¦Àí
+		// å¦‚æœæ²¡æœ‰åœæ­¢ï¼Œä¸”æ¶ˆæ¯é˜Ÿåˆ—ä¸ç©ºï¼Œå–å‡ºä¸€æ¡å¤„ç†
 		auto msg_node = _msg_que.front();
 		std::cout << "recv msg id is" << msg_node->_recvnode->_msg_id << std::endl;
 

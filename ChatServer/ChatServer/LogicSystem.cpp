@@ -2,6 +2,7 @@
 #include "RedisMgr.h"
 #include "MysqlMgr.h"
 #include "UserMgr.h"
+#include "AsyncDBPool.h"
 
 #include "ChatGrpcClient.h"
 
@@ -46,6 +47,7 @@ void LogicSystem::PostMsgToQue(std::shared_ptr<LogicNode> msg)
 LogicSystem::LogicSystem() :_b_stop(false) {
 	RegisterCallBacks();
 	_worker_thread = std::thread(&LogicSystem::DealMsg, this);
+	AsyncDBPool::GetInstance()->Init();
 }
 
 // 注册回调函数
@@ -66,6 +68,9 @@ void LogicSystem::RegisterCallBacks() {
 		std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 
 	_fun_callbacks[ID_GET_OFFLINE_MSG_REQ] = std::bind(&LogicSystem::GetOfflineMsgHandler, this,
+		std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+
+	_fun_callbacks[ID_NOTIFY_TEXT_CHAT_MSG_RSP] = std::bind(&LogicSystem::OfflineMsgAckHandler, this,
 		std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 }
 
@@ -353,13 +358,18 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 		session->Send(return_str, ID_TEXT_CHAT_MSG_RSP);
 		});
 
+	// [Cascade Change][Sync] 核心修改：先持久化，再投递。
+	// 无论对方是在线、离线还是跨服，先将消息入库 (Status=0)。
+	// 这样保证了消息不丢失。当对方收到消息回 ACK 时，再将其删除。
+	AsyncDBPool::GetInstance()->PostTask([uid, touid, notify_str_cache]() {
+		MysqlMgr::GetInstance()->SaveChatMessage(uid, touid, notify_str_cache);
+		});
+
 	std::string to_ip_key = USERIPPREFIX + std::to_string(touid);
 	std::string to_ip_value;
 	bool b_ip = RedisMgr::GetInstance()->Get(to_ip_key, to_ip_value);
 	if (!b_ip) {
-		std::cout << "[TextChat][Route] redis miss key=" << to_ip_key << " -> no route, save to DB as offline" << std::endl;
-		// 对方无路由，判定离线：持久化到 MySQL
-		MysqlMgr::GetInstance()->SaveChatMessage(uid, touid, notify_str_cache);
+		std::cout << "[TextChat][Route] redis miss key=" << to_ip_key << " -> no route (msg saved)" << std::endl;
 		return;
 	}
 
@@ -376,12 +386,10 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 			to_sess->Send(notify_str_cache, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
 		}
 		else {
-			// 用户在本机，但离线，存入Redis离线消息
+			// 用户在本机，但离线，存入Redis离线消息（加速拉取）
 			std::string offline_key = OFFLINE_MSG_PREFIX + std::to_string(touid);
 			RedisMgr::GetInstance()->LPush(offline_key, notify_str_cache);
 			std::cout << "[OfflineMsg] user " << touid << " is offline, saved message to redis key=" << offline_key << std::endl;
-			// 同时持久化到 MySQL，避免 Redis 丢失导致消息丢失
-			MysqlMgr::GetInstance()->SaveChatMessage(uid, touid, notify_str_cache);
 		}
 		return;
 	}
@@ -405,11 +413,9 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 	// 如果RPC调用成功，但业务逻辑返回对方离线
 	if (rsp.error() == ErrorCodes::RecipientOffline) {
 		std::cout << "[TextChat][Route] gRPC target offline, saving to local redis" << std::endl;
-		// 将消息存入本地Redis的离线消息队列
+		// 将消息存入本地Redis的离线消息队列（加速拉取）
 		std::string offline_key = OFFLINE_MSG_PREFIX + std::to_string(touid);
 		RedisMgr::GetInstance()->LPush(offline_key, notify_str_cache);
-		// 同步写入 MySQL，保证重启/跨服可取回
-		MysqlMgr::GetInstance()->SaveChatMessage(uid, touid, notify_str_cache);
 	}
 }
 
@@ -428,19 +434,49 @@ void LogicSystem::GetOfflineMsgHandler(std::shared_ptr<CSession> session, const 
 
 	std::cout << "[OfflineMsg] get " << messages.size() << " offline messages for uid=" << uid << std::endl;
 
+	// 使用 weak_ptr 防止回调时 session 已销毁
+	std::weak_ptr<CSession> weak_sess = session;
 
-	// 再从 MySQL 获取未读消息并下发，下发后删除
-	std::vector<long long> ids;
-	std::vector<std::string> db_payloads;
-	if (MysqlMgr::GetInstance()->GetUnreadChatMessages(uid, ids, db_payloads)) {
-		std::cout << "[OfflineMsg][DB] get " << db_payloads.size() << " unread messages for uid=" << uid << std::endl;
-		for (const auto& payload : db_payloads) {
-			session->Send(payload, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+	// 投递异步任务到 DB 线程池
+	AsyncDBPool::GetInstance()->PostTask([uid, weak_sess]() {
+		// 在 DB 线程中执行
+		std::shared_ptr<CSession> shared_sess = weak_sess.lock();
+		if (!shared_sess) {
+			std::cout << "[OfflineMsg][Async] session expired, abort db query for uid=" << uid << std::endl;
+			return;
 		}
-		if (!ids.empty()) {
-			MysqlMgr::GetInstance()->DeleteChatMessagesByIds(ids);
+
+		std::vector<long long> ids;
+		std::vector<std::string> db_payloads;
+		
+		// 阻塞式查询，但现在是在 Worker 线程中，不会阻塞主 Logic 线程
+		if (MysqlMgr::GetInstance()->GetUnreadChatMessages(uid, ids, db_payloads)) {
+			std::cout << "[OfflineMsg][Async] get " << db_payloads.size() << " unread messages for uid=" << uid << std::endl;
+			
+			// 发送消息 (Session::Send 是线程安全的)
+			for (const auto& payload : db_payloads) {
+				shared_sess->Send(payload, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+			}
+			// 移除删除逻辑，等待客户端ACK确认后再删除
 		}
-	}
+	});
+}
+
+void LogicSystem::OfflineMsgAckHandler(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data)
+{
+	Json::Reader reader;
+	Json::Value root;
+	reader.parse(msg_data, root);
+	// 客户端回包格式: { "uid": 1001, "max_msg_id": 10005 }
+	int uid = root["uid"].asInt();
+	long long max_msg_id = root["max_msg_id"].asInt64();
+	
+	std::cout << "[OfflineMsg][Ack] recv ack for uid=" << uid << " max_msg_id=" << max_msg_id << std::endl;
+
+	// 异步更新 DB 状态
+	AsyncDBPool::GetInstance()->PostTask([uid, max_msg_id]() {
+		MysqlMgr::GetInstance()->AckOfflineMessages(uid, max_msg_id);
+		});
 }
 
 // 获取用户基础信息

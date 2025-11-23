@@ -8,6 +8,16 @@ file(GLOB GATE_SRCS
     ${GATESERVER_SRC_DIR}/*.cxx
 )
 
+# 要排除的源文件
+set(GATE_EXCLUDE_SRCS
+    ${GATESERVER_SRC_DIR}/json_reader.cpp
+    ${GATESERVER_SRC_DIR}/json_value.cpp
+    ${GATESERVER_SRC_DIR}/json_writer.cpp
+    ${GATESERVER_SRC_DIR}/connect_test.cpp   # 如果这个只是测试也不需要
+)
+
+list(REMOVE_ITEM GATE_SRCS ${GATE_EXCLUDE_SRCS})
+
 # 可执行文件
 add_executable(gate_server ${GATE_SRCS})
 
@@ -23,6 +33,9 @@ target_link_libraries(gate_server PRIVATE
 
 if(HIREDIS_TARGET)
     target_link_libraries(gate_server PRIVATE ${HIREDIS_TARGET})
+elseif(UNIX)
+    # Linux 下直接链接系统的 hiredis 库
+    target_link_libraries(gate_server PRIVATE hiredis)
 endif()
 
 if(JSONCPP_TARGET)
@@ -36,5 +49,5 @@ elseif(MYSQLCPP_FALLBACK_LIB)
 endif()
 
 if(WIN32)
-    target_link_libraries(chat_server PRIVATE ws2_32)
+    target_link_libraries(gate_server PRIVATE ws2_32)
 endif()

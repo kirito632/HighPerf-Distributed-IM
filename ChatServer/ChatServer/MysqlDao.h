@@ -8,21 +8,21 @@
 #include <memory>
 #include <iostream>
 #include <chrono>
-#include <jdbc/mysql_driver.h>
-#include <jdbc/cppconn/prepared_statement.h>
-#include <jdbc/cppconn/resultset.h>
-#include <jdbc/cppconn/statement.h>
-#include <jdbc/cppconn/exception.h>
+#include <mysql_driver.h>
+#include <cppconn/prepared_statement.h>
+#include <cppconn/resultset.h>
+#include <cppconn/statement.h>
+#include <cppconn/exception.h>
 #include <string>
 #include "data.h"
-/*Êı¾İ¿â·ÃÎÊ²ã£¨DAO  data access object£©*/
+/*æ•°æ®åº“è®¿é—®å±‚ï¼ˆDAO  data access objectï¼‰*/
 
 // ------------------ MySqlPool ------------------
 class MySqlPool {
 public:
     MySqlPool() : poolSize_(0), b_stop_(false) {}
 
-    // Init ½ÓÊÜ url£¬ÀıÈç "tcp://127.0.0.1:3306"
+    // Init æ¥å— urlï¼Œä¾‹å¦‚ "tcp://127.0.0.1:3306"
     void Init(const std::string& url,
         const std::string& user,
         const std::string& pass,
@@ -57,7 +57,7 @@ public:
             throw;
         }
 
-        // ÏÈµ¥´Î³¢ÊÔÁ¬½Ó£¨±ãÓÚ¶¨Î»£©
+        // å…ˆå•æ¬¡å°è¯•è¿æ¥ï¼ˆä¾¿äºå®šä½ï¼‰
         try {
             std::cout << "[MySqlPool] Trying single test connection..." << std::endl;
             std::unique_ptr<sql::Connection> testCon(driver->connect(url_, user_, pass_));
@@ -82,7 +82,7 @@ public:
             throw;
         }
 
-        // Èç¹û test Í¨¹ı£¬Öğ¸ö½¨³Ø£¨Ã¿´Î¶¼ÓĞ try/catch£©
+        // å¦‚æœ test é€šè¿‡ï¼Œé€ä¸ªå»ºæ± ï¼ˆæ¯æ¬¡éƒ½æœ‰ try/catchï¼‰
         for (int i = 0; i < poolSize_; ++i) {
             try {
                 std::unique_ptr<sql::Connection> con(driver->connect(url_, user_, pass_));
@@ -93,7 +93,7 @@ public:
             catch (sql::SQLException& e) {
                 std::cerr << "[MySqlPool] connect #" << i << " failed: " << e.what()
                     << " (err:" << e.getErrorCode() << ", state:" << e.getSQLState() << ")" << std::endl;
-                // ÕâÀïÑ¡Ôñ£º¼ÌĞø³¢ÊÔÊ£ÏÂµÄ£¬»òÖ±½ÓÅ×³ö¡£ÎªÁËÎÈ½¡£¬ÕâÀï¼ÌĞøµ«´òÓ¡´íÎó¡£
+                // è¿™é‡Œé€‰æ‹©ï¼šç»§ç»­å°è¯•å‰©ä¸‹çš„ï¼Œæˆ–ç›´æ¥æŠ›å‡ºã€‚ä¸ºäº†ç¨³å¥ï¼Œè¿™é‡Œç»§ç»­ä½†æ‰“å°é”™è¯¯ã€‚
             }
             catch (const std::exception& e) {
                 std::cerr << "[MySqlPool] connect #" << i << " std::exception: " << e.what() << std::endl;
@@ -106,7 +106,7 @@ public:
         std::cout << "[MySqlPool] Init done, actual pool size = " << pool_.size() << std::endl;
     }
 
-    // ´Ó³Ø×ÓÀïÈ¡Ò»¸öÁ¬½Ó£¨Èç¹ûÃ»ÓĞ£¬¾Í×èÈûµÈ´ı£©
+    // ä»æ± å­é‡Œå–ä¸€ä¸ªè¿æ¥ï¼ˆå¦‚æœæ²¡æœ‰ï¼Œå°±é˜»å¡ç­‰å¾…ï¼‰
     std::unique_ptr<sql::Connection> getConnection() {
         std::unique_lock<std::mutex> lock(mutex_);
         cond_.wait(lock, [this] { return b_stop_ || !pool_.empty(); });
@@ -117,7 +117,7 @@ public:
         return con;
     }
 
-    // ÓÃÍê°ÑÁ¬½Ó·Å»Ø³Ø×Ó
+    // ç”¨å®ŒæŠŠè¿æ¥æ”¾å›æ± å­
     void returnConnection(std::unique_ptr<sql::Connection> con) {
         if (!con) return;
         std::unique_lock<std::mutex> lock(mutex_);
@@ -177,6 +177,7 @@ public:
     bool SaveChatMessage(int fromUid, int toUid, const std::string& payload);
     bool GetUnreadChatMessagesWithIds(int uid, std::vector<long long>& ids, std::vector<std::string>& payloads);
     bool DeleteChatMessagesByIds(const std::vector<long long>& ids);
+    bool AckOfflineMessages(int uid, long long max_msg_id);
 private:
     std::shared_ptr<MySqlPool> pool_;
 };

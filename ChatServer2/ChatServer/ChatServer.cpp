@@ -79,7 +79,7 @@ int main()
 {
     std::cout << "cwd: " << std::filesystem::current_path() << std::endl;
     std::cout << "exe dir: " << getExecutableDir() << std::endl;
-    std::cout << "trying to load config at: " << (std::filesystem::current_path() / "config.ini") << std::endl;
+    std::cout << "trying to load config at: " << (std::filesystem::current_path() / "config_chat2.ini") << std::endl;
 
     auto& cfg = ConfigMgr::Inst();
     auto server_name = cfg["SelfServer"]["Name"];

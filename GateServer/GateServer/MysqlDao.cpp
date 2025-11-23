@@ -7,11 +7,11 @@
 #include <cctype>
 #include <algorithm>
 #include <stdexcept>
-#include <jdbc/mysql_driver.h>
-#include <jdbc/cppconn/prepared_statement.h>
-#include <jdbc/cppconn/resultset.h>
-#include <jdbc/cppconn/statement.h>
-#include <jdbc/cppconn/exception.h>
+#include <mysql_driver.h>
+#include <cppconn/prepared_statement.h>
+#include <cppconn/resultset.h>
+#include <cppconn/statement.h>
+#include <cppconn/exception.h>
 
 MySqlPool::MySqlPool()
     : poolSize_(0), b_stop_(false)
@@ -182,12 +182,12 @@ std::vector<UserInfo> MysqlDao::SearchUsers(const std::string& keyword) {
     Defer d([this, &con]() { pool_->returnConnection(std::move(con)); });
 
     try {
-        // ÏÈ³¢ÊÔ²éÑ¯ÍêÕû×Ö¶Î£¬Èç¹ûÊ§°ÜÔòÖ»²éÑ¯»ù´¡×Ö¶Î
-        // ÕâÑù¿ÉÒÔ¼æÈÝÃ»ÓÐÀ©Õ¹×Ö¶ÎµÄ¾ÉÊý¾Ý¿â±í
+        // ï¿½È³ï¿½ï¿½Ô²ï¿½Ñ¯ï¿½ï¿½ï¿½ï¿½ï¿½Ö¶Î£ï¿½ï¿½ï¿½ï¿½Ê§ï¿½ï¿½ï¿½ï¿½Ö»ï¿½ï¿½Ñ¯ï¿½ï¿½ï¿½ï¿½ï¿½Ö¶ï¿½
+        // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¼ï¿½ï¿½ï¿½Ã»ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½Ö¶ÎµÄ¾ï¿½ï¿½ï¿½ï¿½Ý¿ï¿½ï¿½
         std::string sql;
         bool hasExtendedFields = false;
 
-        // ¼ì²é±íÊÇ·ñÓÐÀ©Õ¹×Ö¶Î£¨Í¨¹ý³¢ÊÔ²éÑ¯À´ÅÐ¶Ï£©
+        // ï¿½ï¿½ï¿½ï¿½ï¿½Ç·ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½Ö¶Î£ï¿½Í¨ï¿½ï¿½ï¿½ï¿½ï¿½Ô²ï¿½Ñ¯ï¿½ï¿½ï¿½Ð¶Ï£ï¿½
         try {
             std::unique_ptr<sql::Statement> checkStmt(con->createStatement());
             std::unique_ptr<sql::ResultSet> checkRes(
@@ -203,17 +203,17 @@ std::vector<UserInfo> MysqlDao::SearchUsers(const std::string& keyword) {
             sql = "SELECT uid, name, email, nick, icon, sex, `desc` FROM user WHERE name LIKE ? OR email LIKE ? LIMIT 20";
         }
         else {
-            // Èç¹û±íÖÐÃ»ÓÐÀ©Õ¹×Ö¶Î£¬Ö»²éÑ¯»ù´¡×Ö¶Î
+            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã»ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½Ö¶Î£ï¿½Ö»ï¿½ï¿½Ñ¯ï¿½ï¿½ï¿½ï¿½ï¿½Ö¶ï¿½
             sql = "SELECT uid, name, email FROM user WHERE name LIKE ? OR email LIKE ? LIMIT 20";
-            std::cout << "[MysqlDao::SearchUsers] ×¢Òâ: Êý¾Ý¿â±íÖÐÈ±ÉÙÀ©Õ¹×Ö¶Î(nick/icon/sex/desc)£¬½«Ê¹ÓÃÄ¬ÈÏÖµ" << std::endl;
+            std::cout << "[MysqlDao::SearchUsers] ×¢ï¿½ï¿½: ï¿½ï¿½ï¿½Ý¿ï¿½ï¿½ï¿½ï¿½È±ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½Ö¶ï¿½(nick/icon/sex/desc)ï¿½ï¿½ï¿½ï¿½Ê¹ï¿½ï¿½Ä¬ï¿½ï¿½Öµ" << std::endl;
         }
 
-        std::cout << "[MysqlDao::SearchUsers] ËÑË÷¹Ø¼ü´Ê: \"" << keyword << "\"" << std::endl;
-        std::cout << "[MysqlDao::SearchUsers] Ö´ÐÐSQL: " << sql << std::endl;
+        std::cout << "[MysqlDao::SearchUsers] ï¿½ï¿½ï¿½ï¿½ï¿½Ø¼ï¿½ï¿½ï¿½: \"" << keyword << "\"" << std::endl;
+        std::cout << "[MysqlDao::SearchUsers] Ö´ï¿½ï¿½SQL: " << sql << std::endl;
 
         std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement(sql));
         std::string pattern = "%" + keyword + "%";
-        std::cout << "[MysqlDao::SearchUsers] ËÑË÷Ä£Ê½: \"" << pattern << "\"" << std::endl;
+        std::cout << "[MysqlDao::SearchUsers] ï¿½ï¿½ï¿½ï¿½Ä£Ê½: \"" << pattern << "\"" << std::endl;
 
         pstmt->setString(1, pattern);
         pstmt->setString(2, pattern);
@@ -226,7 +226,7 @@ std::vector<UserInfo> MysqlDao::SearchUsers(const std::string& keyword) {
             u.name = res->getString("name");
             u.email = res->getString("email");
 
-            // Èç¹ûÓÐÀ©Õ¹×Ö¶Î£¬¶ÁÈ¡ËüÃÇ£»·ñÔòÊ¹ÓÃÄ¬ÈÏÖµ
+            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½Ö¶Î£ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½Ç£ï¿½ï¿½ï¿½ï¿½ï¿½Ê¹ï¿½ï¿½Ä¬ï¿½ï¿½Öµ
             if (hasExtendedFields) {
                 u.nick = res->getString("nick");
                 u.icon = res->getString("icon");
@@ -234,7 +234,7 @@ std::vector<UserInfo> MysqlDao::SearchUsers(const std::string& keyword) {
                 u.desc = res->getString("desc");
             }
             else {
-                // Ê¹ÓÃÄ¬ÈÏÖµ
+                // Ê¹ï¿½ï¿½Ä¬ï¿½ï¿½Öµ
                 u.nick = "";
                 u.icon = "";
                 u.sex = 0;
@@ -243,10 +243,10 @@ std::vector<UserInfo> MysqlDao::SearchUsers(const std::string& keyword) {
 
             users.push_back(u);
             count++;
-            std::cout << "[MysqlDao::SearchUsers] ÕÒµ½ÓÃ»§: uid=" << u.uid
+            std::cout << "[MysqlDao::SearchUsers] ï¿½Òµï¿½ï¿½Ã»ï¿½: uid=" << u.uid
                 << " name=\"" << u.name << "\" email=\"" << u.email << "\"" << std::endl;
         }
-        std::cout << "[MysqlDao::SearchUsers] ×Ü¹²ÕÒµ½ " << count << " ¸öÓÃ»§" << std::endl;
+        std::cout << "[MysqlDao::SearchUsers] ï¿½Ü¹ï¿½ï¿½Òµï¿½ " << count << " ï¿½ï¿½ï¿½Ã»ï¿½" << std::endl;
     }
     catch (sql::SQLException& e) {
         std::cerr << "[MysqlDao::SearchUsers] SQLException: " << e.what() << std::endl;
@@ -347,7 +347,7 @@ bool MysqlDao::ReplyFriendRequest(int fromUid, int toUid, bool agree) {
         int updateCount = updateStmt->executeUpdate();
         if (updateCount <= 0) return false;
 
-        // Í¬²½ÇåÀí¶ÔÏòÈÔ´¦ÓÚ´ý´¦ÀíµÄÉêÇë£¬±ÜÃâ»¥·¢ºó²ÐÁô pending
+        // Í¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´ï¿½ï¿½Ú´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ë£¬ï¿½ï¿½ï¿½â»¥ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ pending
         std::unique_ptr<sql::PreparedStatement> reverseUpdateStmt(
             con->prepareStatement("UPDATE friend_requests SET status = ? WHERE from_uid = ? AND to_uid = ? AND status = 0")
         );
@@ -519,7 +519,7 @@ bool MysqlDao::CheckEmail(const std::string& name, const std::string& email) {
             std::cout << "[MysqlDao] CheckEmail db_email=" << db_email << std::endl;
             return (email == db_email);
         }
-        // ? §Þ ?
+        // ? ï¿½ï¿½ ?
         return false;
     }
     catch (sql::SQLException& e) {
@@ -574,7 +574,7 @@ bool MysqlDao::CheckPwd(const std::string& email, const std::string& pwd, UserIn
 
     try {
         std::unique_ptr<sql::PreparedStatement> pstmt(
-            //      §Ú?   ?  email ?¦Í   ?  
+            //      ï¿½ï¿½?   ?  email ?ï¿½ï¿½   ?  
             con->prepareStatement("SELECT uid, name, email, pwd FROM user WHERE TRIM(LOWER(email)) = LOWER(?)")
         );
         pstmt->setString(1, email);

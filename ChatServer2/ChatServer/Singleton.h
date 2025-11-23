@@ -1,5 +1,6 @@
 #pragma once
-#include<iostream>
+#include <iostream>
+#include <memory>
 template<typename T>
 class Singleton
 {
@@ -10,8 +11,9 @@ protected:
 
 public:
     static std::shared_ptr<T> GetInstance() {
-        //static std::shared_ptr<T> instance = std::make_shared<T>();  // std::make_shared 无法访问私有构造函数，改用 new 可以
-        static std::shared_ptr<T> instance(new T());
+        static std::shared_ptr<T> instance(new T(), [](T* ptr) {
+            delete ptr;
+        });
         return instance;
     }
 

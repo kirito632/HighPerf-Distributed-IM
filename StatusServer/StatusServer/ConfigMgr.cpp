@@ -3,7 +3,7 @@
 ConfigMgr::ConfigMgr()
 {
 	boost::filesystem::path current_path = boost::filesystem::current_path();
-	boost::filesystem::path config_path = current_path / "config.ini";
+	boost::filesystem::path config_path = current_path / "config_status.ini";
 	std::cout << "Config path: " << config_path << std::endl;
 
 	boost::property_tree::ptree pt;
@@ -23,7 +23,7 @@ ConfigMgr::ConfigMgr()
 		sectionInfo._section_datas = section_config;
 		_config_map[section_name] = sectionInfo;
 
-		// Êä³öËùÓÐµÄsectionºÍkey-value¶Ô  
+		// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ðµï¿½sectionï¿½ï¿½key-valueï¿½ï¿½  
 		for (const auto& section_entry : _config_map) {
 			const std::string& section_name = section_entry.first;
 			SectionInfo section_config = section_entry.second;

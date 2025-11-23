@@ -1,15 +1,15 @@
 #include <iostream>
 #include <memory>
-#include <jdbc/mysql_connection.h>
-#include <jdbc/mysql_driver.h>
-#include <jdbc/cppconn/prepared_statement.h>
-#include <jdbc/cppconn/resultset.h>
-#include <jdbc/cppconn/statement.h>
-#include <jdbc/cppconn/exception.h>
+#include <mysql_connection.h>
+#include <mysql_driver.h>
+#include <cppconn/prepared_statement.h>
+#include <cppconn/resultset.h>
+#include <cppconn/statement.h>
+#include <cppconn/exception.h>
 
 int main() {
     try {
-        std::string url = "tcp://127.0.0.1:3306"; // ¸Ä³ÉÄãµÄ host:port
+        std::string url = "tcp://127.0.0.1:3306"; // ï¿½Ä³ï¿½ï¿½ï¿½ï¿½ host:port
         std::string user = "chatuser";
         std::string pass = "123456";
         std::string schema = "chat_system";

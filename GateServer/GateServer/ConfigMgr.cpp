@@ -1,19 +1,19 @@
 #include "ConfigMgr.h"
 
-// ¹¹Ôìº¯Êı£º³õÊ¼»¯ÅäÖÃ¹ÜÀíÆ÷
+// ï¿½ï¿½ï¿½ìº¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½Ã¹ï¿½ï¿½ï¿½ï¿½ï¿½
 // 
-// ×÷ÓÃ£º
-//   ¸ºÔğ¶ÁÈ¡ºÍ½âÎöconfig.iniÅäÖÃÎÄ¼ş£¬½«ÅäÖÃĞÅÏ¢¼ÓÔØµ½ÄÚ´æÖĞµÄÅäÖÃÓ³Éä±í
+// ï¿½ï¿½ï¿½Ã£ï¿½
+//   ï¿½ï¿½ï¿½ï¿½ï¿½È¡ï¿½Í½ï¿½ï¿½ï¿½config.iniï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢ï¿½ï¿½ï¿½Øµï¿½ï¿½Ú´ï¿½ï¿½Ğµï¿½ï¿½ï¿½ï¿½ï¿½Ó³ï¿½ï¿½ï¿½
 // 
-// ÊµÏÖÂß¼­£º
-//   1. »ñÈ¡µ±Ç°¿ÉÖ´ĞĞÎÄ¼şµÄÂ·¾¶
-//   2. ¹¹½¨config.iniÎÄ¼şµÄÍêÕûÂ·¾¶
-//   3. Ê¹ÓÃproperty_tree¶ÁÈ¡INIÎÄ¼ş
-//   4. ±éÀúËùÓĞsectionºÍkey-value¶Ô
-//   5. ½«ÅäÖÃÊı¾İ´æ´¢µ½_config_mapÓ³Éä±íÖĞ
-//   6. ´òÓ¡ËùÓĞÅäÖÃĞÅÏ¢£¨ÓÃÓÚµ÷ÊÔ£©
+// Êµï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½
+//   1. ï¿½ï¿½È¡ï¿½ï¿½Ç°ï¿½ï¿½Ö´ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½Â·ï¿½ï¿½
+//   2. ï¿½ï¿½ï¿½ï¿½config.iniï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â·ï¿½ï¿½
+//   3. Ê¹ï¿½ï¿½property_treeï¿½ï¿½È¡INIï¿½Ä¼ï¿½
+//   4. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½sectionï¿½ï¿½key-valueï¿½ï¿½
+//   5. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½İ´æ´¢ï¿½ï¿½_config_mapÓ³ï¿½ï¿½ï¿½ï¿½ï¿½
+//   6. ï¿½ï¿½Ó¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢ï¿½ï¿½ï¿½ï¿½ï¿½Úµï¿½ï¿½Ô£ï¿½
 // 
-// config.iniÎÄ¼ş¸ñÊ½Ê¾Àı£º
+// config.iniï¿½Ä¼ï¿½ï¿½ï¿½Ê½Ê¾ï¿½ï¿½ï¿½ï¿½
 //   [Section1]
 //   key1=value1
 //   key2=value2
@@ -21,37 +21,37 @@
 //   key3=value3
 ConfigMgr::ConfigMgr()
 {
-    // »ñÈ¡µ±Ç°¿ÉÖ´ĞĞÎÄ¼şËùÔÚµÄÄ¿Â¼Â·¾¶
+    // ï¿½ï¿½È¡ï¿½ï¿½Ç°ï¿½ï¿½Ö´ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½Úµï¿½Ä¿Â¼Â·ï¿½ï¿½
     boost::filesystem::path current_path = boost::filesystem::current_path();
-    // ¹¹½¨config.iniÎÄ¼şµÄÍêÕûÂ·¾¶
-    boost::filesystem::path config_path = current_path / "config.ini";
+    // ï¿½ï¿½ï¿½ï¿½config.iniï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â·ï¿½ï¿½
+    boost::filesystem::path config_path = current_path / "config_gate.ini";
     std::cout << "Config path: " << config_path << std::endl;
 
-    // Ê¹ÓÃproperty_tree¶ÁÈ¡INIÅäÖÃÎÄ¼ş
+    // Ê¹ï¿½ï¿½property_treeï¿½ï¿½È¡INIï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(config_path.string(), pt);
 
-    // ±éÀúËùÓĞsection£¨ÅäÖÃ½Ú£©
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½sectionï¿½ï¿½ï¿½ï¿½ï¿½Ã½Ú£ï¿½
     for (const auto& section_pair : pt) {
-        const ::std::string& section_name = section_pair.first;  // sectionÃû³Æ
-        const boost::property_tree::ptree& section_tree = section_pair.second;  // sectionÄÚÈİ
+        const ::std::string& section_name = section_pair.first;  // sectionï¿½ï¿½ï¿½ï¿½
+        const boost::property_tree::ptree& section_tree = section_pair.second;  // sectionï¿½ï¿½ï¿½ï¿½
 
-        // ´æ´¢¸ÃsectionÏÂµÄËùÓĞkey-value¶Ô
+        // ï¿½æ´¢ï¿½ï¿½sectionï¿½Âµï¿½ï¿½ï¿½ï¿½ï¿½key-valueï¿½ï¿½
         std::map<std::string, std::string> section_config;
-        // ±éÀú¸ÃsectionÏÂµÄËùÓĞkey-value¶Ô
+        // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½sectionï¿½Âµï¿½ï¿½ï¿½ï¿½ï¿½key-valueï¿½ï¿½
         for (const auto& key_value_pair : section_tree) {
-            const std::string& key = key_value_pair.first;  // ÅäÖÃÏîÃû³Æ
-            const std::string& value = key_value_pair.second.get_value<std::string>();  // ÅäÖÃÏîÖµ
-            section_config[key] = value;  // ´æ´¢µ½mapÖĞ
+            const std::string& key = key_value_pair.first;  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+            const std::string& value = key_value_pair.second.get_value<std::string>();  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Öµ
+            section_config[key] = value;  // ï¿½æ´¢ï¿½ï¿½mapï¿½ï¿½
         }
 
-        // ´´½¨SectionInfo¶ÔÏó²¢´æ´¢ÅäÖÃÊı¾İ
+        // ï¿½ï¿½ï¿½ï¿½SectionInfoï¿½ï¿½ï¿½ó²¢´æ´¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         SectionInfo sectionInfo;
         sectionInfo._section_datas = section_config;
-        // ½«sectionºÍÆäÅäÖÃÊı¾İ´æ´¢µ½ÅäÖÃÓ³Éä±í
+        // ï¿½ï¿½sectionï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½İ´æ´¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó³ï¿½ï¿½ï¿½
         _config_map[section_name] = sectionInfo;
 
-        // ´òÓ¡ËùÓĞsectionµÄkey-value£¨ÓÃÓÚµ÷ÊÔ£©
+        // ï¿½ï¿½Ó¡ï¿½ï¿½ï¿½ï¿½sectionï¿½ï¿½key-valueï¿½ï¿½ï¿½ï¿½ï¿½Úµï¿½ï¿½Ô£ï¿½
         for (const auto& section_entry : _config_map) {
             const std::string& section_name = section_entry.first;
             SectionInfo section_config = section_entry.second;

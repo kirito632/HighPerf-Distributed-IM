@@ -73,3 +73,23 @@ bool MysqlMgr::IsFriend(int uid1, int uid2)
 {
     return _dao.IsFriend(uid1, uid2);
 }
+
+bool MysqlMgr::SaveChatMessage(int fromUid, int toUid, const std::string& payload)
+{
+    return _dao.SaveChatMessage(fromUid, toUid, payload);
+}
+
+bool MysqlMgr::GetUnreadChatMessages(int uid, std::vector<long long>& ids, std::vector<std::string>& payloads)
+{
+    return _dao.GetUnreadChatMessagesWithIds(uid, ids, payloads);
+}
+
+bool MysqlMgr::DeleteChatMessagesByIds(const std::vector<long long>& ids)
+{
+    return _dao.DeleteChatMessagesByIds(ids);
+}
+
+bool MysqlMgr::AckOfflineMessages(int uid, long long max_msg_id)
+{
+    return _dao.AckOfflineMessages(uid, max_msg_id);
+}
