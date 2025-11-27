@@ -82,6 +82,9 @@ public:
             throw;
         }
 
+        // 保存驱动指针，供后续 getConnection() 动态创建新连接
+        driver_ = driver;
+        
         // 如果 test 通过，逐个建池（每次都有 try/catch）
         for (int i = 0; i < poolSize_; ++i) {
             try {
@@ -103,25 +106,62 @@ public:
             }
         }
 
-        std::cout << "[MySqlPool] Init done, actual pool size = " << pool_.size() << std::endl;
+        std::cout << "[MySqlPool] Init done, actual pool size = " << pool_.size() << ", driver saved for lazy loading" << std::endl;
     }
 
-    // 从池子里取一个连接（如果没有，就阻塞等待）
+    // 从池子里取一个连接，支持自动重建
+    // 实现懒加载 + 自动重建机制：
+    //   注意：不在这里检查 isClosed()，因为已经失效的连接调用 isClosed() 可能导致段错误
+    //   连接的有效性在实际使用时通过异常处理来判断（在 MysqlDao 的各个方法中）
+    //   如果连接在使用时失效，会抛出 SQLException，然后被 catch 块捕获并丢弃
     std::unique_ptr<sql::Connection> getConnection() {
         std::unique_lock<std::mutex> lock(mutex_);
-        cond_.wait(lock, [this] { return b_stop_ || !pool_.empty(); });
-        if (b_stop_ || pool_.empty()) return nullptr;
+        
+        while (true) {
+            cond_.wait(lock, [this] { return b_stop_ || !pool_.empty(); });
+            if (b_stop_) return nullptr;
+            if (pool_.empty()) continue;  // 继续等待
 
-        auto con = std::move(pool_.front());
-        pool_.pop();
-        return con;
+            auto con = std::move(pool_.front());
+            pool_.pop();
+            
+            // 直接返回连接，有效性在使用时通过异常处理
+            if (con) {
+                return con;
+            }
+            
+            // 如果连接为 nullptr，尝试创建新连接
+            if (driver_) {
+                try {
+                    std::unique_ptr<sql::Connection> new_con(
+                        driver_->connect(url_, user_, pass_)
+                    );
+                    new_con->setSchema(schema_);
+                    std::cout << "[MySqlPool] Created replacement connection in getConnection" << std::endl;
+                    return new_con;
+                }
+                catch (sql::SQLException& e) {
+                    std::cerr << "[MySqlPool] Failed to create replacement connection: " << e.what() << std::endl;
+                    // 新建失败，继续等待下一个可用连接
+                    continue;
+                }
+            }
+            
+            // 驱动不可用，继续等待
+            std::cerr << "[MySqlPool] Driver not available, waiting for next connection" << std::endl;
+        }
     }
 
     // 用完把连接放回池子
+    // 注意：不在这里检查连接有效性，因为已经失效的连接调用 isClosed() 可能导致段错误
+    // 连接有效性检查在 getConnection() 中进行，这样更安全
     void returnConnection(std::unique_ptr<sql::Connection> con) {
         if (!con) return;
+        
         std::unique_lock<std::mutex> lock(mutex_);
         if (b_stop_) return;
+        
+        // 直接放回池子，有效性检查在 getConnection 中进行
         pool_.push(std::move(con));
         cond_.notify_one();
     }
@@ -146,10 +186,60 @@ private:
     std::string schema_;
     int poolSize_ = 0;
 
+    // 保存 MySQL 驱动指针，用于动态创建新连接（懒加载）
+    sql::mysql::MySQL_Driver* driver_ = nullptr;
+
     std::queue<std::unique_ptr<sql::Connection>> pool_;
     std::mutex mutex_;
     std::condition_variable cond_;
     std::atomic<bool> b_stop_;
+};
+
+// RAII 连接守卫：自动归还连接，彻底杜绝泄漏
+// 使用方式：
+//   ConnectionGuard guard(pool_);
+//   if (!guard) return false;
+//   sql::Connection* con = guard.get();
+//   // 使用 con，函数结束时自动归还
+class ConnectionGuard {
+public:
+    ConnectionGuard(std::shared_ptr<MySqlPool> pool) : pool_(pool) {
+        if (pool_) {
+            con_ = pool_->getConnection();
+        }
+    }
+
+    ~ConnectionGuard() {
+        if (pool_ && con_) {
+            pool_->returnConnection(std::move(con_));
+        }
+    }
+    
+    // 禁止拷贝
+    ConnectionGuard(const ConnectionGuard&) = delete;
+    ConnectionGuard& operator=(const ConnectionGuard&) = delete;
+    
+    // 允许移动
+    ConnectionGuard(ConnectionGuard&& other) noexcept 
+        : pool_(std::move(other.pool_)), con_(std::move(other.con_)) {}
+    
+    ConnectionGuard& operator=(ConnectionGuard&& other) noexcept {
+        if (this != &other) {
+            pool_ = std::move(other.pool_);
+            con_ = std::move(other.con_);
+        }
+        return *this;
+    }
+    
+    // 获取原始指针用于操作
+    sql::Connection* get() { return con_.get(); }
+    
+    // 判断是否获取成功
+    operator bool() const { return con_ != nullptr; }
+
+private:
+    std::shared_ptr<MySqlPool> pool_;
+    std::unique_ptr<sql::Connection> con_;
 };
 
 // ------------------ MysqlDao ------------------

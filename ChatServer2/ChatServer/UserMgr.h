@@ -4,7 +4,6 @@
 #include<memory>
 #include<mutex>
 
-// 前向声明
 class CSession;
 
 // UserMgr类：用户管理器
@@ -23,7 +22,6 @@ class UserMgr : public Singleton<UserMgr>
 {
     friend class Singleton<UserMgr>;  // 允许Singleton访问私有构造函数
 public:
-    // 析构函数：清理所有会话
     ~UserMgr();
 
     // 根据用户ID获取会话
@@ -49,10 +47,8 @@ public:
     void RmvUserSession(int uid);
 
 private:
-    // 私有构造函数：单例模式
     UserMgr();
 
-    // 会话互斥锁，保证线程安全
     std::mutex _session_mtx;
 
     // 用户ID到会话的映射表

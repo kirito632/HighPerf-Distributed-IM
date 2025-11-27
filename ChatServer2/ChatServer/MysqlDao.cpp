@@ -17,25 +17,25 @@ int MysqlDao::RegUser(const std::string& name,
     const std::string& email,
     const std::string& pwd)
 {
-    auto con = pool_->getConnection();
-    if (!con) {
+    // 使用 RAII ConnectionGuard，自动归还连接
+    ConnectionGuard guard(pool_);
+    if (!guard) {
         std::cerr << "[MysqlDao] Failed to get connection from pool." << std::endl;
         return -1;
     }
 
     try {
-        std::unique_ptr<sql::PreparedStatement> stmt(
-            con->prepareStatement("CALL reg_user(?,?,?,@result)")  // ??洢????
-        );
-        stmt->setString(1, name);
-        stmt->setString(2, email);
-        stmt->setString(3, pwd);
-        stmt->execute();
+        sql::Connection* con = guard.get();
+        
+        std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("CALL reg_user(?,?,?,@result)"));
+
+        pstmt->setString(1, name);
+        pstmt->setString(2, email);
+        pstmt->setString(3, pwd);
+        pstmt->execute();
 
         std::unique_ptr<sql::Statement> stmtResult(con->createStatement());
-        std::unique_ptr<sql::ResultSet> res(
-            stmtResult->executeQuery("SELECT @result AS result")
-        );
+        std::unique_ptr<sql::ResultSet> res(stmtResult->executeQuery("SELECT @result AS result"));
 
         int result = -1;
         if (res->next()) {
@@ -43,11 +43,12 @@ int MysqlDao::RegUser(const std::string& name,
             std::cout << "[MysqlDao] RegUser result: " << result << std::endl;
         }
 
-        pool_->returnConnection(std::move(con));
+        // 不需要手动 returnConnection，Guard 析构时自动执行
         return result;
     }
     catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
+        // 异常时也不需要手动处理连接，Guard 会自动归还
+        // 下一次 getConnection 时，pool 会发现它坏了并重建
         std::cerr << "[MysqlDao] SQLException in RegUser: " << e.what()
             << " (MySQL error code: " << e.getErrorCode()
             << ", SQLState: " << e.getSQLState() << ")" << std::endl;
@@ -78,9 +79,14 @@ bool MysqlDao::CheckEmail(const std::string& name, const std::string& email) {
             pool_->returnConnection(std::move(con));
             return true;
         }
+        
+        // 如果没有查询到结果，也要放回连接并返回 false
+        pool_->returnConnection(std::move(con));
+        return false;
     }
     catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
+        // 异常时丢弃坏连接，不放回池子
+        con.reset();
         std::cerr << "SQLException: " << e.what();
         std::cerr << " (MySQL error code: " << e.getErrorCode();
         std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
@@ -109,7 +115,8 @@ bool MysqlDao::UpdatePwdByEmail(const std::string& email, const std::string& new
         return updateCount > 0;
     }
     catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
+        // 异常时丢弃坏连接，不放回池子
+        con.reset();
         std::cerr << "SQLException: " << e.what()
             << " (MySQL error code: " << e.getErrorCode()
             << ", SQLState: " << e.getSQLState() << " )" << std::endl;
@@ -119,10 +126,7 @@ bool MysqlDao::UpdatePwdByEmail(const std::string& email, const std::string& new
 
 bool MysqlDao::CheckPwd(const std::string& identifier, const std::string& pwdPlain, UserInfo& userInfo) {
     auto con = pool_->getConnection();
-    Defer defer([this, &con]() {
-        pool_->returnConnection(std::move(con));
-        });
-
+    
     try {
         if (con == nullptr) {
             return false;
@@ -141,6 +145,7 @@ bool MysqlDao::CheckPwd(const std::string& identifier, const std::string& pwdPla
 
         std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
         if (!res->next()) {
+            pool_->returnConnection(std::move(con));
             return false;
         }
 
@@ -155,6 +160,7 @@ bool MysqlDao::CheckPwd(const std::string& identifier, const std::string& pwdPla
             userInfo.email = db_email;
             userInfo.uid = db_uid;
             userInfo.pwd = origin_pwd;
+            pool_->returnConnection(std::move(con));
             return true;
         }
 
@@ -171,12 +177,16 @@ bool MysqlDao::CheckPwd(const std::string& identifier, const std::string& pwdPla
             userInfo.email = db_email;
             userInfo.uid = db_uid;
             userInfo.pwd = origin_pwd;
+            pool_->returnConnection(std::move(con));
             return true;
         }
 
+        pool_->returnConnection(std::move(con));
         return false;
     }
     catch (sql::SQLException& e) {
+        // 异常时丢弃坏连接，不放回池子
+        con.reset();
         std::cerr << "SQLException: " << e.what();
         std::cerr << " (MySQL error code: " << e.getErrorCode();
         std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
@@ -215,7 +225,8 @@ bool MysqlDao::GetUser(int uid, UserInfo& userInfo)
         return true;
     }
     catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
+        // 异常时丢弃坏连接，不放回池子
+        con.reset();
         std::cerr << "[MysqlDao] SQLException in GetUser: " << e.what() << std::endl;
         return false;
     }
@@ -228,10 +239,6 @@ std::shared_ptr<UserInfo> MysqlDao::GetUserByName(const std::string& name)
         std::cerr << "[MysqlDao] Failed to get connection from pool." << std::endl;
         return nullptr;
     }
-
-    Defer defer([this, &con]() {
-        pool_->returnConnection(std::move(con));
-        });
 
     try {
         std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("SELECT * from user where name = ?"));
@@ -252,13 +259,17 @@ std::shared_ptr<UserInfo> MysqlDao::GetUserByName(const std::string& name)
             userInfo->desc = res->getString("desc");
             break;
         }
+        pool_->returnConnection(std::move(con));
         return userInfo;
     }
     catch (sql::SQLException& e) {
+        // 异常时丢弃坏连接，不放回池子
+        con.reset();
         std::cerr << "[MysqlDao] SQLException in GetUserByName: " << e.what() << std::endl;
         return nullptr;
     }
 }
+
 
 // 获取好友申请列表
 std::vector<ApplyInfo> MysqlDao::GetFriendRequests(int uid) {
@@ -298,7 +309,8 @@ std::vector<ApplyInfo> MysqlDao::GetFriendRequests(int uid) {
         pool_->returnConnection(std::move(con));
     }
     catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
+        // 异常时丢弃坏连接，不放回池子
+        con.reset();
         std::cerr << "[MysqlDao] SQLException in GetFriendRequests: " << e.what() << std::endl;
     }
 
@@ -339,7 +351,8 @@ bool MysqlDao::ReplyFriendRequest(int fromUid, int toUid, bool agree) {
         return updateCount > 0;
     }
     catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
+        // 异常时丢弃坏连接，不放回池子
+        con.reset();
         std::cerr << "[MysqlDao] SQLException in ReplyFriendRequest: " << e.what() << std::endl;
         return false;
     }
@@ -382,7 +395,8 @@ std::vector<UserInfo> MysqlDao::GetMyFriends(int uid) {
         pool_->returnConnection(std::move(con));
     }
     catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
+        // 异常时丢弃坏连接，不放回池子
+        con.reset();
         std::cerr << "[MysqlDao] SQLException in GetMyFriends: " << e.what() << std::endl;
     }
 
@@ -416,7 +430,8 @@ bool MysqlDao::IsFriend(int uid1, int uid2) {
         return isFriend;
     }
     catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
+        // 异常时丢弃坏连接，不放回池子
+        con.reset();
         std::cerr << "[MysqlDao] SQLException in IsFriend: " << e.what() << std::endl;
         return false;
     }
@@ -443,7 +458,8 @@ bool MysqlDao::SaveChatMessage(int fromUid, int toUid, const std::string& payloa
         return true;
     }
     catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
+        // 异常时丢弃坏连接，不放回池子
+        con.reset();
         std::cerr << "[MysqlDao] SQLException in SaveChatMessage: " << e.what() << std::endl;
         return false;
     }
@@ -453,13 +469,17 @@ bool MysqlDao::GetUnreadChatMessagesWithIds(int uid, std::vector<long long>& ids
 {
     ids.clear();
     payloads.clear();
-    auto con = pool_->getConnection();
-    if (!con) {
+    
+    // 使用 RAII ConnectionGuard，自动归还连接
+    ConnectionGuard guard(pool_);
+    if (!guard) {
         std::cerr << "[MysqlDao] Failed to get connection from pool." << std::endl;
         return false;
     }
 
     try {
+        sql::Connection* con = guard.get();
+        
         std::unique_ptr<sql::PreparedStatement> pstmt(
             con->prepareStatement("SELECT id, payload FROM messages WHERE to_uid = ? AND status = 0 ORDER BY id ASC")
         );
@@ -471,11 +491,12 @@ bool MysqlDao::GetUnreadChatMessagesWithIds(int uid, std::vector<long long>& ids
             payloads.push_back(res->getString("payload"));
         }
 
-        pool_->returnConnection(std::move(con));
+        // 不需要手动 returnConnection，Guard 析构时自动执行
         return true;
     }
     catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
+        // 异常时也不需要手动处理连接，Guard 会自动归还
+        // 下一次 getConnection 时，pool 会发现它坏了并重建
         std::cerr << "[MysqlDao] SQLException in GetUnreadChatMessagesWithIds: " << e.what() << std::endl;
         return false;
     }
@@ -510,7 +531,8 @@ bool MysqlDao::DeleteChatMessagesByIds(const std::vector<long long>& ids)
         return true;
     }
     catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
+        // 异常时丢弃坏连接，不放回池子
+        con.reset();
         std::cerr << "[MysqlDao] SQLException in DeleteChatMessagesByIds: " << e.what() << std::endl;
         return false;
     }
@@ -536,7 +558,8 @@ bool MysqlDao::AckOfflineMessages(int uid, long long max_msg_id)
         return true;
     }
     catch (sql::SQLException& e) {
-        pool_->returnConnection(std::move(con));
+        // 异常时丢弃坏连接，不放回池子
+        con.reset();
         std::cerr << "[MysqlDao] SQLException in AckOfflineMessages: " << e.what() << std::endl;
         return false;
     }

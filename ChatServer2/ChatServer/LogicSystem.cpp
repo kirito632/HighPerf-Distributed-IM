@@ -61,7 +61,6 @@ void LogicSystem::RegisterCallBacks() {
 	_fun_callbacks[MSG_CHAT_LOGIN] = std::bind(&LogicSystem::LoginHandler, this,
 		std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 
-
 	_fun_callbacks[ID_TEXT_CHAT_MSG_REQ] = std::bind(&LogicSystem::DealChatTextMsg, this,
 		std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 
@@ -196,7 +195,7 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 		session->Send(return_str, ID_TEXT_CHAT_MSG_RSP);
 		});
 
-	// 核心修改：先持久化，再投递。
+	// 先持久化，再投递。
 	// 无论对方是在线、离线还是跨服，先将消息入库 (Status=0)。
 	// 这样保证了消息不丢失。当对方收到消息回 ACK 时，再将其删除。
 	AsyncDBPool::GetInstance()->PostTask([uid, touid, notify_str_cache]() {
@@ -287,15 +286,15 @@ void LogicSystem::GetOfflineMsgHandler(std::shared_ptr<CSession> session, const 
 		std::vector<long long> ids;
 		std::vector<std::string> db_payloads;
 		
+		// 当前逻辑只在返回 true 时下发离线消息；如果 DB 出现异常导致返回 false，
+		// 不会向客户端返回任何错误信息，也没有做重试控制（例如指数退避重试）。
 		// 阻塞式查询，但现在是在 Worker 线程中，不会阻塞主 Logic 线程
 		if (MysqlMgr::GetInstance()->GetUnreadChatMessages(uid, ids, db_payloads)) {
 			std::cout << "[OfflineMsg][Async] get " << db_payloads.size() << " unread messages for uid=" << uid << std::endl;
 			
-			// 发送消息 (Session::Send 是线程安全的)
 			for (const auto& payload : db_payloads) {
 				shared_sess->Send(payload, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
 			}
-			// 移除删除逻辑，等待客户端ACK确认后再删除
 		}
 	});
 }

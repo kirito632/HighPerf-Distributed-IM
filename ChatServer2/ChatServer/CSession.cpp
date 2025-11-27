@@ -99,12 +99,27 @@ void CSession::Send(char* msg, short max_length, short msgid) {
 		return;
 	}
 	auto& msgnode = _send_que.front();
+	short out_msgid = 0;
+	::memcpy(&out_msgid, msgnode->_data, HEAD_ID_LEN);
+	out_msgid = boost::asio::detail::socket_ops::network_to_host_short(out_msgid);
+	short out_len = 0;
+	::memcpy(&out_len, msgnode->_data + HEAD_ID_LEN, HEAD_DATA_LEN);
+	out_len = boost::asio::detail::socket_ops::network_to_host_short(out_len);
+	int uid = _user_uid;
 	auto self = SharedSelf();
 	boost::asio::async_write(
 		_socket,
 		boost::asio::buffer(msgnode->_data, msgnode->_total_len),
 		boost::asio::bind_executor(_strand,
-			[self](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+			[self, out_msgid, out_len, uid](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+				if (!ec) {
+					std::cout << "[TCP][Write] ok uid=" << uid << " msgid=" << out_msgid
+						<< " body_len=" << out_len << " bytes=" << bytes_transferred << std::endl;
+				}
+				else {
+					std::cout << "[TCP][Write] fail uid=" << uid << " msgid=" << out_msgid
+						<< " body_len=" << out_len << " err=" << ec.message() << std::endl;
+				}
 				self->HandleWrite(ec, self);
 			}
 		)
@@ -239,6 +254,7 @@ void CSession::HandleWrite(const boost::system::error_code& error, std::shared_p
 	try {
 		if (!error) {
 			std::lock_guard<std::mutex> lock(_send_lock);
+			//cout << "send data " << _send_que.front()->_data+HEAD_LENGTH << std::endl;
 			_send_que.pop();
 			if (!_send_que.empty()) {
 				auto& msgnode = _send_que.front();
