@@ -4,112 +4,112 @@
 #include <iostream>
 #include <boost/asio.hpp>
 
-// ���������Ϣ����
+// 定义最大消息长度
 #define MAX_LENGTH 1024 * 2
 
-// ������Ϣͷ���ܳ��ȣ�4�ֽڣ�
+// 定义消息头部总长度（4字节）
 #define HEAD_TOTAL_LEN 4
 
-// ������ϢID���ȣ�2�ֽڣ�
+// 定义消息ID长度（2字节）
 #define HEAD_ID_LEN 2
 
-// ������Ϣ���ݳ����ֶγ��ȣ�2�ֽڣ�
+// 定义消息数据长度字段长度（2字节）
 #define HEAD_DATA_LEN 2
 
-// ���������ն��д�С
+// 定义最大接收队列大小
 #define MAX_RECVQUE 10000
-// ��������Ͷ��д�С
+// 定义最大发送队列大小
 #define MAX_SENDQUE 1000
 
 using boost::asio::ip::tcp;
 
-// ǰ������
+// 前向声明
 class LogicSystem;
 class CSession;
 
-// ��Ϣ�ڵ����Ͷ��壺���ڴ�����Ϣ�Ļص�����
-// ������
-//   - session: CSession����
-//   - msg_id: ��ϢID
-//   - msg_data: ��Ϣ����
+// 消息节点类型定义：用于处理消息的回调函数
+// 参数：
+//   - session: CSession对象
+//   - msg_id: 消息ID
+//   - msg_data: 消息数据
 typedef std::function<void(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data)> FunCallBack;
 
-// MsgNode�ࣺ��Ϣ�ڵ�Ļ���
+// MsgNode类：消息节点的基类
 // 
-// ���ã�
-//   �ṩ��Ϣ�洢�Ļ����ṹ��������Ϣ���ݺ����ݳ���
+// 作用：
+//   提供消息存储的基本结构，包含消息数据和数据长度
 // 
-// ʵ���߼���
-//   1. ʹ�ö�̬������ַ�����洢��Ϣ����
-//   2. ���ٵ�ǰ��ʹ�õĳ��Ⱥ��ܳ���
-//   3. �ṩ�����Ϣ�ķ���
+// 实现逻辑：
+//   1. 使用动态分配的字符数组存储消息数据
+//   2. 跟踪当前已使用的长度和总长度
+//   3. 提供清空消息的方法
 class MsgNode
 {
 public:
-    // ���캯����������Ϣ�ڵ�
-    // ������
-    //   - max_len: ��Ϣ��󳤶�
+    // 构造函数：创建消息节点
+    // 参数：
+    //   - max_len: 消息最大长度
     MsgNode(short max_len) :_total_len(max_len), _cur_len(0) {
-        // �����ڴ沢��ʼ��Ϊ0��ĩβ����\0ȷ����ȫ�ԣ�
+        // 分配内存并初始化为0（末尾添加\0确保安全性）
         _data = new char[_total_len + 1]();
         _data[_total_len] = '\0';
     }
 
-    // �����������ͷ��ڴ�
+    // 析构函数：释放内存
     ~MsgNode() {
         //std::cout << "destruct MsgNode" << std::endl;
         delete[] _data;
     }
 
-    // �����Ϣ����
+    // 清空消息内容
     void Clear() {
         ::memset(_data, 0, _total_len);
         _cur_len = 0;
     }
 
-    short _cur_len;      // ��ǰʹ�õĳ���
-    short _total_len;    // �ܳ���
-    char* _data;         // ��Ϣ����ָ��
+    short _cur_len;      // 当前使用的长度
+    short _total_len;    // 总长度
+    char* _data;         // 消息数据指针
 };
 
-// RecvNode�ࣺ������Ϣ�ڵ�
+// RecvNode类：接收消息节点
 // 
-// ���ã�
-//   ��ʾ��������յ�����Ϣ
+// 作用：
+//   表示从网络接收到的消息
 // 
-// �ص㣺
-//   �̳���MsgNode����������ϢID�ֶ�
-//   ����CSession������Ϣʱʹ��
+// 特点：
+//   继承自MsgNode，添加了消息ID字段
+//   用于CSession接收消息时使用
 class RecvNode :public MsgNode {
-    friend class LogicSystem;  // ����LogicSystem����˽�г�Ա
+    friend class LogicSystem;  // 允许LogicSystem访问私有成员
 public:
-    // ���캯��������������Ϣ�ڵ�
-    // ������
-    //   - max_len: ��Ϣ��󳤶�
-    //   - msg_id: ��ϢID
+    // 构造函数：创建接收消息节点
+    // 参数：
+    //   - max_len: 消息最大长度
+    //   - msg_id: 消息ID
     RecvNode(short max_len, short msg_id);
 private:
-    short _msg_id;       // ��ϢID
+    short _msg_id;       // 消息ID
 };
 
-// SendNode�ࣺ������Ϣ�ڵ�
+// SendNode类：发送消息节点
 // 
-// ���ã�
-//   ��ʾҪ���͵��������Ϣ
+// 作用：
+//   表示要发送到网络的消息
 // 
-// �ص㣺
-//   �̳���MsgNode����������ϢID�ֶ�
-//   ��Ϣ��ʽ��[��ϢID(2�ֽ�)][���ݳ���(2�ֽ�)][��������]
+// 特点：
+//   继承自MsgNode，添加了消息ID字段
+//   消息格式：[消息ID(2字节)][数据长度(2字节)][数据内容]
 class SendNode :public MsgNode {
 public:
-    // ���캯��������������Ϣ�ڵ�
-    // ������
-    //   - msg: ��Ϣ����ָ��
-    //   - max_len: ��Ϣ���ݳ���
-    //   - msg_id: ��ϢID
+    // 构造函数：创建发送消息节点
+    // 参数：
+    //   - msg: 消息数据指针
+    //   - max_len: 消息数据长度
+    //   - msg_id: 消息ID
     SendNode(const char* msg, short max_len, short msg_id);
 private:
-    short _msg_id;       // ��ϢID
+    short _msg_id;       // 消息ID
 };
 
 

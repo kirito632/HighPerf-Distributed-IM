@@ -14,7 +14,7 @@
 #include<boost/filesystem.hpp>
 #include<boost/property_tree/ptree.hpp>
 #include<boost/property_tree/ini_parser.hpp>
-#include <hiredis/hiredis.h> // ĞŞ¸ÄÎªÕıÈ·µÄÂ·¾¶ 
+#include <hiredis/hiredis.h> // ä¿®æ”¹ä¸ºæ­£ç¡®çš„è·¯å¾„ 
 #include<cassert>
 #include<atomic>
 #include<queue>
@@ -26,11 +26,11 @@ using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
 enum ErrorCodes {
     Success = 0,
-    Error_Json = 1001,           // json½âÎö´íÎó
-    RPCFailed = 1002,           // RPCÇëÇó´íÎó
-    VerifyExpired = 1003,       // ÑéÖ¤ÂëÒÑ¹ıÆÚ
-    VerifyCodeErr = 1004,         // ÑéÖ¤Âë´íÎó
-    UserExist = 1005,       // ÓÃ»§ÒÑ´æÔÚ
+    Error_Json = 1001,           // jsonè§£æé”™è¯¯
+    RPCFailed = 1002,           // RPCè¯·æ±‚é”™è¯¯
+    VerifyExpired = 1003,       // éªŒè¯ç å·²è¿‡æœŸ
+    VerifyCodeErr = 1004,         // éªŒè¯ç é”™è¯¯
+    UserExist = 1005,       // ç”¨æˆ·å·²å­˜åœ¨
     PasswdErr = 1006,
     EmailNotMatch = 1007,
     PasswdUpFailed = 1008,
@@ -40,7 +40,7 @@ enum ErrorCodes {
 
 class Defer {
 public:
-    // ½ÓÊÜÒ»¸ölambda±í´ïÊ½»òº¯ÊıÖ¸Õë
+    // æ¥å—ä¸€ä¸ªlambdaè¡¨è¾¾å¼æˆ–å‡½æ•°æŒ‡é’ˆ
     Defer(std::function<void()> func) :func_(func) {}
 
     ~Defer() {

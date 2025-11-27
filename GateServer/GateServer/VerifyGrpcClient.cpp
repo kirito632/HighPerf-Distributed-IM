@@ -1,14 +1,14 @@
 #include "VerifyGrpcClient.h"
 #include"ConfigMgr.h"
 
-// ¹¹Ôìº¯Êı£º³õÊ¼»¯VerifyGrpcClient
+// æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–VerifyGrpcClient
 // 
-// ×÷ÓÃ£º
-//   ´ÓÅäÖÃÎÄ¼şÖĞ¶ÁÈ¡VerifyServerµÄÁ¬½ÓĞÅÏ¢£¬´´½¨Á¬½Ó³Ø
+// ä½œç”¨ï¼š
+//   ä»é…ç½®æ–‡ä»¶ä¸­è¯»å–VerifyServerçš„è¿æ¥ä¿¡æ¯ï¼Œåˆ›å»ºè¿æ¥æ± 
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ´ÓÅäÖÃ¹ÜÀíÆ÷»ñÈ¡VerifyServerµÄÁ¬½ÓĞÅÏ¢£¨Ö÷»ú¡¢¶Ë¿Ú£©
-//   2. ´´½¨VerifyServerµÄÁ¬½Ó³Ø£¨Ä¬ÈÏ5¸öÁ¬½Ó£©
+// å®ç°é€»è¾‘ï¼š
+//   1. ä»é…ç½®ç®¡ç†å™¨è·å–VerifyServerçš„è¿æ¥ä¿¡æ¯ï¼ˆä¸»æœºã€ç«¯å£ï¼‰
+//   2. åˆ›å»ºVerifyServerçš„è¿æ¥æ± ï¼ˆé»˜è®¤5ä¸ªè¿æ¥ï¼‰
 VerifyGrpcClient::VerifyGrpcClient() {
     auto& gCfgMgr = ConfigMgr::Inst();
     std::string host = gCfgMgr["VerifyServer"]["Host"];
@@ -16,42 +16,42 @@ VerifyGrpcClient::VerifyGrpcClient() {
     pool_.reset(new RPConPool(5, host, port));
 }
 
-// ¹¹Ôìº¯Êı£º³õÊ¼»¯VerifyServerÁ¬½Ó³Ø
+// æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–VerifyServerè¿æ¥æ± 
 // 
-// ²ÎÊı£º
-//   - poolsize: Á¬½Ó³Ø´óĞ¡
-//   - host: VerifyServerÖ÷»úµØÖ·
-//   - port: VerifyServer¶Ë¿Ú
+// å‚æ•°ï¼š
+//   - poolsize: è¿æ¥æ± å¤§å°
+//   - host: VerifyServerä¸»æœºåœ°å€
+//   - port: VerifyServerç«¯å£
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ±£´æÁ¬½Ó²ÎÊı
-//   2. ´´½¨Ö¸¶¨ÊıÁ¿µÄgRPCÍ¨µÀºÍStub
-//   3. ½«Stub¼ÓÈëÁ¬½Ó³Ø¶ÓÁĞ
+// å®ç°é€»è¾‘ï¼š
+//   1. ä¿å­˜è¿æ¥å‚æ•°
+//   2. åˆ›å»ºæŒ‡å®šæ•°é‡çš„gRPCé€šé“å’ŒStub
+//   3. å°†StubåŠ å…¥è¿æ¥æ± é˜Ÿåˆ—
 RPConPool::RPConPool(size_t poolsize, std::string host, std::string port) :
     _poolsize(poolsize), _host(host), _port(port), b_stop_(false)
 {
-    // ´´½¨Ö¸¶¨ÊıÁ¿µÄgRPCÍ¨µÀºÍStub
+    // åˆ›å»ºæŒ‡å®šæ•°é‡çš„gRPCé€šé“å’ŒStub
     for (size_t i = 0; i < poolsize; ++i) {
-        // ´´½¨gRPCÍ¨µÀ£¨Ê¹ÓÃ²»°²È«Æ¾Ö¤£©
+        // åˆ›å»ºgRPCé€šé“ï¼ˆä½¿ç”¨ä¸å®‰å…¨å‡­è¯ï¼‰
         std::shared_ptr<Channel> channel = grpc::CreateChannel(host + ":" + port,
             grpc::InsecureChannelCredentials());
-        // ´´½¨Stub²¢¼ÓÈëÁ¬½Ó³Ø
+        // åˆ›å»ºStubå¹¶åŠ å…¥è¿æ¥æ± 
         _connections.emplace(VerifyService::NewStub(channel));
     }
 }
 
-// Îö¹¹º¯Êı£ºÇåÀíËùÓĞÁ¬½Ó
+// ææ„å‡½æ•°ï¼šæ¸…ç†æ‰€æœ‰è¿æ¥
 RPConPool::~RPConPool()
 {
     std::lock_guard<std::mutex> lock(_mutex);
     Close();
-    // Çå¿ÕÁ¬½Ó¶ÓÁĞ
+    // æ¸…ç©ºè¿æ¥é˜Ÿåˆ—
     while (!_connections.empty()) {
         _connections.pop();
     }
 }
 
-// ¹Ø±ÕÁ¬½Ó³Ø
+// å…³é—­è¿æ¥æ± 
 void RPConPool::Close()
 {
     b_stop_ = true;
@@ -59,19 +59,19 @@ void RPConPool::Close()
 }
 
 
-// »ñÈ¡Ò»¸öStubÁ¬½Ó
+// è·å–ä¸€ä¸ªStubè¿æ¥
 // 
-// ·µ»ØÖµ£º
-//   ³É¹¦·µ»ØStubÖ¸Õë£¬·ñÔò·µ»Ønullptr
+// è¿”å›å€¼ï¼š
+//   æˆåŠŸè¿”å›StubæŒ‡é’ˆï¼Œå¦åˆ™è¿”å›nullptr
 // 
-// ÊµÏÖÂß¼­£º
-//   1. µÈ´ıÖ±µ½ÓĞ¿ÉÓÃµÄStub»òÒÑÍ£Ö¹
-//   2. ´Ó¶ÓÁĞÖĞÈ¡³öÒ»¸öStub
-//   3. ·µ»ØStub
+// å®ç°é€»è¾‘ï¼š
+//   1. ç­‰å¾…ç›´åˆ°æœ‰å¯ç”¨çš„Stubæˆ–å·²åœæ­¢
+//   2. ä»é˜Ÿåˆ—ä¸­å–å‡ºä¸€ä¸ªStub
+//   3. è¿”å›Stub
 std::unique_ptr<VerifyService::Stub> RPConPool::getConnection()
 {
     std::unique_lock<std::mutex> lock(_mutex);
-    // µÈ´ıÖ±µ½ÓĞ¿ÉÓÃµÄStub»òÒÑÍ£Ö¹
+    // ç­‰å¾…ç›´åˆ°æœ‰å¯ç”¨çš„Stubæˆ–å·²åœæ­¢
     _cv.wait(lock, [this]() {
         if (b_stop_) {
             return true;
@@ -79,13 +79,13 @@ std::unique_ptr<VerifyService::Stub> RPConPool::getConnection()
         return !_connections.empty();
         });
 
-    // Èç¹ûÒÑÍ£Ö¹£¬·µ»Ønullptr
+    // å¦‚æœå·²åœæ­¢ï¼Œè¿”å›nullptr
     if (b_stop_) {
         std::cerr << "[RPConPool] getConnection: pool stopped!" << std::endl;
         return nullptr;
     }
 
-    // ´Ó¶ÓÁĞÖĞÈ¡³öStub
+    // ä»é˜Ÿåˆ—ä¸­å–å‡ºStub
     auto context = std::move(_connections.front());
     _connections.pop();
 
@@ -95,15 +95,15 @@ std::unique_ptr<VerifyService::Stub> RPConPool::getConnection()
     return context;
 }
 
-// ¹é»¹Stubµ½Á¬½Ó³Ø
+// å½’è¿˜Stubåˆ°è¿æ¥æ± 
 // 
-// ²ÎÊı£º
-//   - context: StubÖ¸Õë
+// å‚æ•°ï¼š
+//   - context: StubæŒ‡é’ˆ
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ¼ì²éÁ¬½Ó³ØÊÇ·ñÒÑÍ£Ö¹
-//   2. ½«Stub·Å»Ø¶ÓÁĞ
-//   3. Í¨ÖªµÈ´ıÁ¬½ÓµÄÏß³Ì
+// å®ç°é€»è¾‘ï¼š
+//   1. æ£€æŸ¥è¿æ¥æ± æ˜¯å¦å·²åœæ­¢
+//   2. å°†Stubæ”¾å›é˜Ÿåˆ—
+//   3. é€šçŸ¥ç­‰å¾…è¿æ¥çš„çº¿ç¨‹
 void RPConPool::returnConnection(std::unique_ptr<VerifyService::Stub> context)
 {
     std::lock_guard<std::mutex> lock(_mutex);
@@ -112,11 +112,11 @@ void RPConPool::returnConnection(std::unique_ptr<VerifyService::Stub> context)
         return;
     }
 
-    // ½«Stub·Å»Ø¶ÓÁĞ
+    // å°†Stubæ”¾å›é˜Ÿåˆ—
     _connections.push(std::move(context));
     std::cout << "[RPConPool] Connection returned, pool size = "
         << _connections.size() << std::endl;
 
-    // Í¨ÖªµÈ´ıÁ¬½ÓµÄÏß³Ì
+    // é€šçŸ¥ç­‰å¾…è¿æ¥çš„çº¿ç¨‹
     _cv.notify_one();
 }

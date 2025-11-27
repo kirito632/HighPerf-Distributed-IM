@@ -3,6 +3,8 @@
 #include <QPainter>
 #include <QScrollBar>
 #include <QTimer>
+#include "localdb.h"
+#include "usermgr.h"
 
 // 构造函数：初始化聊天对话框
 // 
@@ -413,6 +415,20 @@ void ChatDialog::setCurrentContact(const QString &contactName, int contactUid)
         m_titleLabel->setText(contactName);
     }
     setWindowTitle(contactName);
+
+    // 加载历史记录
+    clearMessages();
+
+    // 获取最近 50 条
+    auto msgs = LocalDb::GetInstance()->GetHistory(contactUid, 0, 50);
+    int myUid = UserMgr::GetInstance()->GetUid();
+
+    for (const auto& msg : msgs) {
+        bool isSender = (msg.from_uid == myUid);
+        // 这里简单处理：只显示文本消息
+        // 如果你以后支持图片 msg.type == 1，可以在这里 switch case
+        addMessage(msg.content, isSender);
+    }
 }
 
 // addMessage方法：添加文字消息

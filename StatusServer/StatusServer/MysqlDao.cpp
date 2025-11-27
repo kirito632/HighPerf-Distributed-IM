@@ -4,7 +4,7 @@
 using MySqlPoolSingleton = Singleton<MySqlPool>;
 
 MysqlDao::MysqlDao() {
-    pool_ = MySqlPoolSingleton::GetInstance(); // »ñÈ¡µ¥Àı£¬²»ÔÙÖØ¸´´´½¨
+    pool_ = MySqlPoolSingleton::GetInstance(); // è·å–å•ä¾‹ï¼Œä¸å†é‡å¤åˆ›å»º
 }
 
 MysqlDao::~MysqlDao() {
@@ -23,7 +23,7 @@ int MysqlDao::RegUser(const std::string& name,
 
     try {
         std::unique_ptr<sql::PreparedStatement> stmt(
-            con->prepareStatement("CALL reg_user(?,?,?,@result)")  // µ÷ÓÃÊı¾İ¿âÀïµÄ´æ´¢¹ı³Ì
+            con->prepareStatement("CALL reg_user(?,?,?,@result)")  // è°ƒç”¨æ•°æ®åº“é‡Œçš„å­˜å‚¨è¿‡ç¨‹
         );
         stmt->setString(1, name);
         stmt->setString(2, email);
@@ -61,16 +61,16 @@ bool MysqlDao::CheckEmail(const std::string& name, const std::string& email) {
             return false;
         }
 
-        // ×¼±¸²éÑ¯Óï¾ä
+        // å‡†å¤‡æŸ¥è¯¢è¯­å¥
         std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("SELECT email FROM user WHERE name = ?"));
 
-        // °ó¶¨²ÎÊı
+        // ç»‘å®šå‚æ•°
         pstmt->setString(1, name);
 
-        // Ö´ĞĞ²éÑ¯
+        // æ‰§è¡ŒæŸ¥è¯¢
         std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 
-        // ±éÀú½á¹û¼¯
+        // éå†ç»“æœé›†
         while (res->next()) {
             std::cout << "Check Email: " << res->getString("email") << std::endl;
             if (email != res->getString("email")) {
@@ -98,14 +98,14 @@ bool MysqlDao::UpdatePwd(const std::string& name, const std::string& newpwd) {
             return false;
         }
 
-        // ×¼±¸²éÑ¯Óï¾ä
+        // å‡†å¤‡æŸ¥è¯¢è¯­å¥
         std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("UPDATE user SET pwd = ? WHERE name = ?"));
 
-        // °ó¶¨²ÎÊı
+        // ç»‘å®šå‚æ•°
         pstmt->setString(2, name);
         pstmt->setString(1, newpwd);
 
-        // Ö´ĞĞ¸üĞÂ
+        // æ‰§è¡Œæ›´æ–°
         int updateCount = pstmt->executeUpdate();
 
         std::cout << "Updated rows: " << updateCount << std::endl;
@@ -132,17 +132,17 @@ bool MysqlDao::CheckPwd(const std::string& name, const std::string& pwd, UserInf
             return false;
         }
 
-        // ×¼±¸SQLÓï¾ä
+        // å‡†å¤‡SQLè¯­å¥
         std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement("SELECT * FROM user WHERE name = ?"));
-        pstmt->setString(1, name); // ½«usernameÌæ»»ÎªÄãÒª²éÑ¯µÄÓÃ»§Ãû
+        pstmt->setString(1, name); // å°†usernameæ›¿æ¢ä¸ºä½ è¦æŸ¥è¯¢çš„ç”¨æˆ·å
 
-        // Ö´ĞĞ²éÑ¯
+        // æ‰§è¡ŒæŸ¥è¯¢
         std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
         std::string origin_pwd = "";
-        // ±éÀú½á¹û¼¯
+        // éå†ç»“æœé›†
         while (res->next()) {
             origin_pwd = res->getString("pwd");
-            // Êä³ö²éÑ¯µ½µÄÃÜÂë
+            // è¾“å‡ºæŸ¥è¯¢åˆ°çš„å¯†ç 
             std::cout << "Password: " << origin_pwd << std::endl;
             break;
         }

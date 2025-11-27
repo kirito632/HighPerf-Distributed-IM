@@ -42,9 +42,10 @@ enum ReqId{
 
     ID_SEARCH_USER_RSP = 1020,
     ID_NOTIFY_ADD_FRIEND_REQ = 1021,
-    // [Cascade Change] 新增：好友回复结果通知（TCP 下发给发起方）
+    // 新增：好友回复结果通知（TCP 下发给发起方）
     ID_NOTIFY_FRIEND_REPLY = 1022,
-    ID_GET_OFFLINE_MSG_REQ = 1023
+    ID_GET_OFFLINE_MSG_REQ = 1023,
+    ID_NOTIFY_TEXT_CHAT_MSG_RSP = 1024 // 客户端确认收到通知 (ACK)
 };
 
 enum Modules{

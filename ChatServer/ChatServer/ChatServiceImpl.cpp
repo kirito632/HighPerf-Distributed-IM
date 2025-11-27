@@ -19,7 +19,7 @@ Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendR
     auto touid = request->touid();
     auto session = UserMgr::GetInstance()->GetSession(touid);
 
-    // [Cascade Change][FriendNotify]
+    // [FriendNotify]
     std::cout << "[FriendNotify][Chat][gRPC] NotifyAddFriend applyuid=" << request->applyuid()
         << " to_uid=" << request->touid() << " name=\"" << request->name() << "\""
         << " has_session=" << std::boolalpha << (session != nullptr) << std::endl;
@@ -32,7 +32,7 @@ Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendR
 
     // 用户不在内存中，直接返回
     if (session == nullptr) {
-        // [Cascade Change][FriendNotify]
+        // [FriendNotify]
         std::cout << "[FriendNotify][Chat][gRPC] target user offline, skip TCP notify" << std::endl;
         return Status::OK;
     }
@@ -47,7 +47,7 @@ Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendR
 
     std::string return_str = rtvalue.toStyledString();
 
-    // [Cascade Change][FriendNotify]
+    // [FriendNotify]
     std::cout << "[FriendNotify][Chat][gRPC] send TCP notify uid=" << touid
         << " msgid=" << ID_NOTIFY_ADD_FRIEND
         << " body=" << return_str << std::endl;
@@ -60,7 +60,7 @@ Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendR
 // 通知认证好友（当前用于内部RPC路径）
 Status ChatServiceImpl::NotifyAuthFriend(ServerContext* context, const AuthFriendReq* request, AuthFriendRsp* response)
 {
-    // [Cascade Change][FriendNotify]
+    // [FriendNotify]
     std::cout << "[FriendNotify][Chat][gRPC] NotifyAuthFriend from_uid=" << request->fromuid()
         << " to_uid=" << request->touid() << std::endl;
     return Status::OK;

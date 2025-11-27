@@ -9,52 +9,52 @@
 using namespace std;
 using boost::asio::ip::tcp;
 
-// CServerÀà£ºTCP·şÎñÆ÷£¬ÓÃÓÚ½ÓÊÜ¿Í»§¶ËÁ¬½Ó
+// CServerç±»ï¼šTCPæœåŠ¡å™¨ï¼Œç”¨äºæ¥å—å®¢æˆ·ç«¯è¿æ¥
 // 
-// ×÷ÓÃ£º
-//   1. ¼àÌıÖ¸¶¨¶Ë¿Ú£¬½ÓÊÜ¿Í»§¶ËÁ¬½Ó
-//   2. ¹ÜÀíËùÓĞ¿Í»§¶Ë»á»°
-//   3. ÎªÃ¿¸öÁ¬½Ó´´½¨CSession¶ÔÏó
+// ä½œç”¨ï¼š
+//   1. ç›‘å¬æŒ‡å®šç«¯å£ï¼Œæ¥å—å®¢æˆ·ç«¯è¿æ¥
+//   2. ç®¡ç†æ‰€æœ‰å®¢æˆ·ç«¯ä¼šè¯
+//   3. ä¸ºæ¯ä¸ªè¿æ¥åˆ›å»ºCSessionå¯¹è±¡
 // 
-// ÊµÏÖÂß¼­£º
-//   1. Ê¹ÓÃboost::asioµÄacceptor½ÓÊÜTCPÁ¬½Ó
-//   2. Ê¹ÓÃÒì²½·½Ê½½ÓÊÜÁ¬½Ó£¬ÊµÏÖ¸ß²¢·¢
-//   3. Ê¹ÓÃmap´æ´¢ËùÓĞ»á»°£¨session_id -> session£©
-//   4. Ê¹ÓÃ»¥³âËø±£Ö¤Ïß³Ì°²È«
+// å®ç°é€»è¾‘ï¼š
+//   1. ä½¿ç”¨boost::asioçš„acceptoræ¥å—TCPè¿æ¥
+//   2. ä½¿ç”¨å¼‚æ­¥æ–¹å¼æ¥å—è¿æ¥ï¼Œå®ç°é«˜å¹¶å‘
+//   3. ä½¿ç”¨mapå­˜å‚¨æ‰€æœ‰ä¼šè¯ï¼ˆsession_id -> sessionï¼‰
+//   4. ä½¿ç”¨äº’æ–¥é”ä¿è¯çº¿ç¨‹å®‰å…¨
 class CServer
 {
 public:
-    // ¹¹Ôìº¯Êı£º³õÊ¼»¯·şÎñÆ÷
-    // ²ÎÊı£º
-    //   - io_context: Boost.AsioµÄIOÉÏÏÂÎÄ
-    //   - port: ¼àÌı¶Ë¿ÚºÅ
+    // æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–æœåŠ¡å™¨
+    // å‚æ•°ï¼š
+    //   - io_context: Boost.Asioçš„IOä¸Šä¸‹æ–‡
+    //   - port: ç›‘å¬ç«¯å£å·
     CServer(boost::asio::io_context& io_context, unsigned short port);
 
-    // Îö¹¹º¯Êı£ºÇåÀí×ÊÔ´
+    // ææ„å‡½æ•°ï¼šæ¸…ç†èµ„æº
     ~CServer();
 
-    // Çå³ı»á»°
-    // ²ÎÊı£º
-    //   - session_id: »á»°ID
-    // ×÷ÓÃ£º
-    //   ´Ó·şÎñÆ÷ÖĞÒÆ³ıÖ¸¶¨»á»°
+    // æ¸…é™¤ä¼šè¯
+    // å‚æ•°ï¼š
+    //   - session_id: ä¼šè¯ID
+    // ä½œç”¨ï¼š
+    //   ä»æœåŠ¡å™¨ä¸­ç§»é™¤æŒ‡å®šä¼šè¯
     void ClearSession(std::string);
 
 private:
-    // ´¦Àí½ÓÊÜÁ¬½ÓµÄ»Øµ÷
-    // ²ÎÊı£º
-    //   - new_session: ĞÂµÄ»á»°¶ÔÏó
-    //   - error: ´íÎóÂë
+    // å¤„ç†æ¥å—è¿æ¥çš„å›è°ƒ
+    // å‚æ•°ï¼š
+    //   - new_session: æ–°çš„ä¼šè¯å¯¹è±¡
+    //   - error: é”™è¯¯ç 
     void HandleAccept(std::shared_ptr<CSession>, const boost::system::error_code& error);
 
-    // ¿ªÊ¼Òì²½½ÓÊÜÁ¬½Ó
+    // å¼€å§‹å¼‚æ­¥æ¥å—è¿æ¥
     void StartAccept();
 
-    boost::asio::io_context& _io_context;  // IOÉÏÏÂÎÄÒıÓÃ
-    short _port;                            // ¼àÌı¶Ë¿ÚºÅ
-    tcp::acceptor _acceptor;               // TCP½ÓÊÜÆ÷
-    std::map<std::string, std::shared_ptr<CSession>> _sessions;  // »á»°Ó³Éä±í
-    std::mutex _mutex;                     // »¥³âËø
+    boost::asio::io_context& _io_context;  // IOä¸Šä¸‹æ–‡å¼•ç”¨
+    short _port;                            // ç›‘å¬ç«¯å£å·
+    tcp::acceptor _acceptor;               // TCPæ¥å—å™¨
+    std::map<std::string, std::shared_ptr<CSession>> _sessions;  // ä¼šè¯æ˜ å°„è¡¨
+    std::mutex _mutex;                     // äº’æ–¥é”
 };
 
 

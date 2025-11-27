@@ -7,32 +7,32 @@
 #include <grpcpp/security/credentials.h>
 #include <grpcpp/create_channel.h>
 
-// gRPCÏà¹ØµÄÀàĞÍ±ğÃû
-using grpc::Channel;          // Á¬½ÓµÄÍ¨µÀ
-using grpc::Status;           // grpcµ÷ÓÃµÄ·µ»Ø×´Ì¬
-using grpc::ClientContext;    // Í¨ÓÃÓÚÉÏÏÂÎÄ
+// gRPCç›¸å…³çš„ç±»å‹åˆ«å
+using grpc::Channel;          // è¿æ¥çš„é€šé“
+using grpc::Status;           // grpcè°ƒç”¨çš„è¿”å›çŠ¶æ€
+using grpc::ClientContext;    // é€šç”¨äºä¸Šä¸‹æ–‡
 
-// ÏûÏ¢ÀàĞÍ±ğÃû
-using message::GetChatServerReq;   // »ñÈ¡ÁÄÌì·şÎñÆ÷ÇëÇó
-using message::GetChatServerRsp;   // »ñÈ¡ÁÄÌì·şÎñÆ÷ÏìÓ¦
-using message::StatusService;     // StatusServerµÄgRPC·şÎñ
-using message::LoginReq;          // µÇÂ¼ÇëÇó
-using message::LoginRsp;          // µÇÂ¼ÏìÓ¦
+// æ¶ˆæ¯ç±»å‹åˆ«å
+using message::GetChatServerReq;   // è·å–èŠå¤©æœåŠ¡å™¨è¯·æ±‚
+using message::GetChatServerRsp;   // è·å–èŠå¤©æœåŠ¡å™¨å“åº”
+using message::StatusService;     // StatusServerçš„gRPCæœåŠ¡
+using message::LoginReq;          // ç™»å½•è¯·æ±‚
+using message::LoginRsp;          // ç™»å½•å“åº”
 
-// StatusConPoolÀà£ºStatusServerµÄgRPC¿Í»§¶ËÁ¬½Ó³Ø
+// StatusConPoolç±»ï¼šStatusServerçš„gRPCå®¢æˆ·ç«¯è¿æ¥æ± 
 // 
-// ×÷ÓÃ£º
-//   ¹ÜÀí¶à¸ögRPC StubÁ¬½Ó£¬ÊµÏÖÁ¬½ÓµÄ¸´ÓÃºÍ¸ºÔØ¾ùºâ
+// ä½œç”¨ï¼š
+//   ç®¡ç†å¤šä¸ªgRPC Stubè¿æ¥ï¼Œå®ç°è¿æ¥çš„å¤ç”¨å’Œè´Ÿè½½å‡è¡¡
 // 
-// Éè¼ÆÄ£Ê½£º
-//   ¶ÔÏó³ØÄ£Ê½ - Ô¤ÏÈ´´½¨Stub£¬°´Ğè·ÖÅä
+// è®¾è®¡æ¨¡å¼ï¼š
+//   å¯¹è±¡æ± æ¨¡å¼ - é¢„å…ˆåˆ›å»ºStubï¼ŒæŒ‰éœ€åˆ†é…
 // 
-// ÌØµã£º
-//   - Á¬½Ó»ñÈ¡ÓĞ³¬Ê±»úÖÆ£¨1500ms£©
-//   - Ïß³Ì°²È«
+// ç‰¹ç‚¹ï¼š
+//   - è¿æ¥è·å–æœ‰è¶…æ—¶æœºåˆ¶ï¼ˆ1500msï¼‰
+//   - çº¿ç¨‹å®‰å…¨
 class StatusConPool {
 public:
-    // ¹¹Ôìº¯Êı£º³õÊ¼»¯StatusServerÁ¬½Ó³Ø
+    // æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–StatusServerè¿æ¥æ± 
     StatusConPool(size_t poolSize, std::string host, std::string port)
         : poolSize_(poolSize), host_(host), port_(port), b_stop_(false) {
         for (size_t i = 0; i < poolSize_; ++i) {
@@ -44,7 +44,7 @@ public:
         }
     }
 
-    // Îö¹¹º¯Êı£ºÇåÀíËùÓĞÁ¬½Ó
+    // ææ„å‡½æ•°ï¼šæ¸…ç†æ‰€æœ‰è¿æ¥
     ~StatusConPool() {
         std::lock_guard<std::mutex> lock(mutex_);
         Close();
@@ -53,17 +53,17 @@ public:
         }
     }
 
-    // »ñÈ¡Ò»¸öStubÁ¬½Ó£¨´ø³¬Ê±£©
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»ØStubÖ¸Õë£¬³¬Ê±»òÊ§°Ü·µ»Ønullptr
+    // è·å–ä¸€ä¸ªStubè¿æ¥ï¼ˆå¸¦è¶…æ—¶ï¼‰
+    // è¿”å›å€¼ï¼š
+    //   æˆåŠŸè¿”å›StubæŒ‡é’ˆï¼Œè¶…æ—¶æˆ–å¤±è´¥è¿”å›nullptr
     // 
-    // ÊµÏÖÂß¼­£º
-    //   1. µÈ´ı×î¶à1500ms
-    //   2. Èç¹ûÓĞ¿ÉÓÃÁ¬½Ó»òÒÑÍ£Ö¹£¬·µ»ØStub
-    //   3. Èç¹û³¬Ê±£¬·µ»Ønullptr
+    // å®ç°é€»è¾‘ï¼š
+    //   1. ç­‰å¾…æœ€å¤š1500ms
+    //   2. å¦‚æœæœ‰å¯ç”¨è¿æ¥æˆ–å·²åœæ­¢ï¼Œè¿”å›Stub
+    //   3. å¦‚æœè¶…æ—¶ï¼Œè¿”å›nullptr
     std::unique_ptr<StatusService::Stub> getConnection() {
         std::unique_lock<std::mutex> lock(mutex_);
-        // µÈ´ı 1500ms£¬·ñÔò RPC deadline Ì«¶Ì
+        // ç­‰å¾… 1500msï¼Œå¦åˆ™ RPC deadline å¤ªçŸ­
         if (!cond_.wait_for(lock, std::chrono::milliseconds(1500), [this]() {
             return b_stop_ || !connections_.empty();
             })) {
@@ -80,7 +80,7 @@ public:
     }
 
 
-    // ¹é»¹Stubµ½Á¬½Ó³Ø
+    // å½’è¿˜Stubåˆ°è¿æ¥æ± 
     void returnConnection(std::unique_ptr<StatusService::Stub> context) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (b_stop_) {
@@ -90,59 +90,59 @@ public:
         cond_.notify_one();
     }
 
-    // ¹Ø±ÕÁ¬½Ó³Ø
+    // å…³é—­è¿æ¥æ± 
     void Close() {
         b_stop_ = true;
         cond_.notify_all();
     }
 
 private:
-    std::atomic<bool> b_stop_;                              // Í£Ö¹±êÖ¾
-    size_t poolSize_;                                       // Á¬½Ó³Ø´óĞ¡
-    std::string host_;                                      // StatusServerÖ÷»úµØÖ·
-    std::string port_;                                      // StatusServer¶Ë¿Ú
-    std::queue<std::unique_ptr<StatusService::Stub>> connections_;  // Stub¶ÓÁĞ
-    std::mutex mutex_;                                      // »¥³âËø£¨±£Ö¤Ïß³Ì°²È«£©
-    std::condition_variable cond_;                          // Ìõ¼ş±äÁ¿£¨ÓÃÓÚµÈ´ıÁ¬½Ó£©
+    std::atomic<bool> b_stop_;                              // åœæ­¢æ ‡å¿—
+    size_t poolSize_;                                       // è¿æ¥æ± å¤§å°
+    std::string host_;                                      // StatusServerä¸»æœºåœ°å€
+    std::string port_;                                      // StatusServerç«¯å£
+    std::queue<std::unique_ptr<StatusService::Stub>> connections_;  // Stubé˜Ÿåˆ—
+    std::mutex mutex_;                                      // äº’æ–¥é”ï¼ˆä¿è¯çº¿ç¨‹å®‰å…¨ï¼‰
+    std::condition_variable cond_;                          // æ¡ä»¶å˜é‡ï¼ˆç”¨äºç­‰å¾…è¿æ¥ï¼‰
 };
 
-// StatusGrpcClientÀà£ºStatusServerµÄgRPC¿Í»§¶Ë
+// StatusGrpcClientç±»ï¼šStatusServerçš„gRPCå®¢æˆ·ç«¯
 // 
-// ×÷ÓÃ£º
-//   Ìá¹©µ÷ÓÃStatusServerµÄ½Ó¿Ú
+// ä½œç”¨ï¼š
+//   æä¾›è°ƒç”¨StatusServerçš„æ¥å£
 // 
-// Éè¼ÆÄ£Ê½£º
-//   µ¥ÀıÄ£Ê½ - È·±£È«¾ÖÎ¨Ò»ÊµÀı
+// è®¾è®¡æ¨¡å¼ï¼š
+//   å•ä¾‹æ¨¡å¼ - ç¡®ä¿å…¨å±€å”¯ä¸€å®ä¾‹
 // 
-// Ö÷Òª¹¦ÄÜ£º
-//   - GetChatServer: ¸ù¾İÓÃ»§ID»ñÈ¡ChatServerĞÅÏ¢£¨µ±Ç°Î´Ê¹ÓÃ£©
-//   - Login: ÑéÖ¤ÓÃ»§token
+// ä¸»è¦åŠŸèƒ½ï¼š
+//   - GetChatServer: æ ¹æ®ç”¨æˆ·IDè·å–ChatServerä¿¡æ¯ï¼ˆå½“å‰æœªä½¿ç”¨ï¼‰
+//   - Login: éªŒè¯ç”¨æˆ·token
 class StatusGrpcClient :public Singleton<StatusGrpcClient>
 {
-    friend class Singleton<StatusGrpcClient>;  // ÔÊĞíSingleton·ÃÎÊË½ÓĞ¹¹Ôìº¯Êı
+    friend class Singleton<StatusGrpcClient>;  // å…è®¸Singletonè®¿é—®ç§æœ‰æ„é€ å‡½æ•°
 public:
-    // Îö¹¹º¯Êı£ºÇåÀí×ÊÔ´
+    // ææ„å‡½æ•°ï¼šæ¸…ç†èµ„æº
     ~StatusGrpcClient() {
 
     }
 
-    // »ñÈ¡ChatServerĞÅÏ¢£¨µ±Ç°Î´Ê¹ÓÃ£©
+    // è·å–ChatServerä¿¡æ¯ï¼ˆå½“å‰æœªä½¿ç”¨ï¼‰
     GetChatServerRsp GetChatServer(int uid);
 
-    // ÑéÖ¤ÓÃ»§token
-    // ²ÎÊı£º
-    //   - uid: ÓÃ»§ID
-    //   - token: ÈÏÖ¤ÁîÅÆ
-    // ·µ»ØÖµ£º
-    //   LoginRsp£º°üº¬ÑéÖ¤½á¹û
+    // éªŒè¯ç”¨æˆ·token
+    // å‚æ•°ï¼š
+    //   - uid: ç”¨æˆ·ID
+    //   - token: è®¤è¯ä»¤ç‰Œ
+    // è¿”å›å€¼ï¼š
+    //   LoginRspï¼šåŒ…å«éªŒè¯ç»“æœ
     LoginRsp Login(int uid, std::string token);
 
 private:
-    // Ë½ÓĞ¹¹Ôìº¯Êı£ºµ¥ÀıÄ£Ê½
-    // ´ÓÅäÖÃÎÄ¼şÖĞ¶ÁÈ¡StatusServerµÄÁ¬½ÓĞÅÏ¢
+    // ç§æœ‰æ„é€ å‡½æ•°ï¼šå•ä¾‹æ¨¡å¼
+    // ä»é…ç½®æ–‡ä»¶ä¸­è¯»å–StatusServerçš„è¿æ¥ä¿¡æ¯
     StatusGrpcClient();
 
-    // StatusServerµÄÁ¬½Ó³ØÖ¸Õë
+    // StatusServerçš„è¿æ¥æ± æŒ‡é’ˆ
     std::unique_ptr<StatusConPool> pool_;
 
 };

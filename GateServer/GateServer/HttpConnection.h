@@ -1,68 +1,68 @@
 #pragma once
 #include"const.h"
 
-// HTTPÁ¬½ÓÀà£º´¦Àíµ¥¸öHTTP¿Í»§¶ËÁ¬½Ó
+// HTTPè¿æ¥ç±»ï¼šå¤„ç†å•ä¸ªHTTPå®¢æˆ·ç«¯è¿æ¥
 // 
-// ×÷ÓÃ£º
-//   1. ½ÓÊÕºÍ½âÎöHTTPÇëÇó
-//   2. ´¦ÀíGET/POSTÇëÇó
-//   3. ·¢ËÍHTTPÏìÓ¦
-//   4. ¹ÜÀíÁ¬½Ó³¬Ê±
+// ä½œç”¨ï¼š
+//   1. æ¥æ”¶å’Œè§£æHTTPè¯·æ±‚
+//   2. å¤„ç†GET/POSTè¯·æ±‚
+//   3. å‘é€HTTPå“åº”
+//   4. ç®¡ç†è¿æ¥è¶…æ—¶
 // 
-// Éè¼ÆÄ£Ê½£º
-//   ¼Ì³Ğenable_shared_from_this£¬ÓÃÓÚÔÚÒì²½»Øµ÷ÖĞ±£³Ö¶ÔÏóÉúÃüÖÜÆÚ
+// è®¾è®¡æ¨¡å¼ï¼š
+//   ç»§æ‰¿enable_shared_from_thisï¼Œç”¨äºåœ¨å¼‚æ­¥å›è°ƒä¸­ä¿æŒå¯¹è±¡ç”Ÿå‘½å‘¨æœŸ
 class HttpConnection :public std::enable_shared_from_this<HttpConnection>
 {
 public:
-    friend class LogicSystem;  // ÔÊĞíLogicSystem·ÃÎÊË½ÓĞ³ÉÔ±
+    friend class LogicSystem;  // å…è®¸LogicSystemè®¿é—®ç§æœ‰æˆå‘˜
 
-    // ¹¹Ôìº¯Êı£º³õÊ¼»¯HTTPÁ¬½Ó
-    // ²ÎÊı£º
-    //   - ioc: IOÉÏÏÂÎÄÒıÓÃ
+    // æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–HTTPè¿æ¥
+    // å‚æ•°ï¼š
+    //   - ioc: IOä¸Šä¸‹æ–‡å¼•ç”¨
     HttpConnection(boost::asio::io_context& ioc);
 
-    // Æô¶¯Á¬½Ó´¦Àí£º¿ªÊ¼½ÓÊÕHTTPÇëÇó
+    // å¯åŠ¨è¿æ¥å¤„ç†ï¼šå¼€å§‹æ¥æ”¶HTTPè¯·æ±‚
     void Start();
 
-    // »ñÈ¡TCPÌ×½Ó×ÖÒıÓÃ
+    // è·å–TCPå¥—æ¥å­—å¼•ç”¨
     tcp::socket& GetSocket() {
         return _socket;
     }
 
 private:
-    // ¼ì²éÁ¬½Ó³¬Ê±£¨60Ãë³¬Ê±£©
+    // æ£€æŸ¥è¿æ¥è¶…æ—¶ï¼ˆ60ç§’è¶…æ—¶ï¼‰
     void CheckDeadline();
 
-    // Òì²½Ğ´ÈëHTTPÏìÓ¦
+    // å¼‚æ­¥å†™å…¥HTTPå“åº”
     void WriteResponse();
 
-    // ´¦ÀíHTTPÇëÇó£¨GET/POST£©
+    // å¤„ç†HTTPè¯·æ±‚ï¼ˆGET/POSTï¼‰
     void HandleReq();
 
-    // ½âÎöGETÇëÇóµÄURL²ÎÊı
+    // è§£æGETè¯·æ±‚çš„URLå‚æ•°
     void PreParseGetParam();
 
-    // TCPÌ×½Ó×Ö
+    // TCPå¥—æ¥å­—
     tcp::socket _socket;
 
-    // HTTPÇëÇó»º³åÇø£¨8KB£©
+    // HTTPè¯·æ±‚ç¼“å†²åŒºï¼ˆ8KBï¼‰
     beast::flat_buffer _buffer{ 8192 };
 
-    // HTTPÇëÇó¶ÔÏó
+    // HTTPè¯·æ±‚å¯¹è±¡
     http::request<http::dynamic_body> _request;
 
-    // HTTPÏìÓ¦¶ÔÏó
+    // HTTPå“åº”å¯¹è±¡
     http::response<http::dynamic_body> _response;
 
-    // Á¬½Ó³¬Ê±¶¨Ê±Æ÷£¨60Ãë£©
+    // è¿æ¥è¶…æ—¶å®šæ—¶å™¨ï¼ˆ60ç§’ï¼‰
     boost::asio::steady_timer _deadline{
         _socket.get_executor(), std::chrono::seconds(60)
     };
 
-    // GETÇëÇóµÄURL£¨²»º¬²éÑ¯²ÎÊı£©
+    // GETè¯·æ±‚çš„URLï¼ˆä¸å«æŸ¥è¯¢å‚æ•°ï¼‰
     std::string _get_url;
 
-    // GETÇëÇóµÄ²éÑ¯²ÎÊıÓ³Éä±í
+    // GETè¯·æ±‚çš„æŸ¥è¯¢å‚æ•°æ˜ å°„è¡¨
     std::unordered_map<std::string, std::string> _get_params;
 };
 

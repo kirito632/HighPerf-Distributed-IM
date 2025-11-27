@@ -61,9 +61,6 @@ void LogicSystem::RegisterCallBacks() {
 	_fun_callbacks[MSG_CHAT_LOGIN] = std::bind(&LogicSystem::LoginHandler, this,
 		std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 
-	_fun_callbacks[ID_SEARCH_USER_REQ] = std::bind(&LogicSystem::SearchInfo, this,
-		std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
-
 	_fun_callbacks[ID_TEXT_CHAT_MSG_REQ] = std::bind(&LogicSystem::DealChatTextMsg, this,
 		std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 
@@ -172,167 +169,7 @@ void LogicSystem::LoginHandler(std::shared_ptr<CSession> session, const short& m
 	return;
 }
 
-void LogicSystem::SearchInfo(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data)
-{
-	Json::Reader reader;
-	Json::Value root;
-	reader.parse(msg_data, root);
-	auto uid_str = root["uid"].asString();
-	std::cout << "user searchInfo uid is " << uid_str << std::endl;
 
-	Json::Value rtvalue;
-
-	Defer defer([this, &rtvalue, session]() {
-		std::string return_str = rtvalue.toStyledString();
-		session->Send(return_str, ID_SEARCH_USER_RSP);
-		});
-
-	bool b_digit = isPureDigit(uid_str);
-	if (b_digit) {
-		GetUserByUid(uid_str, rtvalue);
-	}
-	else {
-		GetUserByName(uid_str, rtvalue);
-	}
-}
-
-bool LogicSystem::isPureDigit(const std::string& str) {
-	for (char c : str) {
-		if (!std::isdigit(c)) {
-			return false;
-		}
-	}
-	return true;
-}
-
-void LogicSystem::GetUserByUid(const std::string& uid_str, Json::Value& rtvalue)
-{
-	rtvalue["error"] = ErrorCodes::Success;
-	std::string base_key = USER_BASE_INFO + uid_str;
-	// 优先查redis中查询用户信息
-	std::string info_str = "";
-	bool b_base = RedisMgr::GetInstance()->Get(base_key, info_str);
-	if (b_base) {
-		Json::Reader reader;
-		Json::Value root;
-		reader.parse(info_str, root);
-		auto uid = root["uid"].asInt();
-		auto name = root["name"].asString();
-		auto pwd = root["pwd"].asString();
-		auto email = root["email"].asString();
-		auto nick = root.isMember("nick") ? root["nick"].asString() : "";
-		auto desc = root.isMember("desc") ? root["desc"].asString() : "";
-		auto sex = root.isMember("sex") ? root["sex"].asInt() : 0;
-		auto icon = root.isMember("icon") ? root["icon"].asString() : "";
-		std::cout << "search user uid is " << uid << " name is " << name << " email is " << email << std::endl;
-
-		rtvalue["uid"] = uid;
-		rtvalue["name"] = name;
-		rtvalue["email"] = email;
-		rtvalue["pwd"] = pwd;
-		rtvalue["nick"] = nick;
-		rtvalue["desc"] = desc;
-		rtvalue["sex"] = sex;
-		rtvalue["icon"] = icon;
-		return;
-	}
-
-	auto uid = std::stoi(uid_str);
-	// redis中没有，从mysql查询
-	std::shared_ptr<UserInfo> user_info = nullptr;
-	user_info = MysqlMgr::GetInstance()->GetUser(uid);
-	if (user_info == nullptr) {
-		rtvalue["error"] = ErrorCodes::UidInvalid;
-		return;
-	}
-
-	// 将数据库内容写入redis缓存
-	Json::Value redis_root;
-	redis_root["uid"] = user_info->uid;
-	redis_root["name"] = user_info->name;
-	redis_root["email"] = user_info->email;
-	redis_root["pwd"] = user_info->pwd;
-	redis_root["nick"] = user_info->nick; // 空值
-	redis_root["desc"] = user_info->desc; // 空值
-	redis_root["sex"] = user_info->sex;
-	redis_root["icon"] = user_info->icon; // 空值
-
-	RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
-}
-
-void LogicSystem::GetUserByName(const std::string& name, Json::Value& rtvalue)
-{
-	rtvalue["error"] = ErrorCodes::Success;
-	std::string base_key = NAME_INFO + name;
-	// 优先查redis中查询用户信息
-	std::string info_str = "";
-	bool b_base = RedisMgr::GetInstance()->Get(base_key, info_str);
-	if (b_base) {
-		Json::Reader reader;
-		Json::Value root;
-		reader.parse(info_str, root);
-
-		auto uid = root["uid"].asInt();
-		auto name = root["name"].asString();
-		auto pwd = root["pwd"].asString();
-		auto email = root["email"].asString();
-		auto nick = root.isMember("nick") ? root["nick"].asString() : "";
-		auto desc = root.isMember("desc") ? root["desc"].asString() : "";
-		auto sex = root.isMember("sex") ? root["sex"].asInt() : 0;
-		auto icon = root.isMember("icon") ? root["icon"].asString() : "";
-		std::cout << "search user uid is " << uid << " name is " << name << " email is " << email << std::endl;
-
-		rtvalue["uid"] = uid;
-		rtvalue["name"] = name;
-		rtvalue["email"] = email;
-		rtvalue["pwd"] = pwd;
-		rtvalue["nick"] = nick;
-		rtvalue["desc"] = desc;
-		rtvalue["sex"] = sex;
-		rtvalue["icon"] = icon;
-		return;
-	}
-
-	// redis中没有，从mysql查询
-	std::shared_ptr<UserInfo> user_info = nullptr;
-	user_info = MysqlMgr::GetInstance()->GetUserByName(name);
-	if (user_info == nullptr) {
-		rtvalue["error"] = ErrorCodes::UidInvalid;
-		return;
-	}
-
-	// 将数据库内容写入redis缓存
-	Json::Value redis_root;
-	redis_root["uid"] = user_info->uid;
-	redis_root["name"] = user_info->name;
-	redis_root["email"] = user_info->email;
-	redis_root["pwd"] = user_info->pwd;
-	redis_root["nick"] = user_info->nick; // 空值
-	redis_root["desc"] = user_info->desc; // 空值
-	redis_root["sex"] = user_info->sex;
-
-	RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
-
-	// 返回数据
-	rtvalue["uid"] = user_info->uid;
-	rtvalue["name"] = user_info->name;
-	rtvalue["email"] = user_info->email;
-	rtvalue["pwd"] = user_info->pwd;
-	rtvalue["nick"] = user_info->nick;
-	rtvalue["sex"] = user_info->sex;
-	rtvalue["desc"] = user_info->desc;
-}
-
-// 这个功能感觉重复了
-void LogicSystem::AddFriendApply(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data)
-{
-	Json::Reader reader;
-	Json::Value root;
-	reader.parse(msg_data, root);
-	int from_uid = root["from_uid"].asInt();
-	int to_uid = root["to_uid"].asInt();
-
-}
 
 void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data)
 {
@@ -358,7 +195,7 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 		session->Send(return_str, ID_TEXT_CHAT_MSG_RSP);
 		});
 
-	// [Cascade Change][Sync] 核心修改：先持久化，再投递。
+	// 先持久化，再投递。
 	// 无论对方是在线、离线还是跨服，先将消息入库 (Status=0)。
 	// 这样保证了消息不丢失。当对方收到消息回 ACK 时，再将其删除。
 	AsyncDBPool::GetInstance()->PostTask([uid, touid, notify_str_cache]() {
@@ -449,15 +286,15 @@ void LogicSystem::GetOfflineMsgHandler(std::shared_ptr<CSession> session, const 
 		std::vector<long long> ids;
 		std::vector<std::string> db_payloads;
 		
+		// 当前逻辑只在返回 true 时下发离线消息；如果 DB 出现异常导致返回 false，
+		// 不会向客户端返回任何错误信息，也没有做重试控制（例如指数退避重试）。
 		// 阻塞式查询，但现在是在 Worker 线程中，不会阻塞主 Logic 线程
 		if (MysqlMgr::GetInstance()->GetUnreadChatMessages(uid, ids, db_payloads)) {
 			std::cout << "[OfflineMsg][Async] get " << db_payloads.size() << " unread messages for uid=" << uid << std::endl;
 			
-			// 发送消息 (Session::Send 是线程安全的)
 			for (const auto& payload : db_payloads) {
 				shared_sess->Send(payload, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
 			}
-			// 移除删除逻辑，等待客户端ACK确认后再删除
 		}
 	});
 }

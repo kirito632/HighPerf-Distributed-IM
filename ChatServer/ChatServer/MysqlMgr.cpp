@@ -44,15 +44,6 @@ MysqlMgr::MysqlMgr() {
 }
 
 // 好友相关功能实现
-std::vector<UserInfo> MysqlMgr::SearchUsers(const std::string& keyword)
-{
-    return _dao.SearchUsers(keyword);
-}
-
-bool MysqlMgr::AddFriendRequest(int fromUid, int toUid, const std::string& desc)
-{
-    return _dao.AddFriendRequest(fromUid, toUid, desc);
-}
 
 std::vector<ApplyInfo> MysqlMgr::GetFriendRequests(int uid)
 {

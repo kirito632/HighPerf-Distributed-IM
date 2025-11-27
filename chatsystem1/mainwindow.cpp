@@ -4,7 +4,8 @@
 #include "addfrienddialog.h"
 #include "friendmanager.h"
 #include "usermgr.h"
-// [Cascade Change] 新增：接入 TCP 通知（好友申请&回复结果）
+#include "localdb.h"
+// 新增：接入 TCP 通知（好友申请&回复结果）
 #include "tcpmgr.h"
 #include <QPainter>
 #include <QPainterPath>
@@ -288,16 +289,14 @@ void MainWindow::setupUi()
     // 防御性检查：如果能进入主窗口，理论上已经登录了，uid应该有效
     // 如果真的无效，说明登录流程有问题，但在Release模式下不崩溃，只记录错误
     if (currentUid <= 0) {
-        qCritical() << "[MainWindow] ⚠️ 严重错误: 用户ID无效！如果能进入主窗口，说明已经登录，"
+        qCritical() << "[MainWindow] 严重错误: 用户ID无效！如果能进入主窗口，说明已经登录，"
                     << "uid应该已经被设置。这可能是一个bug，请检查登录流程。";
         // 在Debug模式下使用断言立即发现问题
         Q_ASSERT_X(false, "MainWindow::setupUi", 
                    "用户ID无效！登录流程可能存在问题，请检查 logindialog.cpp 中是否正确调用了 UserMgr::SetUid()");
-        // Release模式下继续运行，但功能可能受影响
     }
     
-    // 之前写死了url
-    // 读取GateServer的配置信息
+    // 读取GateServer的配置信息,之前写死了url
     QString fileName = "config.ini";
     QString app_path = QCoreApplication::applicationDirPath();
     QString config_path = QDir::toNativeSeparators(app_path + QDir::separator() + fileName);
@@ -354,46 +353,94 @@ void MainWindow::setupUi()
 
     // 文本聊天下行（1019）：展示到 ChatDialog
     connect(TcpMgr::GetInstance(), &TcpMgr::sig_text_notify,
-            this, [this](int fromUid, int toUid, const QString &content) {
+            this, [this](int fromUid, int toUid, const QString &msgId, const QString &content) {
                 qDebug() << "[MainWindow] sig_text_notify received from=" << fromUid << " to=" << toUid 
-                         << " myUid=" << UserMgr::GetInstance()->GetUid() << " content=" << content;
+                         << " msgId=" << msgId << " myUid=" << UserMgr::GetInstance()->GetUid() << " content=" << content;
+                
                 // 仅当这是发给当前登录用户的消息时处理
                 if (UserMgr::GetInstance()->GetUid() != toUid) {
                     qDebug() << "[MainWindow] message not for me, ignoring";
                     return;
                 }
+
+                // 存入本地 DB (去重)
+                MessageInfo msg;
+                msg.msg_id = msgId.toLongLong();
+                msg.from_uid = fromUid;
+                msg.to_uid = toUid;
+                msg.content = content;
+                msg.status = 0; 
+                msg.create_time = QString::number(QDateTime::currentMSecsSinceEpoch());
+                msg.type = 0;
+
+                bool isNew = LocalDb::GetInstance()->SaveMessage(msg);
+                if (!isNew) {
+                    qDebug() << "[MainWindow] Duplicate message ignored: " << msgId;
+                }
+
+                // 无论是否重复，都更新 cursor 并发送 ACK
+                // 这里简单实现：立即发送 ACK
+                QJsonObject ackRoot;
+                ackRoot["uid"] = UserMgr::GetInstance()->GetUid();
+                ackRoot["max_msg_id"] = msgId.toLongLong(); // 假设是按序到达，或者 LocalDb::GetMaxMsgId()
+                // 更严谨的做法是 LocalDb::GetInstance()->GetMaxMsgId()，但这里为了简单先回这个
+                
+                QString ackJson = QString::fromUtf8(QJsonDocument(ackRoot).toJson(QJsonDocument::Compact));
+                emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_NOTIFY_TEXT_CHAT_MSG_RSP, ackJson);
+
+                // 如果是重复消息，就不需要更新 UI 了 (除非 UI 没显示出来，但通常 DB 有了就是有了)
+                if (!isNew) return;
+
                 // 尝试使用 uid 作为窗口标题；若你有 uid->name 映射，可替换为好友昵称
                 QString contactTitle = QString::number(fromUid);
-                qDebug() << "[MainWindow] opening chat dialog for contact=" << contactTitle;
-                openChatDialog(contactTitle, fromUid);
+                
+                // [Fix Duplicate Display]
+                // 检查窗口是否已经打开且对应当前好友
+                bool isChatOpen = (m_chatDialog && m_chatDialog->isVisible() && m_chatDialog->getCurrentContactUid() == fromUid);
 
-                // 确保 ChatDialog 的发送信号连接到当前会话
-                QObject::disconnect(m_chatDialog, &ChatDialog::messageSent, nullptr, nullptr);
-                connect(m_chatDialog, &ChatDialog::messageSent, this,
-                        [this, fromUid](const QString &toUser, const QString &text) {
-                            Q_UNUSED(toUser);
-                            QJsonObject root;
-                            root["fromuid"] = UserMgr::GetInstance()->GetUid();
-                            root["touid"] = fromUid;
-                            QJsonArray arr;
-                            QJsonObject elem;
-                            elem["content"] = text;
-                            elem["msgid"] = QString::number(QDateTime::currentMSecsSinceEpoch());
-                            arr.append(elem);
-                            root["text_array"] = arr;
-
-                            QString json = QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact));
-                            qDebug() << "[TextChat][UI->TCP] send 1017 json=" << json;
-                            emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_TEXT_CHAT_MSG_REQ, json);
-                        });
-
-                if (m_chatDialog) {
-                    // 收到的是对方发来的消息，isSender=false（左侧气泡）
-                    qDebug() << "[MainWindow] adding message to chat dialog";
+                if (isChatOpen) {
+                    // 窗口开着 -> 直接追加新消息 (不需要重载历史)
+                    qDebug() << "[MainWindow] chat open, appending message";
                     m_chatDialog->addMessage(content, false);
+                    m_chatDialog->raise();
+                    m_chatDialog->activateWindow();
                 } else {
-                    qDebug() << "[MainWindow] ERROR: m_chatDialog is null!";
+                    // 窗口没开 -> 打开窗口 (openChatDialog 会自动加载历史记录，包含刚才存的那条)
+                    qDebug() << "[MainWindow] chat closed, opening and loading history";
+                    openChatDialog(contactTitle, fromUid);
+                    
+                    // 重新绑定发送信号 (只有新打开/切换窗口时才需要)
+                    QObject::disconnect(m_chatDialog, &ChatDialog::messageSent, nullptr, nullptr);
+                    connect(m_chatDialog, &ChatDialog::messageSent, this,
+                            [this, fromUid](const QString &toUser, const QString &text) {
+                                Q_UNUSED(toUser);
+                                QJsonObject root;
+                                root["fromuid"] = UserMgr::GetInstance()->GetUid();
+                                root["touid"] = fromUid;
+                                QJsonArray arr;
+                                QJsonObject elem;
+                                elem["content"] = text;
+                                elem["msgid"] = QString::number(QDateTime::currentMSecsSinceEpoch());
+                                arr.append(elem);
+                                root["text_array"] = arr;
+
+                                // 发送前存入本地 DB
+                                MessageInfo selfMsg;
+                                selfMsg.msg_id = elem["msgid"].toString().toLongLong();
+                                selfMsg.from_uid = UserMgr::GetInstance()->GetUid();
+                                selfMsg.to_uid = fromUid;
+                                selfMsg.content = text;
+                                selfMsg.status = 0;
+                                selfMsg.create_time = QString::number(QDateTime::currentMSecsSinceEpoch());
+                                selfMsg.type = 0;
+                                LocalDb::GetInstance()->SaveMessage(selfMsg);
+
+                                QString json = QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact));
+                                qDebug() << "[TextChat][UI->TCP] send 1017 json=" << json;
+                                emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_TEXT_CHAT_MSG_REQ, json);
+                            });
                 }
+
                 // 会话列表更新/新增
                 bool found = false;
                 for (int i = 0; i < m_messageList->count(); ++i) {
@@ -414,11 +461,11 @@ void MainWindow::setupUi()
             },
             Qt::UniqueConnection);
 
-    // [Cascade Change] 新增：TCP 通知与 HTTP 刷新串联
+    // 新增：TCP 通知与 HTTP 刷新串联
     // 收到“好友申请”实时通知后，拉取“新朋友”列表
     connect(TcpMgr::GetInstance(), &TcpMgr::sig_friend_apply,
             this, [this]() {
-                // [Cascade Change][FriendNotify]
+                // [FriendNotify]
                 qDebug() << "[FriendNotify][UI] recv sig_friend_apply -> HTTP getFriendRequests()";
                 if (m_friendManager) m_friendManager->getFriendRequests();
             });
@@ -426,7 +473,7 @@ void MainWindow::setupUi()
     // 收到“好友回复结果”（同意/拒绝）实时通知后，刷新“我的好友”和“新朋友”
     connect(TcpMgr::GetInstance(), &TcpMgr::sig_friend_reply,
             this, [this](int fromUid, bool agree) {
-                // [Cascade Change][FriendNotify]
+                // [FriendNotify]
                 qDebug() << "[FriendNotify][UI] recv sig_friend_reply fromUid=" << fromUid
                          << " agree=" << agree << " -> HTTP getMyFriends()+getFriendRequests()";
                 if (m_friendManager) {
@@ -675,6 +722,17 @@ void MainWindow::setupContactsWidget()
                         elem["msgid"] = QString::number(QDateTime::currentMSecsSinceEpoch());
                         arr.append(elem);
                         root["text_array"] = arr;
+
+                        // 发送前存入本地 DB
+                        MessageInfo selfMsg;
+                        selfMsg.msg_id = elem["msgid"].toString().toLongLong();
+                        selfMsg.from_uid = UserMgr::GetInstance()->GetUid();
+                        selfMsg.to_uid = touid;
+                        selfMsg.content = text;
+                        selfMsg.status = 0;
+                        selfMsg.create_time = QString::number(QDateTime::currentMSecsSinceEpoch());
+                        selfMsg.type = 0;
+                        LocalDb::GetInstance()->SaveMessage(selfMsg);
 
                         QString json = QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact));
                         qDebug() << "[TextChat][UI->TCP] send 1017 json=" << json;

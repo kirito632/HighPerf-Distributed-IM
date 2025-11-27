@@ -29,10 +29,14 @@ public:
 
     // 初始化线程池
     // 参数：
-    //   threadNum: 线程池中的工作线程数量，默认为4
+    //   threadNum: 线程池中的工作线程数量，默认为 hardware_concurrency()
     // 注意：
     //   必须在系统启动时调用一次
-    void Init(int threadNum = 4) {
+    void Init(int threadNum = -1) {
+        // 如果threadNum为-1，则使用CPU核心数
+        if (threadNum <= 0) {
+            threadNum = std::max(4, (int)std::thread::hardware_concurrency());
+        }
         if (b_stop_) return; // 避免重复初始化
         
         for (int i = 0; i < threadNum; ++i) {

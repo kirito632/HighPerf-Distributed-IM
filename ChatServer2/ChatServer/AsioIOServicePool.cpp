@@ -8,7 +8,7 @@ _works(size), _nextIOService(0) {
         std::cout << "AsioIOServicePool: created work for io[" << i << "]\n";
     }
 
-    //±éÀú¶à¸öioservice£¬´´½¨¶à¸öÏß³Ì£¬Ã¿¸öÏß³ÌÄÚ²¿Æô¶¯ioservice
+    //éåŽ†å¤šä¸ªioserviceï¼Œåˆ›å»ºå¤šä¸ªçº¿ç¨‹ï¼Œæ¯ä¸ªçº¿ç¨‹å†…éƒ¨å¯åŠ¨ioservice
     for (std::size_t i = 0; i < _ioServices.size(); ++i) {
         _threads.emplace_back([this, i]() {
             std::cout << "thread " << i << " start run()\n";
@@ -35,12 +35,12 @@ boost::asio::io_context& AsioIOServicePool::GetIOService() {
 }
 
 void AsioIOServicePool::Stop() {
-    //ÒòÎª½ö½öÖ´ÐÐwork.reset²¢²»ÄÜÈÃiocontext´ÓrunµÄ×´Ì¬ÖÐÍË³ö
-    //µ±iocontextÒÑ¾­°ó¶¨ÁË¶Á»òÐ´µÄ¼àÌýÊÂ¼þºó£¬»¹ÐèÒªÊÖ¶¯stop¸Ã·þÎñ¡£
+    //å› ä¸ºä»…ä»…æ‰§è¡Œwork.resetå¹¶ä¸èƒ½è®©iocontextä»Žrunçš„çŠ¶æ€ä¸­é€€å‡º
+    //å½“iocontextå·²ç»ç»‘å®šäº†è¯»æˆ–å†™çš„ç›‘å¬äº‹ä»¶åŽï¼Œè¿˜éœ€è¦æ‰‹åŠ¨stopè¯¥æœåŠ¡ã€‚
     std::cout << "AsioIOServicePool::Stop() called\n";
     for (auto& work : _works) {
-        //°Ñ·þÎñÏÈÍ£Ö¹
-        // Í¨¹ýexecutor»ñÈ¡io_context
+        //æŠŠæœåŠ¡å…ˆåœæ­¢
+        // é€šè¿‡executorèŽ·å–io_context
         auto& io_context = boost::asio::query(
             work->get_executor(),
             boost::asio::execution::context

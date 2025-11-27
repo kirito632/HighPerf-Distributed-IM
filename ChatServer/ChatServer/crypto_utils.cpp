@@ -1,5 +1,5 @@
 #include "crypto_utils.h"
-#include <openssl/sha.h>   // Á´½Ó -lssl -lcrypto
+#include <openssl/sha.h>   // é“¾æŽ¥ -lssl -lcrypto
 #include <sstream>
 #include <iomanip>
 

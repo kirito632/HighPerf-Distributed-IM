@@ -1,20 +1,20 @@
 #pragma once
 #include"const.h"
 
-// SectionInfo½á¹¹Ìå£º±íÊ¾ÅäÖÃÎÄ¼şÖĞµÄÒ»¸ösection¼°Æä¼üÖµ¶Ô
+// SectionInfoç»“æ„ä½“ï¼šè¡¨ç¤ºé…ç½®æ–‡ä»¶ä¸­çš„ä¸€ä¸ªsectionåŠå…¶é”®å€¼å¯¹
 // 
-// ×÷ÓÃ£º
-//   ·â×°ÅäÖÃÎÄ¼şÖĞÒ»¸ösectionÏÂµÄËùÓĞkey-value¶Ô
+// ä½œç”¨ï¼š
+//   å°è£…é…ç½®æ–‡ä»¶ä¸­ä¸€ä¸ªsectionä¸‹çš„æ‰€æœ‰key-valueå¯¹
 struct SectionInfo {
     SectionInfo() {}
     ~SectionInfo() { _section_datas.clear(); }
 
-    // ¿½±´¹¹Ôìº¯Êı
+    // æ‹·è´æ„é€ å‡½æ•°
     SectionInfo(const SectionInfo& src) {
         _section_datas = src._section_datas;
     }
 
-    // ¸³ÖµÔËËã·û
+    // èµ‹å€¼è¿ç®—ç¬¦
     SectionInfo& operator=(const SectionInfo& src) {
         if (&src == this) {
             return *this;
@@ -24,14 +24,14 @@ struct SectionInfo {
         return *this;
     }
 
-    // sectionÏÂµÄ¼üÖµ¶ÔÓ³Éä±í
+    // sectionä¸‹çš„é”®å€¼å¯¹æ˜ å°„è¡¨
     std::map<std::string, std::string> _section_datas;
 
-    // ÖØÔØ[]²Ù×÷·û£ºÍ¨¹ıkey»ñÈ¡value
-    // ²ÎÊı£º
-    //   - key: ÅäÖÃÏîÃû³Æ
-    // ·µ»ØÖµ£º
-    //   ÅäÖÃÏîµÄÖµ£¬Èç¹û²»´æÔÚÔò·µ»Ø¿Õ×Ö·û´®
+    // é‡è½½[]æ“ä½œç¬¦ï¼šé€šè¿‡keyè·å–value
+    // å‚æ•°ï¼š
+    //   - key: é…ç½®é¡¹åç§°
+    // è¿”å›å€¼ï¼š
+    //   é…ç½®é¡¹çš„å€¼ï¼Œå¦‚æœä¸å­˜åœ¨åˆ™è¿”å›ç©ºå­—ç¬¦ä¸²
     std::string operator[](const std::string& key) {
         if (_section_datas.find(key) == _section_datas.end()) {
             return "";
@@ -40,28 +40,28 @@ struct SectionInfo {
     }
 };
 
-// ÅäÖÃ¹ÜÀíÆ÷Àà£º¹ÜÀí³ÌĞòÅäÖÃĞÅÏ¢
+// é…ç½®ç®¡ç†å™¨ç±»ï¼šç®¡ç†ç¨‹åºé…ç½®ä¿¡æ¯
 // 
-// ×÷ÓÃ£º
-//   1. ¶ÁÈ¡ºÍ½âÎöconfig.iniÅäÖÃÎÄ¼ş
-//   2. Ìá¹©Í³Ò»ÅäÖÃ·ÃÎÊ½Ó¿Ú
-//   3. Ê¹ÓÃµ¥ÀıÄ£Ê½È·±£È«¾ÖÎ¨Ò»ÅäÖÃ
+// ä½œç”¨ï¼š
+//   1. è¯»å–å’Œè§£æconfig.inié…ç½®æ–‡ä»¶
+//   2. æä¾›ç»Ÿä¸€é…ç½®è®¿é—®æ¥å£
+//   3. ä½¿ç”¨å•ä¾‹æ¨¡å¼ç¡®ä¿å…¨å±€å”¯ä¸€é…ç½®
 // 
-// Ê¹ÓÃ·½Ê½£º
+// ä½¿ç”¨æ–¹å¼ï¼š
 //   ConfigMgr::Inst()[section][key]
 class ConfigMgr
 {
 public:
-    // Îö¹¹º¯Êı£ºÇåÀíÅäÖÃÓ³Éä±í
+    // ææ„å‡½æ•°ï¼šæ¸…ç†é…ç½®æ˜ å°„è¡¨
     ~ConfigMgr() {
         _config_map.clear();
     }
 
-    // ÖØÔØ[]²Ù×÷·û£ºÍ¨¹ısectionÃû³Æ»ñÈ¡SectionInfo
-    // ²ÎÊı£º
-    //   - section: ÅäÖÃ½ÚÃû³Æ
-    // ·µ»ØÖµ£º
-    //   SectionInfo¶ÔÏó£¬°üº¬¸ÃsectionÏÂµÄËùÓĞ¼üÖµ¶Ô
+    // é‡è½½[]æ“ä½œç¬¦ï¼šé€šè¿‡sectionåç§°è·å–SectionInfo
+    // å‚æ•°ï¼š
+    //   - section: é…ç½®èŠ‚åç§°
+    // è¿”å›å€¼ï¼š
+    //   SectionInfoå¯¹è±¡ï¼ŒåŒ…å«è¯¥sectionä¸‹çš„æ‰€æœ‰é”®å€¼å¯¹
     SectionInfo operator[](const std::string section) {
         if (_config_map.find(section) == _config_map.end()) {
             return SectionInfo();
@@ -70,12 +70,12 @@ public:
         return _config_map[section];
     }
 
-    // »ñÈ¡ÅäÖÃ¹ÜÀíÆ÷µ¥ÀıÊµÀı
+    // è·å–é…ç½®ç®¡ç†å™¨å•ä¾‹å®ä¾‹
     // 
-    // ·µ»ØÖµ£º
-    //   ConfigMgrµ¥ÀıÒıÓÃ
+    // è¿”å›å€¼ï¼š
+    //   ConfigMgrå•ä¾‹å¼•ç”¨
     // 
-    // Ê¹ÓÃÊ¾Àı£º
+    // ä½¿ç”¨ç¤ºä¾‹ï¼š
     //   auto& cfg = ConfigMgr::Inst();
     //   std::string host = cfg["Mysql"]["Host"];
     static ConfigMgr& Inst() {
@@ -83,12 +83,12 @@ public:
         return cfg_mgr;
     }
 
-    // ¿½±´¹¹Ôìº¯Êı
+    // æ‹·è´æ„é€ å‡½æ•°
     ConfigMgr(const ConfigMgr& src) {
         _config_map = src._config_map;
     }
 
-    // ¸³ÖµÔËËã·û
+    // èµ‹å€¼è¿ç®—ç¬¦
     ConfigMgr& operator=(const ConfigMgr& src) {
         if (&src == this) {
             return *this;
@@ -98,9 +98,9 @@ public:
     }
 
 private:
-    // Ë½ÓĞ¹¹Ôìº¯Êı£ºµ¥ÀıÄ£Ê½
+    // ç§æœ‰æ„é€ å‡½æ•°ï¼šå•ä¾‹æ¨¡å¼
     ConfigMgr();
 
-    // ÅäÖÃÓ³Éä±í£ºÒÔsectionÃû³ÆÎªkey£¬SectionInfoÎªvalue
+    // é…ç½®æ˜ å°„è¡¨ï¼šä»¥sectionåç§°ä¸ºkeyï¼ŒSectionInfoä¸ºvalue
     std::map<std::string, SectionInfo> _config_map;
 };

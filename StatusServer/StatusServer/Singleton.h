@@ -10,7 +10,7 @@ protected:
 
 public:
     static std::shared_ptr<T> GetInstance() {
-        //static std::shared_ptr<T> instance = std::make_shared<T>();  // std::make_shared 无法访问私有构造函数，改用 new 可以
+        //static std::shared_ptr<T> instance = std::make_shared<T>();  // std::make_shared 鏃犳硶璁块棶绉佹湁鏋勯�犲嚱鏁帮紝鏀圭敤 new 鍙互
         static std::shared_ptr<T> instance(new T());
         return instance;
     }

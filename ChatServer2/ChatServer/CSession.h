@@ -52,10 +52,10 @@ private:
 	CServer* _server;
 	std::queue<std::shared_ptr<MsgNode> > _send_que;
 	std::mutex _send_lock;
-	//ÊÕµ½µÄÏûÏ¢½á¹¹
+	//æ”¶åˆ°çš„æ¶ˆæ¯ç»“æ„
 	std::shared_ptr<RecvNode> _recv_msg_node;
 	bool _b_head_parse;
-	//ÊÕµ½µÄÍ·²¿½á¹¹
+	//æ”¶åˆ°çš„å¤´éƒ¨ç»“æ„
 	std::shared_ptr<MsgNode> _recv_head_node;
 	std::function<void()> func_;
 

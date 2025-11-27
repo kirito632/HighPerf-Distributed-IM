@@ -2,32 +2,32 @@
 #include"AsioIOServicePool.h"
 #include "UserMgr.h"
 
-// ¹¹Ôìº¯Êı£º³õÊ¼»¯TCP·şÎñÆ÷
+// æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–TCPæœåŠ¡å™¨
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ±£´æIOÉÏÏÂÎÄºÍ¶Ë¿Ú
-//   2. ÑéÖ¤¶Ë¿ÚºÅ
-//   3. ´´½¨acceptor²¢°ó¶¨µ½Ö¸¶¨¶Ë¿Ú
-//   4. ¿ªÊ¼¼àÌı
-//   5. ¿ªÊ¼Òì²½½ÓÊÜÁ¬½Ó
+// å®ç°é€»è¾‘ï¼š
+//   1. ä¿å­˜IOä¸Šä¸‹æ–‡å’Œç«¯å£
+//   2. éªŒè¯ç«¯å£å·
+//   3. åˆ›å»ºacceptorå¹¶ç»‘å®šåˆ°æŒ‡å®šç«¯å£
+//   4. å¼€å§‹ç›‘å¬
+//   5. å¼€å§‹å¼‚æ­¥æ¥å—è¿æ¥
 CServer::CServer(boost::asio::io_context& io_context, unsigned short port)
     : _io_context(io_context), _port(port), _acceptor(io_context)
 {
     std::cout << "CServer ctor called with port: " << port << std::endl;
 
-    // ÑéÖ¤¶Ë¿ÚºÅ
+    // éªŒè¯ç«¯å£å·
     if (port == 0) {
         std::cerr << "ERROR: invalid port 0 passed to CServer. Aborting." << std::endl;
         throw std::runtime_error("Invalid port: 0");
     }
 
     try {
-        // ´´½¨endpoint²¢°ó¶¨
+        // åˆ›å»ºendpointå¹¶ç»‘å®š
         boost::asio::ip::tcp::endpoint ep(boost::asio::ip::tcp::v4(), port);
         _acceptor.open(ep.protocol());
-        _acceptor.set_option(boost::asio::socket_base::reuse_address(true));  // ÔÊĞíµØÖ·ÖØÓÃ
+        _acceptor.set_option(boost::asio::socket_base::reuse_address(true));  // å…è®¸åœ°å€é‡ç”¨
         _acceptor.bind(ep);
-        _acceptor.listen(boost::asio::socket_base::max_listen_connections);  // ¿ªÊ¼¼àÌı
+        _acceptor.listen(boost::asio::socket_base::max_listen_connections);  // å¼€å§‹ç›‘å¬
 
         auto ep_local = _acceptor.local_endpoint();
         std::cout << "Acceptor bound, local endpoint port: " << ep_local.port() << std::endl;
@@ -40,33 +40,33 @@ CServer::CServer(boost::asio::io_context& io_context, unsigned short port)
     std::cout << "Server start success, listen on port : " << _port << std::endl;
     std::cout << "CServer StartAccept using io_context at " << &(_io_context) << "\n";
 
-    // ¿ªÊ¼Òì²½½ÓÊÜÁ¬½Ó
+    // å¼€å§‹å¼‚æ­¥æ¥å—è¿æ¥
     StartAccept();
 }
 
-// Îö¹¹º¯Êı£ºÇåÀí×ÊÔ´
+// ææ„å‡½æ•°ï¼šæ¸…ç†èµ„æº
 CServer::~CServer()
 {
 }
 
-// Çå³ı»á»°
+// æ¸…é™¤ä¼šè¯
 // 
-// ²ÎÊı£º
-//   - session_id: »á»°ID
+// å‚æ•°ï¼š
+//   - session_id: ä¼šè¯ID
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ´ÓUserMgrÖĞÒÆ³ıÓÃ»§»á»°
-//   2. ¼ÓËø±£Ö¤Ïß³Ì°²È«
-//   3. ´Ó_sessionsÖĞÉ¾³ı»á»°
+// å®ç°é€»è¾‘ï¼š
+//   1. ä»UserMgrä¸­ç§»é™¤ç”¨æˆ·ä¼šè¯
+//   2. åŠ é”ä¿è¯çº¿ç¨‹å®‰å…¨
+//   3. ä»_sessionsä¸­åˆ é™¤ä¼šè¯
 void CServer::ClearSession(std::string session_id)
 {
-    // Èç¹û»á»°´æÔÚ£¬ÒÆ³ıÓÃ»§µÄsessionÓ³Éä
+    // å¦‚æœä¼šè¯å­˜åœ¨ï¼Œç§»é™¤ç”¨æˆ·çš„sessionæ˜ å°„
     if (_sessions.find(session_id) != _sessions.end()) {
-        // ÒÆ³ıÓÃ»§µÄ session Ó³Éä
+        // ç§»é™¤ç”¨æˆ·çš„ session æ˜ å°„
         UserMgr::GetInstance()->RmvUserSession(_sessions[session_id]->GetUserId());
     }
 
-    // ´Ó_sessionsÖĞÉ¾³ı»á»°
+    // ä»_sessionsä¸­åˆ é™¤ä¼šè¯
     {
         std::lock_guard<std::mutex> lock(_mutex);
         _sessions.erase(session_id);
@@ -74,49 +74,49 @@ void CServer::ClearSession(std::string session_id)
 
 }
 
-// ¿ªÊ¼Òì²½½ÓÊÜÁ¬½Ó
+// å¼€å§‹å¼‚æ­¥æ¥å—è¿æ¥
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ´´½¨Ò»¸öĞÂµÄCSession¶ÔÏó
-//   2. Òì²½½ÓÊÜ¿Í»§¶ËÁ¬½Ó
-//   3. µ±ÓĞÁ¬½ÓÊ±£¬µ÷ÓÃHandleAccept´¦Àí
+// å®ç°é€»è¾‘ï¼š
+//   1. åˆ›å»ºä¸€ä¸ªæ–°çš„CSessionå¯¹è±¡
+//   2. å¼‚æ­¥æ¥å—å®¢æˆ·ç«¯è¿æ¥
+//   3. å½“æœ‰è¿æ¥æ—¶ï¼Œè°ƒç”¨HandleAcceptå¤„ç†
 void CServer::StartAccept() {
-    // Ê¹ÓÃ´«µİ¹ıÀ´µÄ_io_context£¬ÀıÈçAsioIOServicePool::GetInstance()
+    // ä½¿ç”¨ä¼ é€’è¿‡æ¥çš„_io_contextï¼Œä¾‹å¦‚AsioIOServicePool::GetInstance()
     std::cout << "CServer StartAccept using io_context at " << &(_io_context) << "\n";
 
-    // ´´½¨ĞÂµÄ»á»°¶ÔÏó
+    // åˆ›å»ºæ–°çš„ä¼šè¯å¯¹è±¡
     std::shared_ptr<CSession> new_session = std::make_shared<CSession>(_io_context, this);
 
-    // Òì²½½ÓÊÜÁ¬½Ó
+    // å¼‚æ­¥æ¥å—è¿æ¥
     _acceptor.async_accept(new_session->GetSocket(),
         std::bind(&CServer::HandleAccept, this, new_session, std::placeholders::_1));
 }
 
-// ´¦Àí½ÓÊÜÁ¬½ÓµÄ»Øµ÷
+// å¤„ç†æ¥å—è¿æ¥çš„å›è°ƒ
 // 
-// ²ÎÊı£º
-//   - new_session: ĞÂµÄ»á»°¶ÔÏó
-//   - error: ´íÎóÂë
+// å‚æ•°ï¼š
+//   - new_session: æ–°çš„ä¼šè¯å¯¹è±¡
+//   - error: é”™è¯¯ç 
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ¼ì²éÊÇ·ñÓĞ´íÎó
-//   2. Èç¹ûÃ»ÓĞ´íÎó£¬Æô¶¯»á»°²¢½«»á»°¼ÓÈë_sessions
-//   3. ¼ÌĞøÒì²½½ÓÊÜÏÂÒ»¸öÁ¬½Ó
+// å®ç°é€»è¾‘ï¼š
+//   1. æ£€æŸ¥æ˜¯å¦æœ‰é”™è¯¯
+//   2. å¦‚æœæ²¡æœ‰é”™è¯¯ï¼Œå¯åŠ¨ä¼šè¯å¹¶å°†ä¼šè¯åŠ å…¥_sessions
+//   3. ç»§ç»­å¼‚æ­¥æ¥å—ä¸‹ä¸€ä¸ªè¿æ¥
 void CServer::HandleAccept(std::shared_ptr<CSession> new_session, const boost::system::error_code& error) {
     if (!error) {
-        // Æô¶¯»á»°
+        // å¯åŠ¨ä¼šè¯
         new_session->Start();
 
-        // ¼ÓËø±£Ö¤Ïß³Ì°²È«
+        // åŠ é”ä¿è¯çº¿ç¨‹å®‰å…¨
         lock_guard<mutex> lock(_mutex);
 
-        // ½«»á»°¼ÓÈë_sessions
+        // å°†ä¼šè¯åŠ å…¥_sessions
         _sessions.insert(std::make_pair(new_session->GetSessionId(), new_session));
     }
     else {
         cout << "session accept failed, error is " << error.what() << std::endl;
     }
 
-    // ¼ÌĞø½ÓÊÜÏÂÒ»¸öÁ¬½Ó
+    // ç»§ç»­æ¥å—ä¸‹ä¸€ä¸ªè¿æ¥
     StartAccept();
 }

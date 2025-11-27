@@ -13,7 +13,7 @@
 #include <cctype>
 #include<grpc/grpc.h>
 
-// ¸¨Öúº¯Êı£ºÈ¥³ı×Ö·û´®Ê×Î²µÄ¿Õ°××Ö·û
+// è¾…åŠ©å‡½æ•°ï¼šå»é™¤å­—ç¬¦ä¸²é¦–å°¾çš„ç©ºç™½å­—ç¬¦
 static inline std::string trim(const std::string& s) {
     size_t l = 0, r = s.size();
     while (l < r && std::isspace((unsigned char)s[l])) ++l;
@@ -21,27 +21,27 @@ static inline std::string trim(const std::string& s) {
     return s.substr(l, r - l);
 }
 
-// Éú³ÉÎ¨Ò»µÄUUID×Ö·û´®
+// ç”Ÿæˆå”¯ä¸€çš„UUIDå­—ç¬¦ä¸²
 // 
-// ·µ»ØÖµ£º
-//   ·µ»ØÒ»¸öUUID×Ö·û´®£¨ÀıÈç£º"12345678-1234-1234-1234-123456789abc"£©
+// è¿”å›å€¼ï¼š
+//   è¿”å›ä¸€ä¸ªUUIDå­—ç¬¦ä¸²ï¼ˆä¾‹å¦‚ï¼š"12345678-1234-1234-1234-123456789abc"ï¼‰
 // 
-// ÓÃÍ¾£º
-//   ÓÃ×÷ÓÃ»§µÇÂ¼token£¬±£Ö¤Î¨Ò»ĞÔ
+// ç”¨é€”ï¼š
+//   ç”¨ä½œç”¨æˆ·ç™»å½•tokenï¼Œä¿è¯å”¯ä¸€æ€§
 std::string generate_unique_string() {
     boost::uuids::uuid uuid = boost::uuids::random_generator()();
     return to_string(uuid);
 }
 
-// ²åÈëÓÃ»§tokenµ½Redis
+// æ’å…¥ç”¨æˆ·tokenåˆ°Redis
 // 
-// ²ÎÊı£º
-//   - uid: ÓÃ»§ID
-//   - token: ÈÏÖ¤ÁîÅÆ
+// å‚æ•°ï¼š
+//   - uid: ç”¨æˆ·ID
+//   - token: è®¤è¯ä»¤ç‰Œ
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ¹¹ÔìRedis¼ü£ºUSERTOKENPREFIX + uid
-//   2. ½«token´æ´¢µ½RedisÖĞ
+// å®ç°é€»è¾‘ï¼š
+//   1. æ„é€ Redisé”®ï¼šUSERTOKENPREFIX + uid
+//   2. å°†tokenå­˜å‚¨åˆ°Redisä¸­
 void StatusServiceImpl::insertToken(int uid, std::string token)
 {
     std::string uid_str = std::to_string(uid);
@@ -50,20 +50,20 @@ void StatusServiceImpl::insertToken(int uid, std::string token)
     std::cout << "[insertToken] uid=" << uid << " key=" << token_key << " token=" << token << std::endl;
 }
 
-// »ñÈ¡¿ÉÓÃµÄChatServer£¨¸ºÔØ¾ùºâËã·¨£©
+// è·å–å¯ç”¨çš„ChatServerï¼ˆè´Ÿè½½å‡è¡¡ç®—æ³•ï¼‰
 // 
-// ·µ»ØÖµ£º
-//   Ò»¸öChatServer½á¹¹Ìå
+// è¿”å›å€¼ï¼š
+//   ä¸€ä¸ªChatServerç»“æ„ä½“
 // 
-// ¸ºÔØ¾ùºâ²ßÂÔ£º
-//   ×îĞ¡Á¬½ÓÊıÓÅÏÈ£¨Least Connections£©
-//   ´ÓRedis¶ÁÈ¡Ã¿¸öChatServerµÄµ±Ç°Á¬½ÓÊı£¬Ñ¡ÔñÁ¬½ÓÊı×îÉÙµÄ
+// è´Ÿè½½å‡è¡¡ç­–ç•¥ï¼š
+//   æœ€å°è¿æ¥æ•°ä¼˜å…ˆï¼ˆLeast Connectionsï¼‰
+//   ä»Redisè¯»å–æ¯ä¸ªChatServerçš„å½“å‰è¿æ¥æ•°ï¼Œé€‰æ‹©è¿æ¥æ•°æœ€å°‘çš„
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ±éÀúËùÓĞChatServer
-//   2. ´ÓRedis¶ÁÈ¡Ã¿¸öChatServerµÄµ±Ç°Á¬½ÓÊı£¨HGET LOGIN_COUNT server_name£©
-//   3. Ñ¡ÔñÁ¬½ÓÊı×îÉÙµÄChatServer
-//   4. Èç¹ûÃ»ÓĞ¼ÇÂ¼£¬½«Á¬½ÓÊıÉèÎªINT_MAX£¨ÓÅÏÈÑ¡ÔñÓĞ¼ÇÂ¼µÄ·şÎñÆ÷£©
+// å®ç°é€»è¾‘ï¼š
+//   1. éå†æ‰€æœ‰ChatServer
+//   2. ä»Redisè¯»å–æ¯ä¸ªChatServerçš„å½“å‰è¿æ¥æ•°ï¼ˆHGET LOGIN_COUNT server_nameï¼‰
+//   3. é€‰æ‹©è¿æ¥æ•°æœ€å°‘çš„ChatServer
+//   4. å¦‚æœæ²¡æœ‰è®°å½•ï¼Œå°†è¿æ¥æ•°è®¾ä¸ºINT_MAXï¼ˆä¼˜å…ˆé€‰æ‹©æœ‰è®°å½•çš„æœåŠ¡å™¨ï¼‰
 ChatServer StatusServiceImpl::getChatServer()
 {
     std::lock_guard<std::mutex> guard(_server_mtx);
@@ -71,20 +71,20 @@ ChatServer StatusServiceImpl::getChatServer()
     ChatServer best;
     bool initialized = false;
 
-    // ¼ì²é·şÎñÆ÷ÁĞ±íÊÇ·ñÎª¿Õ
+    // æ£€æŸ¥æœåŠ¡å™¨åˆ—è¡¨æ˜¯å¦ä¸ºç©º
     if (_servers.empty()) {
         std::cerr << "[getChatServer] _servers is empty\n";
         return best;
     }
 
-    // ±éÀúËùÓĞChatServer£¬Ñ¡ÔñÁ¬½ÓÊı×îÉÙµÄ
+    // éå†æ‰€æœ‰ChatServerï¼Œé€‰æ‹©è¿æ¥æ•°æœ€å°‘çš„
     for (auto& kv : _servers) {
         ChatServer s = kv.second;
 
-        // ´Ó Redis ¶ÁÈ¡µ±Ç°·şÎñÆ÷µÄµÇÂ¼¼ÇÂ¼Êı
+        // ä» Redis è¯»å–å½“å‰æœåŠ¡å™¨çš„ç™»å½•è®°å½•æ•°
         std::string count_str = RedisMgr::GetInstance()->HGet(LOGIN_COUNT, s.name);
         if (count_str.empty()) {
-            s.con_count = INT_MAX; // ÎŞ¼ÇÂ¼ -> ÊÓÎª×îĞ¡Öµ£¨ÓÅÏÈÑ¡ÔñÓĞ¼ÇÂ¼µÄ£©
+            s.con_count = INT_MAX; // æ— è®°å½• -> è§†ä¸ºæœ€å°å€¼ï¼ˆä¼˜å…ˆé€‰æ‹©æœ‰è®°å½•çš„ï¼‰
         }
         else {
             try {
@@ -95,14 +95,14 @@ ChatServer StatusServiceImpl::getChatServer()
             }
         }
 
-        // ¸üĞÂ×î¼ÑÑ¡Ôñ
+        // æ›´æ–°æœ€ä½³é€‰æ‹©
         if (!initialized || s.con_count < best.con_count) {
             best = s;
             initialized = true;
         }
     }
 
-    // Èç¹ûËùÓĞ server µÄ con_count ¶¼ÊÇ INT_MAX£¬±íÊ¾ Redis Ã»ÓĞ¼ÇÂ¼£¬Ò²·µ»ØµÚÒ»Ì¨·şÎñÆ÷£¨ÑéÖ¤²»»á·µ»Ø¿Õ£©
+    // å¦‚æœæ‰€æœ‰ server çš„ con_count éƒ½æ˜¯ INT_MAXï¼Œè¡¨ç¤º Redis æ²¡æœ‰è®°å½•ï¼Œä¹Ÿè¿”å›ç¬¬ä¸€å°æœåŠ¡å™¨ï¼ˆéªŒè¯ä¸ä¼šè¿”å›ç©ºï¼‰
     if (!initialized && !_servers.empty()) {
         best = _servers.begin()->second;
     }
@@ -113,42 +113,42 @@ ChatServer StatusServiceImpl::getChatServer()
     return best;
 }
 
-// »ñÈ¡ÁÄÌì·şÎñÆ÷£¨gRPC·½·¨ÊµÏÖ£©
+// è·å–èŠå¤©æœåŠ¡å™¨ï¼ˆgRPCæ–¹æ³•å®ç°ï¼‰
 // 
-// ¹¦ÄÜ£º
-//   ÎªÇëÇóµÄÓÃ»§·ÖÅäÒ»¸ö¿ÉÓÃµÄChatServer
+// åŠŸèƒ½ï¼š
+//   ä¸ºè¯·æ±‚çš„ç”¨æˆ·åˆ†é…ä¸€ä¸ªå¯ç”¨çš„ChatServer
 // 
-// ÊµÏÖÂß¼­£º
-//   1. µ÷ÓÃgetChatServer()Ñ¡ÔñÒ»¸ö¸ºÔØ×îÇáµÄChatServer
-//   2. ¼ì²éÑ¡ÖĞµÄChatServerÊÇ·ñÓĞĞ§
-//   3. Éú³ÉÎ¨Ò»µÄtoken
-//   4. ½«token´æ´¢µ½Redis
-//   5. ·µ»ØChatServerµÄhost¡¢portºÍtoken
+// å®ç°é€»è¾‘ï¼š
+//   1. è°ƒç”¨getChatServer()é€‰æ‹©ä¸€ä¸ªè´Ÿè½½æœ€è½»çš„ChatServer
+//   2. æ£€æŸ¥é€‰ä¸­çš„ChatServeræ˜¯å¦æœ‰æ•ˆ
+//   3. ç”Ÿæˆå”¯ä¸€çš„token
+//   4. å°†tokenå­˜å‚¨åˆ°Redis
+//   5. è¿”å›ChatServerçš„hostã€portå’Œtoken
 Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatServerReq* request, GetChatServerRsp* reply)
 {
     std::cout << "[GetChatServer] called with uid=" << request->uid() << std::endl;
 
-    // Ñ¡ÔñÒ»¸ö¸ºÔØ×îÇáµÄChatServer
+    // é€‰æ‹©ä¸€ä¸ªè´Ÿè½½æœ€è½»çš„ChatServer
     ChatServer server = getChatServer();
 
-    // ÏêÏ¸ÈÕÖ¾
+    // è¯¦ç»†æ—¥å¿—
     std::cout << "[GetChatServer] selected server: name=" << server.name
         << " host=" << server.host << " port=" << server.port
         << " con_count=" << server.con_count << std::endl;
 
-    // ¼ì²éÑ¡ÖĞµÄ·şÎñÆ÷ÊÇ·ñÓĞĞ§
+    // æ£€æŸ¥é€‰ä¸­çš„æœåŠ¡å™¨æ˜¯å¦æœ‰æ•ˆ
     if (server.host.empty() || server.port.empty()) {
         std::cerr << "[GetChatServer] no valid chat server available\n";
         reply->set_error(ErrorCodes::ServerNotFound); // 1013
         return Status::OK;
     }
 
-    // ÉèÖÃ·µ»ØĞÅÏ¢
+    // è®¾ç½®è¿”å›ä¿¡æ¯
     reply->set_host(server.host);
     reply->set_port(server.port);
     reply->set_error(ErrorCodes::Success);
 
-    // Éú³ÉÎ¨Ò»µÄtoken²¢´æ´¢µ½Redis
+    // ç”Ÿæˆå”¯ä¸€çš„tokenå¹¶å­˜å‚¨åˆ°Redis
     std::string token = generate_unique_string();
     reply->set_token(token);
     insertToken(request->uid(), token);
@@ -157,29 +157,29 @@ Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatSer
     return Status::OK;
 }
 
-// ÓÃ»§µÇÂ¼ÑéÖ¤£¨gRPC·½·¨ÊµÏÖ£©
+// ç”¨æˆ·ç™»å½•éªŒè¯ï¼ˆgRPCæ–¹æ³•å®ç°ï¼‰
 // 
-// ¹¦ÄÜ£º
-//   ÑéÖ¤ÓÃ»§µÄtokenÊÇ·ñÓĞĞ§
+// åŠŸèƒ½ï¼š
+//   éªŒè¯ç”¨æˆ·çš„tokenæ˜¯å¦æœ‰æ•ˆ
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ´ÓRedis¶ÁÈ¡ÓÃ»§¶ÔÓ¦µÄtoken£¨key = USERTOKENPREFIX + uid£©
-//   2. ±È½ÏÇëÇóÖĞµÄtokenºÍRedisÖĞµÄtoken
-//   3. Èç¹ûÆ¥Åä£¬·µ»Ø³É¹¦£»·ñÔò·µ»ØÊ§°Ü
+// å®ç°é€»è¾‘ï¼š
+//   1. ä»Redisè¯»å–ç”¨æˆ·å¯¹åº”çš„tokenï¼ˆkey = USERTOKENPREFIX + uidï¼‰
+//   2. æ¯”è¾ƒè¯·æ±‚ä¸­çš„tokenå’ŒRedisä¸­çš„token
+//   3. å¦‚æœåŒ¹é…ï¼Œè¿”å›æˆåŠŸï¼›å¦åˆ™è¿”å›å¤±è´¥
 // 
-// Ê¹ÓÃ³¡¾°£º
-//   ChatServerÔÚÓÃ»§Á¬½ÓÊ±µ÷ÓÃ´Ë½Ó¿ÚÑéÖ¤token
+// ä½¿ç”¨åœºæ™¯ï¼š
+//   ChatServeråœ¨ç”¨æˆ·è¿æ¥æ—¶è°ƒç”¨æ­¤æ¥å£éªŒè¯token
 Status StatusServiceImpl::Login(ServerContext* context, const message::LoginReq* request, message::LoginRsp* reply)
 {
     auto uid = request->uid();
     auto token = request->token();
 
-    // ¹¹ÔìRedis¼ü
+    // æ„é€ Redisé”®
     std::string uid_str = std::to_string(uid);
     std::string token_key = USERTOKENPREFIX + uid_str;
     std::string token_value;
 
-    // ´ÓRedis¶ÁÈ¡token
+    // ä»Redisè¯»å–token
     bool got = RedisMgr::GetInstance()->Get(token_key, token_value);
     if (!got) {
         std::cerr << "[Login] token not found in redis for uid=" << uid << " key=" << token_key << std::endl;
@@ -187,14 +187,14 @@ Status StatusServiceImpl::Login(ServerContext* context, const message::LoginReq*
         return Status::OK;
     }
 
-    // ±È½Ïtoken
+    // æ¯”è¾ƒtoken
     if (token_value != token) {
         std::cerr << "[Login] token mismatch for uid=" << uid << " expected=" << token_value << " got=" << token << std::endl;
         reply->set_error(ErrorCodes::TokenInvalid);
         return Status::OK;
     }
 
-    // ÑéÖ¤³É¹¦
+    // éªŒè¯æˆåŠŸ
     reply->set_error(ErrorCodes::Success);
     reply->set_uid(uid);
     reply->set_token(token);
@@ -202,17 +202,17 @@ Status StatusServiceImpl::Login(ServerContext* context, const message::LoginReq*
     return Status::OK;
 }
 
-// ¹¹Ôìº¯Êı£º³õÊ¼»¯StatusServiceImpl
+// æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–StatusServiceImpl
 // 
-// ×÷ÓÃ£º
-//   ´ÓÅäÖÃÎÄ¼ş¶ÁÈ¡ËùÓĞChatServerµÄÅäÖÃĞÅÏ¢
+// ä½œç”¨ï¼š
+//   ä»é…ç½®æ–‡ä»¶è¯»å–æ‰€æœ‰ChatServerçš„é…ç½®ä¿¡æ¯
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ´ÓÅäÖÃÎÄ¼ş¶ÁÈ¡ChatServerÁĞ±í£¨¶ººÅ·Ö¸ôµÄsectionÃû³Æ£©
-//   2. ½âÎösectionÁĞ±í
-//   3. ÎªÃ¿¸ösection¶ÁÈ¡Name¡¢Host¡¢PortÅäÖÃ
-//   4. ´´½¨ChatServer½á¹¹Ìå²¢Ìí¼Óµ½_servers
-//   5. con_count³õÊ¼»¯ÎªINT_MAX£¨Êµ¼ÊÖµÔÚgetChatServerÊ±´ÓRedis¶ÁÈ¡£©
+// å®ç°é€»è¾‘ï¼š
+//   1. ä»é…ç½®æ–‡ä»¶è¯»å–ChatServeråˆ—è¡¨ï¼ˆé€—å·åˆ†éš”çš„sectionåç§°ï¼‰
+//   2. è§£æsectionåˆ—è¡¨
+//   3. ä¸ºæ¯ä¸ªsectionè¯»å–Nameã€Hostã€Porté…ç½®
+//   4. åˆ›å»ºChatServerç»“æ„ä½“å¹¶æ·»åŠ åˆ°_servers
+//   5. con_countåˆå§‹åŒ–ä¸ºINT_MAXï¼ˆå®é™…å€¼åœ¨getChatServeræ—¶ä»Redisè¯»å–ï¼‰
 StatusServiceImpl::StatusServiceImpl() : _server_index(0)
 {
     auto& cfg = ConfigMgr::Inst();
@@ -222,16 +222,16 @@ StatusServiceImpl::StatusServiceImpl() : _server_index(0)
     std::stringstream ss(server_list);
     std::string word;
 
-    // ½âÎö¶ººÅ·Ö¸ôµÄsectionÁĞ±í
+    // è§£æé€—å·åˆ†éš”çš„sectionåˆ—è¡¨
     while (std::getline(ss, word, ',')) {
         word = trim(word);
         if (!word.empty()) words.push_back(word);
     }
 
-    // ÎªÃ¿¸ösection¶ÁÈ¡ÅäÖÃ
+    // ä¸ºæ¯ä¸ªsectionè¯»å–é…ç½®
     for (auto& w : words) {
         std::string section = w;
-        // Ê×ÏÈ¶ÁÈ¡ [chatserverX].Name£¬Èç¹ûÃ»ÓĞÅäÖÃÔò section ±¾Éí×÷Îª name
+        // é¦–å…ˆè¯»å– [chatserverX].Nameï¼Œå¦‚æœæ²¡æœ‰é…ç½®åˆ™ section æœ¬èº«ä½œä¸º name
         std::string configured_name = cfg[section]["Name"];
         std::string server_name = trim(configured_name.empty() ? section : configured_name);
 
@@ -239,9 +239,9 @@ StatusServiceImpl::StatusServiceImpl() : _server_index(0)
         server.port = cfg[section]["Port"];
         server.host = cfg[section]["Host"];
         server.name = server_name;
-        server.con_count = INT_MAX; // ³õÊ¼»¯Îª×î´óÖµ£¬Êµ¼ÊÖµÔÚ getChatServer Ê±´Ó Redis ¶ÁÈ¡
+        server.con_count = INT_MAX; // åˆå§‹åŒ–ä¸ºæœ€å¤§å€¼ï¼Œå®é™…å€¼åœ¨ getChatServer æ—¶ä» Redis è¯»å–
 
-        // ¼ì²éÅäÖÃÊÇ·ñÍêÕû
+        // æ£€æŸ¥é…ç½®æ˜¯å¦å®Œæ•´
         if (server.name.empty() || server.host.empty() || server.port.empty()) {
             std::cerr << "[StatusServiceImpl::ctor] skip invalid config for section=" << section
                 << " name=" << server.name << " host=" << server.host << " port=" << server.port << std::endl;
@@ -251,7 +251,7 @@ StatusServiceImpl::StatusServiceImpl() : _server_index(0)
         _servers[server.name] = server;
     }
 
-    // ´òÓ¡¼ÓÔØµÄ·şÎñÆ÷ÁĞ±í
+    // æ‰“å°åŠ è½½çš„æœåŠ¡å™¨åˆ—è¡¨
     std::cout << "[StatusServiceImpl::ctor] loaded servers:" << std::endl;
     for (auto& kv : _servers) {
         std::cout << "  " << kv.first << " -> " << kv.second.host << ":" << kv.second.port << std::endl;

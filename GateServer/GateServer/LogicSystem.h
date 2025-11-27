@@ -1,84 +1,84 @@
 #pragma once
 #include"const.h"
 
-// Ç°ÏòÉùÃ÷
+// å‰å‘å£°æ˜
 class HttpConnection;
 
-// HTTP´¦ÀíÆ÷ÀàĞÍ¶¨Òå
+// HTTPå¤„ç†å™¨ç±»å‹å®šä¹‰
 // 
-// ×÷ÓÃ£º
-//   ¶¨Òå´¦ÀíHTTPÇëÇóµÄ»Øµ÷º¯ÊıÀàĞÍ
+// ä½œç”¨ï¼š
+//   å®šä¹‰å¤„ç†HTTPè¯·æ±‚çš„å›è°ƒå‡½æ•°ç±»å‹
 // 
-// ²ÎÊı£º
-//   std::shared_ptr<HttpConnection>: HTTPÁ¬½Ó¶ÔÏóµÄÖÇÄÜÖ¸Õë
+// å‚æ•°ï¼š
+//   std::shared_ptr<HttpConnection>: HTTPè¿æ¥å¯¹è±¡çš„æ™ºèƒ½æŒ‡é’ˆ
 // 
-// ·µ»ØÖµ£º
+// è¿”å›å€¼ï¼š
 //   void
 typedef std::function<void(std::shared_ptr<HttpConnection>)> HttpHandler;
 
-// LogicSystemÀà£ºHTTPÂ·ÓÉºÍÒµÎñÂß¼­´¦ÀíÏµÍ³
+// LogicSystemç±»ï¼šHTTPè·¯ç”±å’Œä¸šåŠ¡é€»è¾‘å¤„ç†ç³»ç»Ÿ
 // 
-// ×÷ÓÃ£º
-//   1. ¹ÜÀíHTTPÇëÇóµÄÂ·ÓÉ£¨GET/POST£©
-//   2. ×¢²á¸÷ÖÖAPI¶ËµãµÄ´¦Àíº¯Êı
-//   3. ´¦ÀíÒµÎñÂß¼­£¨ÓÃ»§×¢²á¡¢µÇÂ¼¡¢ºÃÓÑ¹ÜÀíµÈ£©
+// ä½œç”¨ï¼š
+//   1. ç®¡ç†HTTPè¯·æ±‚çš„è·¯ç”±ï¼ˆGET/POSTï¼‰
+//   2. æ³¨å†Œå„ç§APIç«¯ç‚¹çš„å¤„ç†å‡½æ•°
+//   3. å¤„ç†ä¸šåŠ¡é€»è¾‘ï¼ˆç”¨æˆ·æ³¨å†Œã€ç™»å½•ã€å¥½å‹ç®¡ç†ç­‰ï¼‰
 // 
-// Éè¼ÆÄ£Ê½£º
-//   ¼Ì³ĞSingletonµ¥ÀıÄ£Ê½£¬È·±£È«¾ÖÖ»ÓĞÒ»¸öÊµÀı
+// è®¾è®¡æ¨¡å¼ï¼š
+//   ç»§æ‰¿Singletonå•ä¾‹æ¨¡å¼ï¼Œç¡®ä¿å…¨å±€åªæœ‰ä¸€ä¸ªå®ä¾‹
 // 
-// API¶Ëµã£º
-//   POST /get_verifycode - »ñÈ¡ÑéÖ¤Âë
-//   POST /user_register - ÓÃ»§×¢²á
-//   POST /reset_password - ÖØÖÃÃÜÂë
-//   POST /user_login - ÓÃ»§µÇÂ¼
-//   POST /search_friends - ËÑË÷ºÃÓÑ
-//   POST /get_friend_requests - »ñÈ¡ºÃÓÑÉêÇëÁĞ±í
-//   POST /get_my_friends - »ñÈ¡ÎÒµÄºÃÓÑÁĞ±í
-//   POST /send_friend_request - ·¢ËÍºÃÓÑÉêÇë
-//   POST /reply_friend_request - »Ø¸´ºÃÓÑÉêÇë
+// APIç«¯ç‚¹ï¼š
+//   POST /get_verifycode - è·å–éªŒè¯ç 
+//   POST /user_register - ç”¨æˆ·æ³¨å†Œ
+//   POST /reset_password - é‡ç½®å¯†ç 
+//   POST /user_login - ç”¨æˆ·ç™»å½•
+//   POST /search_friends - æœç´¢å¥½å‹
+//   POST /get_friend_requests - è·å–å¥½å‹ç”³è¯·åˆ—è¡¨
+//   POST /get_my_friends - è·å–æˆ‘çš„å¥½å‹åˆ—è¡¨
+//   POST /send_friend_request - å‘é€å¥½å‹ç”³è¯·
+//   POST /reply_friend_request - å›å¤å¥½å‹ç”³è¯·
 class LogicSystem :public Singleton<LogicSystem>
 {
     friend class Singleton<LogicSystem>;
 public:
-    // Îö¹¹º¯Êı
+    // ææ„å‡½æ•°
     ~LogicSystem() {}
 
-    // ´¦ÀíGETÇëÇó
-    // ²ÎÊı£º
-    //   - path: ÇëÇóÂ·¾¶
-    //   - con: HTTPÁ¬½Ó¶ÔÏó
-    // ·µ»ØÖµ£º
-    //   Èç¹ûÕÒµ½¶ÔÓ¦µÄ´¦ÀíÆ÷·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // å¤„ç†GETè¯·æ±‚
+    // å‚æ•°ï¼š
+    //   - path: è¯·æ±‚è·¯å¾„
+    //   - con: HTTPè¿æ¥å¯¹è±¡
+    // è¿”å›å€¼ï¼š
+    //   å¦‚æœæ‰¾åˆ°å¯¹åº”çš„å¤„ç†å™¨è¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool HandleGet(std::string, std::shared_ptr<HttpConnection>);
 
-    // ×¢²áGETÇëÇó´¦ÀíÆ÷
-    // ²ÎÊı£º
-    //   - url: ÇëÇóÂ·¾¶
-    //   - handler: ´¦Àíº¯Êı
+    // æ³¨å†ŒGETè¯·æ±‚å¤„ç†å™¨
+    // å‚æ•°ï¼š
+    //   - url: è¯·æ±‚è·¯å¾„
+    //   - handler: å¤„ç†å‡½æ•°
     void RegGet(std::string, HttpHandler handler);
 
-    // ×¢²áPOSTÇëÇó´¦ÀíÆ÷
-    // ²ÎÊı£º
-    //   - url: ÇëÇóÂ·¾¶
-    //   - handler: ´¦Àíº¯Êı
+    // æ³¨å†ŒPOSTè¯·æ±‚å¤„ç†å™¨
+    // å‚æ•°ï¼š
+    //   - url: è¯·æ±‚è·¯å¾„
+    //   - handler: å¤„ç†å‡½æ•°
     void RegPost(std::string url, HttpHandler handler);
 
-    // ´¦ÀíPOSTÇëÇó
-    // ²ÎÊı£º
-    //   - path: ÇëÇóÂ·¾¶
-    //   - con: HTTPÁ¬½Ó¶ÔÏó
-    // ·µ»ØÖµ£º
-    //   Èç¹ûÕÒµ½¶ÔÓ¦µÄ´¦ÀíÆ÷·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // å¤„ç†POSTè¯·æ±‚
+    // å‚æ•°ï¼š
+    //   - path: è¯·æ±‚è·¯å¾„
+    //   - con: HTTPè¿æ¥å¯¹è±¡
+    // è¿”å›å€¼ï¼š
+    //   å¦‚æœæ‰¾åˆ°å¯¹åº”çš„å¤„ç†å™¨è¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool HandlePost(std::string, std::shared_ptr<HttpConnection>);
 
 private:
-    // Ë½ÓĞ¹¹Ôìº¯Êı£ºÔÚ¹¹Ôìº¯ÊıÖĞ×¢²áËùÓĞÂ·ÓÉ
+    // ç§æœ‰æ„é€ å‡½æ•°ï¼šåœ¨æ„é€ å‡½æ•°ä¸­æ³¨å†Œæ‰€æœ‰è·¯ç”±
     LogicSystem();
 
-    // POSTÇëÇó´¦ÀíÆ÷Ó³Éä±í£¨Â·¾¶ -> ´¦Àíº¯Êı£©
+    // POSTè¯·æ±‚å¤„ç†å™¨æ˜ å°„è¡¨ï¼ˆè·¯å¾„ -> å¤„ç†å‡½æ•°ï¼‰
     std::map<std::string, HttpHandler> _post_handlers;
 
-    // GETÇëÇó´¦ÀíÆ÷Ó³Éä±í£¨Â·¾¶ -> ´¦Àíº¯Êı£©
+    // GETè¯·æ±‚å¤„ç†å™¨æ˜ å°„è¡¨ï¼ˆè·¯å¾„ -> å¤„ç†å‡½æ•°ï¼‰
     std::map<std::string, HttpHandler> _get_handlers;
 };
 

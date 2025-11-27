@@ -4,58 +4,58 @@
 #include<memory>
 #include<mutex>
 
-// ǰ������
+// 前向声明
 class CSession;
 
-// UserMgr�ࣺ�û�������
+// UserMgr类：用户管理器
 // 
-// ���ã�
-//   �����û�ID��CSession��ӳ�䣬�ṩ�û��Ự����ɾ�Ĳ�
+// 作用：
+//   管理用户ID到CSession的映射，提供用户会话的增删改查
 // 
-// ���ģʽ��
-//   ����ģʽ��ȷ��ȫ��Ψһ���û�������ʵ��
+// 设计模式：
+//   单例模式，确保全局唯一的用户管理器实例
 // 
-// ��Ҫ���ܣ�
-//   - ������ά���û�ID��Ự��ӳ���ϵ
-//   - �ṩ�����û�ID��ȡ�Ự�ķ���
-//   - ֧�ֻỰ�����Ӻ�ɾ��
+// 主要功能：
+//   - 建立和维护用户ID与会话的映射关系
+//   - 提供根据用户ID获取会话的方法
+//   - 支持会话的添加和删除
 class UserMgr : public Singleton<UserMgr>
 {
-    friend class Singleton<UserMgr>;  // ����Singleton����˽�й��캯��
+    friend class Singleton<UserMgr>;  // 允许Singleton访问私有构造函数
 public:
-    // �����������������лỰ
+    // 析构函数：清理所有会话
     ~UserMgr();
 
-    // �����û�ID��ȡ�Ự
-    // ������
-    //   - uid: �û�ID
-    // ����ֵ��
-    //   ����ҵ����ػỰָ�룬���򷵻�nullptr
+    // 根据用户ID获取会话
+    // 参数：
+    //   - uid: 用户ID
+    // 返回值：
+    //   如果找到返回会话指针，否则返回nullptr
     std::shared_ptr<CSession> GetSession(int uid);
 
-    // �����û��Ự
-    // ������
-    //   - uid: �û�ID
-    //   - session: �Ựָ��
-    // ���ã�
-    //   �����û�ID��Ự��ӳ���ϵ
+    // 设置用户会话
+    // 参数：
+    //   - uid: 用户ID
+    //   - session: 会话指针
+    // 作用：
+    //   建立用户ID与会话的映射关系
     void SetUserSession(int uid, std::shared_ptr<CSession> session);
 
-    // �Ƴ��û��Ự
-    // ������
-    //   - uid: �û�ID
-    // ���ã�
-    //   ����û�ID��Ự��ӳ���ϵ
+    // 移除用户会话
+    // 参数：
+    //   - uid: 用户ID
+    // 作用：
+    //   清除用户ID与会话的映射关系
     void RmvUserSession(int uid);
 
 private:
-    // ˽�й��캯��������ģʽ
+    // 私有构造函数：单例模式
     UserMgr();
 
-    // �Ự����������֤�̰߳�ȫ
+    // 会话互斥锁，保证线程安全
     std::mutex _session_mtx;
 
-    // �û�ID���Ự��ӳ���
+    // 用户ID到会话的映射表
     std::unordered_map<int, std::shared_ptr<CSession>> _uid_to_session;
 };
 

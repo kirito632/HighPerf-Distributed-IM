@@ -1,6 +1,6 @@
 #include"StatusGrpcClient.h"
 
-// »ñÈ¡ChatServerĞÅÏ¢£¨µ±Ç°Î´Ê¹ÓÃ£©
+// è·å–ChatServerä¿¡æ¯ï¼ˆå½“å‰æœªä½¿ç”¨ï¼‰
 GetChatServerRsp StatusGrpcClient::GetChatServer(int uid)
 {
     ClientContext context;
@@ -8,7 +8,7 @@ GetChatServerRsp StatusGrpcClient::GetChatServer(int uid)
     GetChatServerReq request;
     request.set_uid(uid);
 
-    // ´ÓÁ¬½Ó³Ø»ñÈ¡Stub
+    // ä»è¿æ¥æ± è·å–Stub
     auto stub = pool_->getConnection();
     if (!stub) {
         std::cerr << "StatusGrpcClient::GetChatServer - no stub from pool\n";
@@ -16,12 +16,12 @@ GetChatServerRsp StatusGrpcClient::GetChatServer(int uid)
         return reply;
     }
 
-    // Ê¹ÓÃRAIIÈ·±£Á¬½Ó¹é»¹
+    // ä½¿ç”¨RAIIç¡®ä¿è¿æ¥å½’è¿˜
     Defer defer([&stub, this]() {
         pool_->returnConnection(std::move(stub));
         });
 
-    // µ÷ÓÃgRPC
+    // è°ƒç”¨gRPC
     Status status = stub->GetChatServer(&context, request, &reply);
 
     if (!status.ok()) {
@@ -31,7 +31,7 @@ GetChatServerRsp StatusGrpcClient::GetChatServer(int uid)
         return reply;
     }
 
-    // Êä³ö¹Ø¼üÈÕÖ¾£¬´òÓ¡ server ·µ»ØµÄ host/port/token
+    // è¾“å‡ºå…³é”®æ—¥å¿—ï¼Œæ‰“å° server è¿”å›çš„ host/port/token
     std::cout << "StatusGrpcClient::GetChatServer reply: error=" << reply.error()
         << " host='" << reply.host() << "' port='" << reply.port()
         << "' token='" << reply.token() << "'\n";
@@ -39,28 +39,28 @@ GetChatServerRsp StatusGrpcClient::GetChatServer(int uid)
     return reply;
 }
 
-// ÑéÖ¤ÓÃ»§token
+// éªŒè¯ç”¨æˆ·token
 // 
-// ¹¦ÄÜ£º
-//   Í¨¹ıgRPCµ÷ÓÃStatusServerÑéÖ¤ÓÃ»§token
+// åŠŸèƒ½ï¼š
+//   é€šè¿‡gRPCè°ƒç”¨StatusServeréªŒè¯ç”¨æˆ·token
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ¹¹ÔìÇëÇó£¨uidºÍtoken£©
-//   2. ´ÓÁ¬½Ó³Ø»ñÈ¡Stub
-//   3. Ê¹ÓÃRAIIÈ·±£Á¬½Ó¹é»¹
-//   4. µ÷ÓÃgRPC
-//   5. ·µ»ØÑéÖ¤½á¹û
+// å®ç°é€»è¾‘ï¼š
+//   1. æ„é€ è¯·æ±‚ï¼ˆuidå’Œtokenï¼‰
+//   2. ä»è¿æ¥æ± è·å–Stub
+//   3. ä½¿ç”¨RAIIç¡®ä¿è¿æ¥å½’è¿˜
+//   4. è°ƒç”¨gRPC
+//   5. è¿”å›éªŒè¯ç»“æœ
 LoginRsp StatusGrpcClient::Login(int uid, std::string token)
 {
-    // 1. ¹¹ÔìÇëÇóÏûÏ¢
+    // 1. æ„é€ è¯·æ±‚æ¶ˆæ¯
     LoginReq request;
     request.set_uid(uid);
     request.set_token(token);
 
-    // 2. ¹¹ÔìÏìÓ¦ÏûÏ¢
+    // 2. æ„é€ å“åº”æ¶ˆæ¯
     LoginRsp reply;
 
-    // 3. »ñÈ¡Á¬½Ó³ØÖĞµÄ stub
+    // 3. è·å–è¿æ¥æ± ä¸­çš„ stub
     auto stub = pool_->getConnection();
     if (!stub) {
         std::cerr << "StatusGrpcClient::Login - no stub from pool\n";
@@ -68,16 +68,16 @@ LoginRsp StatusGrpcClient::Login(int uid, std::string token)
         return reply;
     }
 
-    // 4. Ê¹ÓÃ Defer È·±£ÍË³öÊ±ÊÍ·Å stub
+    // 4. ä½¿ç”¨ Defer ç¡®ä¿é€€å‡ºæ—¶é‡Šæ”¾ stub
     Defer defer([&stub, this]() {
         pool_->returnConnection(std::move(stub));
         });
 
-    // 5. µ÷ÓÃ gRPC
+    // 5. è°ƒç”¨ gRPC
     ClientContext context;
     Status status = stub->Login(&context, request, &reply);
 
-    // 6. ·µ»ØÏìÓ¦
+    // 6. è¿”å›å“åº”
     if (!status.ok()) {
         std::cerr << "Login RPC failed: " << status.error_message()
             << " (code " << status.error_code() << ")\n";
@@ -85,7 +85,7 @@ LoginRsp StatusGrpcClient::Login(int uid, std::string token)
         return reply;
     }
 
-    // 7. Êä³öÏìÓ¦
+    // 7. è¾“å‡ºå“åº”
     std::cout << "StatusGrpcClient::Login reply: error=" << reply.error()
         << " uid='" << reply.uid() << "' token='" << reply.token() << "'\n";
 
@@ -93,11 +93,11 @@ LoginRsp StatusGrpcClient::Login(int uid, std::string token)
 }
 
 
-// ¹¹Ôìº¯Êı£º³õÊ¼»¯StatusGrpcClient
+// æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–StatusGrpcClient
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ´ÓÅäÖÃ¹ÜÀíÆ÷»ñÈ¡StatusServerµÄÁ¬½ÓĞÅÏ¢
-//   2. ´´½¨StatusServerµÄÁ¬½Ó³Ø£¨Ä¬ÈÏ5¸öÁ¬½Ó£©
+// å®ç°é€»è¾‘ï¼š
+//   1. ä»é…ç½®ç®¡ç†å™¨è·å–StatusServerçš„è¿æ¥ä¿¡æ¯
+//   2. åˆ›å»ºStatusServerçš„è¿æ¥æ± ï¼ˆé»˜è®¤5ä¸ªè¿æ¥ï¼‰
 StatusGrpcClient::StatusGrpcClient()
 {
     auto& gCfgMgr = ConfigMgr::Inst();

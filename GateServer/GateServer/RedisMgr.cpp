@@ -6,87 +6,90 @@
 #include <stdexcept>
 #include <vector>
 
-// hiredisÍ·ÎÄ¼ş£¨¸ù¾İÊµ¼ÊÏîÄ¿µÄincludeÂ·¾¶£©
+// hiredisÍ·ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Êµï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½includeÂ·ï¿½ï¿½ï¿½ï¿½
 #include <hiredis/hiredis.h>
 
 namespace {
-    // ¸¨Öúº¯Êı£º°²È«µØ½«redisReply->str×ª»»Îªstd::string£¬·ÀÖ¹reply==nullptr
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È«ï¿½Ø½ï¿½redisReply->str×ªï¿½ï¿½Îªstd::stringï¿½ï¿½ï¿½ï¿½Ö¹reply==nullptr
     static std::string replyToString(redisReply* reply) {
         if (!reply || reply->type != REDIS_REPLY_STRING) return {};
         return std::string(reply->str, reply->len);
     }
 } // namespace
 
-// RedisConnectionGuard£ºRAII»úÖÆÈ·±£»ñÈ¡µ½µÄÁ¬½Ó»áÔÚ×÷ÓÃÓò½áÊøÊ±¹é»¹
+// RedisConnectionGuardï¿½ï¿½RAIIï¿½ï¿½ï¿½ï¿½È·ï¿½ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½é»¹
 // 
-// ×÷ÓÃ£º
-//   ×Ô¶¯¹ÜÀíRedisÁ¬½ÓµÄÉúÃüÖÜÆÚ£¬È·±£Á¬½ÓÔÚÊ¹ÓÃÍêºó¹é»¹µ½Á¬½Ó³Ø
+// ï¿½ï¿½ï¿½Ã£ï¿½
+//   ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½ï¿½Redisï¿½ï¿½ï¿½Óµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú£ï¿½È·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¹ï¿½ï¿½ï¿½ï¿½ï¿½é»¹ï¿½ï¿½ï¿½ï¿½ï¿½Ó³ï¿½
 // 
-// Ê¹ÓÃ·½Ê½£º
+// Ê¹ï¿½Ã·ï¿½Ê½ï¿½ï¿½
 //   auto guard = RedisConnectionGuard(pool, connection);
 //   redisContext* ctx = guard.get();
 class RedisConnectionGuard {
 public:
     RedisConnectionGuard(RedisConPool* pool, redisContext* ctx) : pool_(pool), ctx_(ctx) {}
 
-    // Îö¹¹º¯Êı£º×Ô¶¯¹é»¹Á¬½Óµ½Á¬½Ó³Ø
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½é»¹ï¿½ï¿½ï¿½Óµï¿½ï¿½ï¿½ï¿½Ó³ï¿½
     ~RedisConnectionGuard() {
         if (pool_ && ctx_) {
             pool_->returnConnection(ctx_);
-            // ½«ctx_ÉèÖÃÎªnullptr£¬ÒòÎªÁ¬½ÓÒÑ¹é»¹
+            // ï¿½ï¿½ctx_ï¿½ï¿½ï¿½ï¿½Îªnullptrï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½Ñ¹é»¹
         }
     }
 
-    // »ñÈ¡Á¬½ÓµÄÔ­Ê¼Ö¸Õë
+    // ï¿½ï¿½È¡ï¿½ï¿½ï¿½Óµï¿½Ô­Ê¼Ö¸ï¿½ï¿½
     redisContext* get() const { return ctx_; }
 
-    // ½ûÖ¹¿½±´£¨ÒÆ¶¯ÓïÒå£©
+    // ï¿½ï¿½Ö¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ¶ï¿½ï¿½ï¿½ï¿½å£©
     RedisConnectionGuard(const RedisConnectionGuard&) = delete;
     RedisConnectionGuard& operator=(const RedisConnectionGuard&) = delete;
 private:
-    RedisConPool* pool_;      // Á¬½Ó³ØÖ¸Õë
-    redisContext* ctx_;       // RedisÁ¬½ÓÖ¸Õë
+    RedisConPool* pool_;      // ï¿½ï¿½ï¿½Ó³ï¿½Ö¸ï¿½ï¿½
+    redisContext* ctx_;       // Redisï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½
 };
 
-// ¹¹Ôìº¯Êı£º³õÊ¼»¯Redis¹ÜÀíÆ÷
+// ï¿½ï¿½ï¿½ìº¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¼ï¿½ï¿½Redisï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 // 
-// ×÷ÓÃ£º
-//   ´ÓÅäÖÃÎÄ¼şÖĞ¶ÁÈ¡RedisÁ¬½ÓĞÅÏ¢£¬´´½¨Á¬½Ó³Ø
+// ï¿½ï¿½ï¿½Ã£ï¿½
+//   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½Ğ¶ï¿½È¡Redisï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó³ï¿½
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ´ÓÅäÖÃ¹ÜÀíÆ÷»ñÈ¡RedisÁ¬½ÓĞÅÏ¢£¨Ö÷»ú¡¢¶Ë¿Ú¡¢ÃÜÂë£©
-//   2. ´´½¨RedisÁ¬½Ó³Ø£¨Ä¬ÈÏ5¸öÁ¬½Ó£©
+// Êµï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½
+//   1. ï¿½ï¿½ï¿½ï¿½ï¿½Ã¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¡Redisï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë¿Ú¡ï¿½ï¿½ï¿½ï¿½ë£©
+//   2. ï¿½ï¿½ï¿½ï¿½Redisï¿½ï¿½ï¿½Ó³Ø£ï¿½Ä¬ï¿½ï¿½5ï¿½ï¿½ï¿½ï¿½ï¿½Ó£ï¿½
 RedisMgr::RedisMgr()
 {
     auto& gCfgMgr = ConfigMgr::Inst();
     auto host = gCfgMgr["Redis"]["Host"];
     auto port = gCfgMgr["Redis"]["Port"];
     auto pwd = gCfgMgr["Redis"]["Passwd"];
-    // Ä¬ÈÏpool size 5£¬¿É¸ù¾İĞèÒªµ÷Õû
-    con_pool_.reset(new RedisConPool(5, host.c_str(), atoi(port.c_str()), pwd.c_str()));
+    // æ ¹æ®CPUæ ¸å¿ƒæ•°åŠ¨æ€è®¾ç½®è¿æ¥æ± å¤§å°
+    size_t pool_size = std::max(16u, std::thread::hardware_concurrency() * 2);
+    std::cout << "[RedisMgr] CPU cores: " << std::thread::hardware_concurrency() 
+              << ", Redis pool size: " << pool_size << std::endl;
+    con_pool_.reset(new RedisConPool(pool_size, host.c_str(), atoi(port.c_str()), pwd.c_str()));
 }
 
-// Îö¹¹º¯Êı£ºÇåÀí×ÊÔ´
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´
 RedisMgr::~RedisMgr()
 {
     Close();
 }
 
-// »ñÈ¡¼üÖµ£¨GETÃüÁî£©
+// ï¿½ï¿½È¡ï¿½ï¿½Öµï¿½ï¿½GETï¿½ï¿½ï¿½î£©
 // 
-// ²ÎÊı£º
-//   - key: ¼üÃû
-//   - value: Êä³ö²ÎÊı£¬¼üÖµ
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - key: ï¿½ï¿½ï¿½ï¿½
+//   - value: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Öµ
 // 
-// ·µ»ØÖµ£º
-//   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+// ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½
+//   ï¿½É¹ï¿½ï¿½ï¿½ï¿½ï¿½trueï¿½ï¿½ï¿½ï¿½ï¿½ò·µ»ï¿½false
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ´ÓÁ¬½Ó³Ø»ñÈ¡Á¬½Ó
-//   2. Ê¹ÓÃRAII»úÖÆ×Ô¶¯¹ÜÀíÁ¬½Ó
-//   3. Ö´ĞĞGETÃüÁî
-//   4. ´¦Àí·µ»Ø½á¹û£¨NIL±íÊ¾¼ü²»´æÔÚ£©
-//   5. ½«½á¹ûĞ´Èëvalue
+// Êµï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½
+//   1. ï¿½ï¿½ï¿½ï¿½ï¿½Ó³Ø»ï¿½È¡ï¿½ï¿½ï¿½ï¿½
+//   2. Ê¹ï¿½ï¿½RAIIï¿½ï¿½ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   3. Ö´ï¿½ï¿½GETï¿½ï¿½ï¿½ï¿½
+//   4. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø½ï¿½ï¿½ï¿½ï¿½NILï¿½ï¿½Ê¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú£ï¿½
+//   5. ï¿½ï¿½ï¿½ï¿½ï¿½Ğ´ï¿½ï¿½value
 bool RedisMgr::Get(const std::string& key, std::string& value)
 {
     auto connect = con_pool_->getConnection();
@@ -94,7 +97,7 @@ bool RedisMgr::Get(const std::string& key, std::string& value)
         std::cout << "[RedisMgr::Get] getConnection returned nullptr for key=" << key << std::endl;
         return false;
     }
-    // Ê¹ÓÃRAII×Ô¶¯¹é»¹Á¬½Ó
+    // Ê¹ï¿½ï¿½RAIIï¿½Ô¶ï¿½ï¿½é»¹ï¿½ï¿½ï¿½ï¿½
     RedisConnectionGuard guard(con_pool_.get(), connect);
 
     redisReply* reply = (redisReply*)redisCommand(connect, "GET %s", key.c_str());
@@ -103,9 +106,9 @@ bool RedisMgr::Get(const std::string& key, std::string& value)
         return false;
     }
 
-    // ¼ì²é·µ»ØÀàĞÍ
+    // ï¿½ï¿½é·µï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     if (reply->type == REDIS_REPLY_NIL) {
-        // key²»´æÔÚ
+        // keyï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         freeReplyObject(reply);
         std::cout << "[RedisMgr::Get] GET " << key << " -> (nil)\n";
         return false;
@@ -117,26 +120,26 @@ bool RedisMgr::Get(const std::string& key, std::string& value)
         return false;
     }
 
-    // ¸´ÖÆ×Ö·û´®Öµ
+    // ï¿½ï¿½ï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½Öµ
     value.assign(reply->str, reply->len);
     freeReplyObject(reply);
     std::cout << "Succeed to execute command [ GET " << key << " ]\n";
     return true;
 }
 
-// ÉèÖÃ¼üÖµ£¨SETÃüÁî£©
+// ï¿½ï¿½ï¿½Ã¼ï¿½Öµï¿½ï¿½SETï¿½ï¿½ï¿½î£©
 // 
-// ²ÎÊı£º
-//   - key: ¼üÃû
-//   - value: ¼üÖµ
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - key: ï¿½ï¿½ï¿½ï¿½
+//   - value: ï¿½ï¿½Öµ
 // 
-// ·µ»ØÖµ£º
-//   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+// ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½
+//   ï¿½É¹ï¿½ï¿½ï¿½ï¿½ï¿½trueï¿½ï¿½ï¿½ï¿½ï¿½ò·µ»ï¿½false
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ´ÓÁ¬½Ó³Ø»ñÈ¡Á¬½Ó
-//   2. Ö´ĞĞSETÃüÁî
-//   3. ¼ì²é·µ»ØÖµÊÇ·ñÎª"OK"
+// Êµï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½
+//   1. ï¿½ï¿½ï¿½ï¿½ï¿½Ó³Ø»ï¿½È¡ï¿½ï¿½ï¿½ï¿½
+//   2. Ö´ï¿½ï¿½SETï¿½ï¿½ï¿½ï¿½
+//   3. ï¿½ï¿½é·µï¿½ï¿½Öµï¿½Ç·ï¿½Îª"OK"
 bool RedisMgr::Set(const std::string& key, const std::string& value) {
     auto connect = con_pool_->getConnection();
     if (connect == nullptr) {
@@ -151,7 +154,7 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
         return false;
     }
 
-    // ¼ì²é·µ»Ø×´Ì¬
+    // ï¿½ï¿½é·µï¿½ï¿½×´Ì¬
     bool ok = false;
     if (reply->type == REDIS_REPLY_STATUS) {
         // "OK" or "ok"
@@ -169,7 +172,7 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
     return false;
 }
 
-// ·¢²¼ÏûÏ¢µ½ÆµµÀ£¨PUBLISH channel message£©
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢ï¿½ï¿½Æµï¿½ï¿½ï¿½ï¿½PUBLISH channel messageï¿½ï¿½
 bool RedisMgr::Publish(const std::string& channel, const std::string& message)
 {
     auto connect = con_pool_->getConnection();
@@ -194,13 +197,13 @@ bool RedisMgr::Publish(const std::string& channel, const std::string& message)
     return ok;
 }
 
-// Éí·İÈÏÖ¤£¨AUTHÃüÁî£©
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¤ï¿½ï¿½AUTHï¿½ï¿½ï¿½î£©
 // 
-// ²ÎÊı£º
-//   - password: RedisÃÜÂë
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - password: Redisï¿½ï¿½ï¿½ï¿½
 // 
-// ·µ»ØÖµ£º
-//   ÈÏÖ¤³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+// ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½
+//   ï¿½ï¿½Ö¤ï¿½É¹ï¿½ï¿½ï¿½ï¿½ï¿½trueï¿½ï¿½ï¿½ï¿½ï¿½ò·µ»ï¿½false
 bool RedisMgr::Auth(const std::string& password)
 {
     auto connect = con_pool_->getConnection();
@@ -222,22 +225,22 @@ bool RedisMgr::Auth(const std::string& password)
     }
     freeReplyObject(reply);
 
-    if (ok) std::cout << "ÈÏÖ¤³É¹¦" << std::endl;
-    else std::cout << "ÈÏÖ¤Ê§°Ü" << std::endl;
+    if (ok) std::cout << "ï¿½ï¿½Ö¤ï¿½É¹ï¿½" << std::endl;
+    else std::cout << "ï¿½ï¿½Ö¤Ê§ï¿½ï¿½" << std::endl;
     return ok;
 }
 
-// ´Ó×ó¶ËÍÆÈëÔªËØ£¨LPUSHÃüÁî£©
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ôªï¿½Ø£ï¿½LPUSHï¿½ï¿½ï¿½î£©
 // 
-// ²ÎÊı£º
-//   - key: ÁĞ±í¼üÃû
-//   - value: ÒªÍÆÈëµÄÖµ
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - key: ï¿½Ğ±ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - value: Òªï¿½ï¿½ï¿½ï¿½ï¿½Öµ
 // 
-// ·µ»ØÖµ£º
-//   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+// ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½
+//   ï¿½É¹ï¿½ï¿½ï¿½ï¿½ï¿½trueï¿½ï¿½ï¿½ï¿½ï¿½ò·µ»ï¿½false
 // 
-// ËµÃ÷£º
-//   LPUSHÓÃÓÚ¶ÓÁĞ³¡¾°£¬´ÓÁĞ±í×ó¶Ë£¨Í·²¿£©Ìí¼ÓÔªËØ
+// Ëµï¿½ï¿½ï¿½ï¿½
+//   LPUSHï¿½ï¿½ï¿½Ú¶ï¿½ï¿½Ğ³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ğ±ï¿½ï¿½ï¿½Ë£ï¿½Í·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ôªï¿½ï¿½
 bool RedisMgr::LPush(const std::string& key, const std::string& value)
 {
     auto connect = con_pool_->getConnection();
@@ -253,7 +256,7 @@ bool RedisMgr::LPush(const std::string& key, const std::string& value)
         return false;
     }
 
-    // LPUSH·µ»ØÕûÊı£¬±íÊ¾²Ù×÷ºóµÄÁĞ±í³¤¶È
+    // LPUSHï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ğ±ï¿½ï¿½ï¿½ï¿½ï¿½
     bool ok = (reply->type == REDIS_REPLY_INTEGER && reply->integer >= 0);
     freeReplyObject(reply);
 
@@ -265,17 +268,17 @@ bool RedisMgr::LPush(const std::string& key, const std::string& value)
     return false;
 }
 
-// ´Ó×ó¶Ëµ¯³öÔªËØ£¨LPOPÃüÁî£©
+// ï¿½ï¿½ï¿½ï¿½Ëµï¿½ï¿½ï¿½Ôªï¿½Ø£ï¿½LPOPï¿½ï¿½ï¿½î£©
 // 
-// ²ÎÊı£º
-//   - key: ÁĞ±í¼üÃû
-//   - value: Êä³ö²ÎÊı£¬µ¯³öµÄÖµ
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - key: ï¿½Ğ±ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - value: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Öµ
 // 
-// ·µ»ØÖµ£º
-//   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+// ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½
+//   ï¿½É¹ï¿½ï¿½ï¿½ï¿½ï¿½trueï¿½ï¿½ï¿½ï¿½ï¿½ò·µ»ï¿½false
 // 
-// ËµÃ÷£º
-//   LPOPÓÃÓÚ¶ÓÁĞ³¡¾°£¬´ÓÁĞ±í×ó¶Ë£¨Í·²¿£©µ¯³öÔªËØ
+// Ëµï¿½ï¿½ï¿½ï¿½
+//   LPOPï¿½ï¿½ï¿½Ú¶ï¿½ï¿½Ğ³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ğ±ï¿½ï¿½ï¿½Ë£ï¿½Í·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ôªï¿½ï¿½
 bool RedisMgr::LPop(const std::string& key, std::string& value) {
     auto connect = con_pool_->getConnection();
     if (connect == nullptr) {
@@ -290,7 +293,7 @@ bool RedisMgr::LPop(const std::string& key, std::string& value) {
         return false;
     }
 
-    // ¼ì²é·µ»ØÀàĞÍ
+    // ï¿½ï¿½é·µï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     if (reply->type == REDIS_REPLY_NIL) {
         freeReplyObject(reply);
         std::cout << "Execut command [ LPOP " << key << " ] -> (nil)\n";
@@ -302,24 +305,24 @@ bool RedisMgr::LPop(const std::string& key, std::string& value) {
         return false;
     }
 
-    // ¸´ÖÆ×Ö·û´®Öµ
+    // ï¿½ï¿½ï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½Öµ
     value.assign(reply->str, reply->len);
     freeReplyObject(reply);
     std::cout << "Execut command [ LPOP " << key << " ] success ! " << std::endl;
     return true;
 }
 
-// ´ÓÓÒ¶ËÍÆÈëÔªËØ£¨RPUSHÃüÁî£©
+// ï¿½ï¿½ï¿½Ò¶ï¿½ï¿½ï¿½ï¿½ï¿½Ôªï¿½Ø£ï¿½RPUSHï¿½ï¿½ï¿½î£©
 // 
-// ²ÎÊı£º
-//   - key: ÁĞ±í¼üÃû
-//   - value: ÒªÍÆÈëµÄÖµ
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - key: ï¿½Ğ±ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - value: Òªï¿½ï¿½ï¿½ï¿½ï¿½Öµ
 // 
-// ·µ»ØÖµ£º
-//   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+// ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½
+//   ï¿½É¹ï¿½ï¿½ï¿½ï¿½ï¿½trueï¿½ï¿½ï¿½ï¿½ï¿½ò·µ»ï¿½false
 // 
-// ËµÃ÷£º
-//   RPUSHÓÃÓÚÕ»³¡¾°£¬´ÓÁĞ±íÓÒ¶Ë£¨Î²²¿£©Ìí¼ÓÔªËØ
+// Ëµï¿½ï¿½ï¿½ï¿½
+//   RPUSHï¿½ï¿½ï¿½ï¿½Õ»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ğ±ï¿½ï¿½Ò¶Ë£ï¿½Î²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ôªï¿½ï¿½
 bool RedisMgr::RPush(const std::string& key, const std::string& value) {
     auto connect = con_pool_->getConnection();
     if (connect == nullptr) {
@@ -334,7 +337,7 @@ bool RedisMgr::RPush(const std::string& key, const std::string& value) {
         return false;
     }
 
-    // RPUSH·µ»ØÕûÊı£¬±íÊ¾²Ù×÷ºóµÄÁĞ±í³¤¶È
+    // RPUSHï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ğ±ï¿½ï¿½ï¿½ï¿½ï¿½
     bool ok = (reply->type == REDIS_REPLY_INTEGER && reply->integer >= 0);
     freeReplyObject(reply);
 
@@ -346,17 +349,17 @@ bool RedisMgr::RPush(const std::string& key, const std::string& value) {
     return false;
 }
 
-// ´ÓÓÒ¶Ëµ¯³öÔªËØ£¨RPOPÃüÁî£©
+// ï¿½ï¿½ï¿½Ò¶Ëµï¿½ï¿½ï¿½Ôªï¿½Ø£ï¿½RPOPï¿½ï¿½ï¿½î£©
 // 
-// ²ÎÊı£º
-//   - key: ÁĞ±í¼üÃû
-//   - value: Êä³ö²ÎÊı£¬µ¯³öµÄÖµ
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - key: ï¿½Ğ±ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - value: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Öµ
 // 
-// ·µ»ØÖµ£º
-//   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+// ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½
+//   ï¿½É¹ï¿½ï¿½ï¿½ï¿½ï¿½trueï¿½ï¿½ï¿½ï¿½ï¿½ò·µ»ï¿½false
 // 
-// ËµÃ÷£º
-//   RPOPÓÃÓÚÕ»³¡¾°£¬´ÓÁĞ±íÓÒ¶Ë£¨Î²²¿£©µ¯³öÔªËØ
+// Ëµï¿½ï¿½ï¿½ï¿½
+//   RPOPï¿½ï¿½ï¿½ï¿½Õ»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ğ±ï¿½ï¿½Ò¶Ë£ï¿½Î²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ôªï¿½ï¿½
 bool RedisMgr::RPop(const std::string& key, std::string& value) {
     auto connect = con_pool_->getConnection();
     if (connect == nullptr) {
@@ -371,7 +374,7 @@ bool RedisMgr::RPop(const std::string& key, std::string& value) {
         return false;
     }
 
-    // ¼ì²é·µ»ØÀàĞÍ
+    // ï¿½ï¿½é·µï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     if (reply->type == REDIS_REPLY_NIL) {
         freeReplyObject(reply);
         std::cout << "Execut command [ RPOP " << key << " ] -> (nil)\n";
@@ -383,25 +386,25 @@ bool RedisMgr::RPop(const std::string& key, std::string& value) {
         return false;
     }
 
-    // ¸´ÖÆ×Ö·û´®Öµ
+    // ï¿½ï¿½ï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½Öµ
     value.assign(reply->str, reply->len);
     freeReplyObject(reply);
     std::cout << "Execut command [ RPOP " << key << " ] success ! " << std::endl;
     return true;
 }
 
-// ÉèÖÃ¹şÏ£×Ö¶ÎÖµ£¨HSETÃüÁî - ×Ö·û´®°æ±¾£©
+// ï¿½ï¿½ï¿½Ã¹ï¿½Ï£ï¿½Ö¶ï¿½Öµï¿½ï¿½HSETï¿½ï¿½ï¿½ï¿½ - ï¿½Ö·ï¿½ï¿½ï¿½ï¿½æ±¾ï¿½ï¿½
 // 
-// ²ÎÊı£º
-//   - key: ¹şÏ£¼üÃû
-//   - hkey: ×Ö¶ÎÃû
-//   - value: ×Ö¶ÎÖµ
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - key: ï¿½ï¿½Ï£ï¿½ï¿½ï¿½ï¿½
+//   - hkey: ï¿½Ö¶ï¿½ï¿½ï¿½
+//   - value: ï¿½Ö¶ï¿½Öµ
 // 
-// ·µ»ØÖµ£º
-//   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+// ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½
+//   ï¿½É¹ï¿½ï¿½ï¿½ï¿½ï¿½trueï¿½ï¿½ï¿½ï¿½ï¿½ò·µ»ï¿½false
 // 
-// ËµÃ÷£º
-//   HSETÓÃÓÚÉèÖÃ¹şÏ£ÖĞµÄ×Ö¶ÎÖµ
+// Ëµï¿½ï¿½ï¿½ï¿½
+//   HSETï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã¹ï¿½Ï£ï¿½Ğµï¿½ï¿½Ö¶ï¿½Öµ
 bool RedisMgr::HSet(const std::string& key, const std::string& hkey, const std::string& value) {
     auto connect = con_pool_->getConnection();
     if (connect == nullptr) {
@@ -416,7 +419,7 @@ bool RedisMgr::HSet(const std::string& key, const std::string& hkey, const std::
         return false;
     }
 
-    // HSET·µ»ØÕûÊı£¨ĞÂÔöµÄ×Ö¶ÎÊı£©
+    // HSETï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¶ï¿½ï¿½ï¿½ï¿½ï¿½
     bool ok = (reply->type == REDIS_REPLY_INTEGER);
     freeReplyObject(reply);
 
@@ -428,20 +431,20 @@ bool RedisMgr::HSet(const std::string& key, const std::string& hkey, const std::
     return false;
 }
 
-// ÉèÖÃ¹şÏ£×Ö¶ÎÖµ£¨HSETÃüÁî - ¶ş½øÖÆ°æ±¾£©
+// ï¿½ï¿½ï¿½Ã¹ï¿½Ï£ï¿½Ö¶ï¿½Öµï¿½ï¿½HSETï¿½ï¿½ï¿½ï¿½ - ï¿½ï¿½ï¿½ï¿½ï¿½Æ°æ±¾ï¿½ï¿½
 // 
-// ²ÎÊı£º
-//   - key: ¹şÏ£¼üÃû
-//   - hkey: ×Ö¶ÎÃû
-//   - hvalue: ×Ö¶ÎÖµ£¨¶ş½øÖÆÊı¾İ£©
-//   - hvaluelen: Êı¾İ³¤¶È
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - key: ï¿½ï¿½Ï£ï¿½ï¿½ï¿½ï¿½
+//   - hkey: ï¿½Ö¶ï¿½ï¿½ï¿½
+//   - hvalue: ï¿½Ö¶ï¿½Öµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½İ£ï¿½
+//   - hvaluelen: ï¿½ï¿½ï¿½İ³ï¿½ï¿½ï¿½
 // 
-// ·µ»ØÖµ£º
-//   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+// ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½
+//   ï¿½É¹ï¿½ï¿½ï¿½ï¿½ï¿½trueï¿½ï¿½ï¿½ï¿½ï¿½ò·µ»ï¿½false
 // 
-// ËµÃ÷£º
-//   Ê¹ÓÃredisCommandArgvÖ§³Ö¶ş½øÖÆÊı¾İ
-//   ÊÊÓÃÓÚ´æ´¢·ÇÎÄ±¾Êı¾İ£¨ÈçÍ¼Æ¬¡¢ÊÓÆµµÈ£©
+// Ëµï¿½ï¿½ï¿½ï¿½
+//   Ê¹ï¿½ï¿½redisCommandArgvÖ§ï¿½Ö¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   ï¿½ï¿½ï¿½ï¿½ï¿½Ú´æ´¢ï¿½ï¿½ï¿½Ä±ï¿½ï¿½ï¿½ï¿½İ£ï¿½ï¿½ï¿½Í¼Æ¬ï¿½ï¿½ï¿½ï¿½Æµï¿½È£ï¿½
 bool RedisMgr::HSet(const char* key, const char* hkey, const char* hvalue, size_t hvaluelen)
 {
     auto connect = con_pool_->getConnection();
@@ -451,7 +454,7 @@ bool RedisMgr::HSet(const char* key, const char* hkey, const char* hvalue, size_
     }
     RedisConnectionGuard guard(con_pool_.get(), connect);
 
-    // ×¼±¸redisCommandArgvµÄ²ÎÊı
+    // ×¼ï¿½ï¿½redisCommandArgvï¿½Ä²ï¿½ï¿½ï¿½
     const char* argv[4];
     size_t argvlen[4];
     argv[0] = "HSET";
@@ -480,19 +483,19 @@ bool RedisMgr::HSet(const char* key, const char* hkey, const char* hvalue, size_
     return false;
 }
 
-// É¾³ı¹şÏ£×Ö¶Î£¨HDELÃüÁî£©
+// É¾ï¿½ï¿½ï¿½ï¿½Ï£ï¿½Ö¶Î£ï¿½HDELï¿½ï¿½ï¿½î£©
 // 
-// ²ÎÊı£º
-//   - key: ¹şÏ£¼üÃû
-//   - field: ×Ö¶ÎÃû
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - key: ï¿½ï¿½Ï£ï¿½ï¿½ï¿½ï¿½
+//   - field: ï¿½Ö¶ï¿½ï¿½ï¿½
 // 
-// ·µ»ØÖµ£º
-//   ³É¹¦É¾³ı·µ»Øtrue£¬·ñÔò·µ»Øfalse
+// ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½
+//   ï¿½É¹ï¿½É¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½trueï¿½ï¿½ï¿½ï¿½ï¿½ò·µ»ï¿½false
 // 
-// ÊµÏÖÂß¼­£º
-//   1. Ö´ĞĞHDELÃüÁî
-//   2. ¼ì²é·µ»ØÖµ£¨·µ»ØÕûÊı£¬±íÊ¾É¾³ıµÄ×Ö¶ÎÊı£©
-//   3. Èç¹û·µ»ØÖµ>0£¬±íÊ¾×Ö¶Î´æÔÚÇÒ±»É¾³ı
+// Êµï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½
+//   1. Ö´ï¿½ï¿½HDELï¿½ï¿½ï¿½ï¿½
+//   2. ï¿½ï¿½é·µï¿½ï¿½Öµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¾É¾ï¿½ï¿½ï¿½ï¿½ï¿½Ö¶ï¿½ï¿½ï¿½ï¿½ï¿½
+//   3. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Öµ>0ï¿½ï¿½ï¿½ï¿½Ê¾ï¿½Ö¶Î´ï¿½ï¿½ï¿½ï¿½Ò±ï¿½É¾ï¿½ï¿½
 bool RedisMgr::HDel(const std::string& key, const std::string& field)
 {
     auto connect = con_pool_->getConnection();
@@ -500,24 +503,24 @@ bool RedisMgr::HDel(const std::string& key, const std::string& field)
         std::cout << "[RedisMgr::HDel] getConnection returned nullptr for key=" << key << " field=" << field << std::endl;
         return false;
     }
-    // RAII: È·±£Á¬½Ó»á±»¹é»¹¸øÁ¬½Ó³Ø
+    // RAII: È·ï¿½ï¿½ï¿½ï¿½ï¿½Ó»á±»ï¿½é»¹ï¿½ï¿½ï¿½ï¿½ï¿½Ó³ï¿½
     RedisConnectionGuard guard(con_pool_.get(), connect);
 
-    // Ö´ĞĞ HDEL ÃüÁî
+    // Ö´ï¿½ï¿½ HDEL ï¿½ï¿½ï¿½ï¿½
     redisReply* reply = (redisReply*)redisCommand(connect, "HDEL %s %s", key.c_str(), field.c_str());
     if (reply == nullptr) {
         std::cout << "Execut command [ HDEL " << key << " " << field << " ] failure (reply==NULL)!\n";
         return false;
     }
 
-    // HDEL ·µ»ØÕûÊı£¨·µ»ØÖµ±íÊ¾ÒÑÉ¾³ıµÄ×Ö¶ÎÊı£©
+    // HDEL ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½Ê¾ï¿½ï¿½É¾ï¿½ï¿½ï¿½ï¿½ï¿½Ö¶ï¿½ï¿½ï¿½ï¿½ï¿½
     bool ok = false;
     if (reply->type == REDIS_REPLY_INTEGER) {
         if (reply->integer > 0) {
-            ok = true; // ×Ö¶Î±»É¾³ı
+            ok = true; // ï¿½Ö¶Î±ï¿½É¾ï¿½ï¿½
         }
         else {
-            ok = false; // ×Ö¶Î²»´æÔÚ»òÎ´É¾³ı
+            ok = false; // ï¿½Ö¶Î²ï¿½ï¿½ï¿½ï¿½Ú»ï¿½Î´É¾ï¿½ï¿½
         }
     }
     else {
@@ -537,19 +540,19 @@ bool RedisMgr::HDel(const std::string& key, const std::string& field)
 }
 
 
-// »ñÈ¡¹şÏ£×Ö¶ÎÖµ£¨HGETÃüÁî£©
+// ï¿½ï¿½È¡ï¿½ï¿½Ï£ï¿½Ö¶ï¿½Öµï¿½ï¿½HGETï¿½ï¿½ï¿½î£©
 // 
-// ²ÎÊı£º
-//   - key: ¹şÏ£¼üÃû
-//   - hkey: ×Ö¶ÎÃû
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - key: ï¿½ï¿½Ï£ï¿½ï¿½ï¿½ï¿½
+//   - hkey: ï¿½Ö¶ï¿½ï¿½ï¿½
 // 
-// ·µ»ØÖµ£º
-//   ×Ö¶ÎÖµ£¬²»´æÔÚ·µ»Ø¿Õ×Ö·û´®
+// ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½
+//   ï¿½Ö¶ï¿½Öµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú·ï¿½ï¿½Ø¿ï¿½ï¿½Ö·ï¿½ï¿½ï¿½
 // 
-// ÊµÏÖÂß¼­£º
-//   1. Ê¹ÓÃredisCommandArgvÖ´ĞĞHGETÃüÁî
-//   2. ¼ì²é·µ»ØÀàĞÍ
-//   3. ·µ»Ø×Ö¶ÎÖµ
+// Êµï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½
+//   1. Ê¹ï¿½ï¿½redisCommandArgvÖ´ï¿½ï¿½HGETï¿½ï¿½ï¿½ï¿½
+//   2. ï¿½ï¿½é·µï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   3. ï¿½ï¿½ï¿½ï¿½ï¿½Ö¶ï¿½Öµ
 std::string RedisMgr::HGet(const std::string& key, const std::string& hkey)
 {
     auto connect = con_pool_->getConnection();
@@ -559,7 +562,7 @@ std::string RedisMgr::HGet(const std::string& key, const std::string& hkey)
     }
     RedisConnectionGuard guard(con_pool_.get(), connect);
 
-    // ×¼±¸redisCommandArgvµÄ²ÎÊı
+    // ×¼ï¿½ï¿½redisCommandArgvï¿½Ä²ï¿½ï¿½ï¿½
     const char* argv[3];
     size_t argvlen[3];
     argv[0] = "HGET";
@@ -575,7 +578,7 @@ std::string RedisMgr::HGet(const std::string& key, const std::string& hkey)
         return "";
     }
 
-    // ¼ì²é·µ»ØÀàĞÍ
+    // ï¿½ï¿½é·µï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     if (reply->type == REDIS_REPLY_NIL) {
         freeReplyObject(reply);
         std::cout << "Execut command [ HGet " << key << " " << hkey << " ] -> (nil)\n";
@@ -594,16 +597,16 @@ std::string RedisMgr::HGet(const std::string& key, const std::string& hkey)
     return value;
 }
 
-// É¾³ı¼ü£¨DELÃüÁî£©
+// É¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½DELï¿½ï¿½ï¿½î£©
 // 
-// ²ÎÊı£º
-//   - key: ¼üÃû
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - key: ï¿½ï¿½ï¿½ï¿½
 // 
-// ·µ»ØÖµ£º
-//   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+// ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½
+//   ï¿½É¹ï¿½ï¿½ï¿½ï¿½ï¿½trueï¿½ï¿½ï¿½ï¿½ï¿½ò·µ»ï¿½false
 // 
-// ËµÃ÷£º
-//   É¾³ıÖ¸¶¨µÄ¼ü¼°Æä¹ØÁªµÄÖµ
+// Ëµï¿½ï¿½ï¿½ï¿½
+//   É¾ï¿½ï¿½Ö¸ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Öµ
 bool RedisMgr::Del(const std::string& key)
 {
     auto connect = con_pool_->getConnection();
@@ -619,7 +622,7 @@ bool RedisMgr::Del(const std::string& key)
         return false;
     }
 
-    // DEL·µ»ØÕûÊı£¬±íÊ¾É¾³ıµÄ¼üÊı
+    // DELï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¾É¾ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½
     bool ok = (reply->type == REDIS_REPLY_INTEGER);
     freeReplyObject(reply);
 
@@ -631,17 +634,17 @@ bool RedisMgr::Del(const std::string& key)
     return false;
 }
 
-// ¼ì²é¼üÊÇ·ñ´æÔÚ£¨EXISTSÃüÁî£©
+// ï¿½ï¿½ï¿½ï¿½ï¿½Ç·ï¿½ï¿½ï¿½Ú£ï¿½EXISTSï¿½ï¿½ï¿½î£©
 // 
-// ²ÎÊı£º
-//   - key: ¼üÃû
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//   - key: ï¿½ï¿½ï¿½ï¿½
 // 
-// ·µ»ØÖµ£º
-//   ´æÔÚ·µ»Øtrue£¬·ñÔò·µ»Øfalse
+// ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½
+//   ï¿½ï¿½ï¿½Ú·ï¿½ï¿½ï¿½trueï¿½ï¿½ï¿½ï¿½ï¿½ò·µ»ï¿½false
 // 
-// ÊµÏÖÂß¼­£º
-//   1. Ö´ĞĞEXISTSÃüÁî
-//   2. ¼ì²é·µ»ØÖµ£¨·µ»ØÕûÊı£¬>0±íÊ¾´æÔÚ£©
+// Êµï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½
+//   1. Ö´ï¿½ï¿½EXISTSï¿½ï¿½ï¿½ï¿½
+//   2. ï¿½ï¿½é·µï¿½ï¿½Öµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½>0ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½Ú£ï¿½
 bool RedisMgr::ExistsKey(const std::string& key)
 {
     auto connect = con_pool_->getConnection();
@@ -657,7 +660,7 @@ bool RedisMgr::ExistsKey(const std::string& key)
         return false;
     }
 
-    // EXISTS·µ»ØÕûÊı£¬>0±íÊ¾¼ü´æÔÚ
+    // EXISTSï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½>0ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     bool ok = (reply->type == REDIS_REPLY_INTEGER && reply->integer > 0);
     freeReplyObject(reply);
 
@@ -669,24 +672,24 @@ bool RedisMgr::ExistsKey(const std::string& key)
     return false;
 }
 
-// ¹Ø±ÕÁ¬½Ó³Ø
+// ï¿½Ø±ï¿½ï¿½ï¿½ï¿½Ó³ï¿½
 // 
-// ×÷ÓÃ£º
-//   ¹Ø±ÕRedisÁ¬½Ó³Ø£¬ÊÍ·ÅËùÓĞÁ¬½Ó
+// ï¿½ï¿½ï¿½Ã£ï¿½
+//   ï¿½Ø±ï¿½Redisï¿½ï¿½ï¿½Ó³Ø£ï¿½ï¿½Í·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 // 
-// ÊµÏÖÂß¼­£º
-//   1. µ÷ÓÃÁ¬½Ó³ØµÄClose·½·¨
-//   2. ÖØÖÃÁ¬½Ó³ØÖ¸Õë
+// Êµï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½
+//   1. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó³Øµï¿½Closeï¿½ï¿½ï¿½ï¿½
+//   2. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó³ï¿½Ö¸ï¿½ï¿½
 // 
-// ×¢Òâ£º
-//   RedisConPool::Close() Ó¦¸ÃÊÍ·ÅËùÓĞ redisContext£¨redisFree£©£¬
-//   Èç¹û»¹Ã»ÓĞ RedisConPool µÄÊµÏÖ£¬Ó¦¸ÃÈÃ RedisConPool::Close/Îö¹¹º¯ÊıÊÍ·Å ctx
+// ×¢ï¿½â£º
+//   RedisConPool::Close() Ó¦ï¿½ï¿½ï¿½Í·ï¿½ï¿½ï¿½ï¿½ï¿½ redisContextï¿½ï¿½redisFreeï¿½ï¿½ï¿½ï¿½
+//   ï¿½ï¿½ï¿½ï¿½ï¿½Ã»ï¿½ï¿½ RedisConPool ï¿½ï¿½Êµï¿½Ö£ï¿½Ó¦ï¿½ï¿½ï¿½ï¿½ RedisConPool::Close/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í·ï¿½ ctx
 void RedisMgr::Close()
 {
     if (con_pool_) {
         con_pool_->Close();
-        // ×¢Òâ£ºRedisConPool::Close() Ó¦¸ÃÊÍ·ÅËùÓĞ redisContext£¨redisFree£©£¬
-        // Èç¹û»¹Ã»ÓĞ RedisConPool µÄÊµÏÖ£¬Ó¦¸ÃÈÃ RedisConPool::Close/Îö¹¹º¯ÊıÊÍ·Å ctx
+        // ×¢ï¿½â£ºRedisConPool::Close() Ó¦ï¿½ï¿½ï¿½Í·ï¿½ï¿½ï¿½ï¿½ï¿½ redisContextï¿½ï¿½redisFreeï¿½ï¿½ï¿½ï¿½
+        // ï¿½ï¿½ï¿½ï¿½ï¿½Ã»ï¿½ï¿½ RedisConPool ï¿½ï¿½Êµï¿½Ö£ï¿½Ó¦ï¿½ï¿½ï¿½ï¿½ RedisConPool::Close/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í·ï¿½ ctx
         con_pool_.reset();
     }
 }

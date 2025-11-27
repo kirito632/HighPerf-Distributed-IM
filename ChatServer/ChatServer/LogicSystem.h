@@ -68,12 +68,6 @@ private:
     //   - msg_data: 消息数据（JSON格式）
     void LoginHandler(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
 
-    void SearchInfo(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
-    bool isPureDigit(const std::string& str);
-    void GetUserByUid(const std::string& uid_str, Json::Value& rtvalue);
-    void GetUserByName(const std::string& name, Json::Value& rtvalue);
-
-    void AddFriendApply(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
 
     void DealChatTextMsg(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
 

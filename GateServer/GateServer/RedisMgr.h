@@ -1,35 +1,35 @@
 #pragma once
 #include"const.h"
 
-// RedisConPoolÀà£ºRedisÁ¬½Ó³Ø
+// RedisConPoolç±»ï¼šRedisè¿æ¥æ± 
 // 
-// ×÷ÓÃ£º
-//   ¹ÜÀí¶à¸öRedisÁ¬½Ó£¬ÊµÏÖÁ¬½ÓµÄ¸´ÓÃºÍ¸ºÔØ¾ùºâ
+// ä½œç”¨ï¼š
+//   ç®¡ç†å¤šä¸ªRedisè¿æ¥ï¼Œå®ç°è¿æ¥çš„å¤ç”¨å’Œè´Ÿè½½å‡è¡¡
 // 
-// Éè¼ÆÄ£Ê½£º
-//   ¶ÔÏó³ØÄ£Ê½ - Ô¤ÏÈ´´½¨Á¬½Ó£¬°´Ğè·ÖÅä
+// è®¾è®¡æ¨¡å¼ï¼š
+//   å¯¹è±¡æ± æ¨¡å¼ - é¢„å…ˆåˆ›å»ºè¿æ¥ï¼ŒæŒ‰éœ€åˆ†é…
 // 
-// ¹¤×÷Ô­Àí£º
-//   1. ³õÊ¼»¯Ê±´´½¨Ö¸¶¨ÊıÁ¿µÄRedisÁ¬½Ó
-//   2. ¶ÔÃ¿¸öÁ¬½Ó½øĞĞÉí·İÈÏÖ¤
-//   3. Ê¹ÓÃ¶ÓÁĞ´æ´¢¿ÉÓÃÁ¬½Ó
-//   4. Ê¹ÓÃÌõ¼ş±äÁ¿ÊµÏÖÁ¬½ÓµÄµÈ´ı»úÖÆ
+// å·¥ä½œåŸç†ï¼š
+//   1. åˆå§‹åŒ–æ—¶åˆ›å»ºæŒ‡å®šæ•°é‡çš„Redisè¿æ¥
+//   2. å¯¹æ¯ä¸ªè¿æ¥è¿›è¡Œèº«ä»½è®¤è¯
+//   3. ä½¿ç”¨é˜Ÿåˆ—å­˜å‚¨å¯ç”¨è¿æ¥
+//   4. ä½¿ç”¨æ¡ä»¶å˜é‡å®ç°è¿æ¥çš„ç­‰å¾…æœºåˆ¶
 class RedisConPool {
 public:
-    // ¹¹Ôìº¯Êı£º³õÊ¼»¯RedisÁ¬½Ó³Ø
-    // ²ÎÊı£º
-    //   - poolSize: Á¬½Ó³Ø´óĞ¡
-    //   - host: Redis·şÎñÆ÷µØÖ·
-    //   - port: Redis·şÎñÆ÷¶Ë¿Ú
-    //   - pwd: RedisÃÜÂë
+    // æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–Redisè¿æ¥æ± 
+    // å‚æ•°ï¼š
+    //   - poolSize: è¿æ¥æ± å¤§å°
+    //   - host: RedisæœåŠ¡å™¨åœ°å€
+    //   - port: RedisæœåŠ¡å™¨ç«¯å£
+    //   - pwd: Rediså¯†ç 
     // 
-    // ÊµÏÖÂß¼­£º
-    //   1. ´´½¨Ö¸¶¨ÊıÁ¿µÄRedisÁ¬½Ó
-    //   2. ¶ÔÃ¿¸öÁ¬½Ó½øĞĞÉí·İÈÏÖ¤
-    //   3. ½«ÈÏÖ¤³É¹¦µÄÁ¬½Ó¼ÓÈë¶ÓÁĞ
+    // å®ç°é€»è¾‘ï¼š
+    //   1. åˆ›å»ºæŒ‡å®šæ•°é‡çš„Redisè¿æ¥
+    //   2. å¯¹æ¯ä¸ªè¿æ¥è¿›è¡Œèº«ä»½è®¤è¯
+    //   3. å°†è®¤è¯æˆåŠŸçš„è¿æ¥åŠ å…¥é˜Ÿåˆ—
     RedisConPool(size_t poolSize, const char* host, int port, const char* pwd)
         : poolSize_(poolSize), host_(host), port_(port), b_stop_(false) {
-        // ´´½¨Ö¸¶¨ÊıÁ¿µÄRedisÁ¬½Ó
+        // åˆ›å»ºæŒ‡å®šæ•°é‡çš„Redisè¿æ¥
         for (size_t i = 0; i < poolSize_; ++i) {
             auto* context = redisConnect(host, port);
             if (context == nullptr || context->err != 0) {
@@ -39,26 +39,26 @@ public:
                 continue;
             }
 
-            // ½øĞĞÉí·İÈÏÖ¤
+            // è¿›è¡Œèº«ä»½è®¤è¯
             auto reply = (redisReply*)redisCommand(context, "AUTH %s", pwd);
             if (reply->type == REDIS_REPLY_ERROR) {
-                std::cout << "ÈÏÖ¤Ê§°Ü" << std::endl;
-                // ÈÏÖ¤Ê§°Ü£¬ÊÍ·ÅÁ¬½Ó
+                std::cout << "è®¤è¯å¤±è´¥" << std::endl;
+                // è®¤è¯å¤±è´¥ï¼Œé‡Šæ”¾è¿æ¥
                 redisFree(context);
                 freeReplyObject(reply);
                 continue;
             }
 
-            // ÈÏÖ¤³É¹¦£¬ÊÍ·Åreply¶ÔÏó
+            // è®¤è¯æˆåŠŸï¼Œé‡Šæ”¾replyå¯¹è±¡
             freeReplyObject(reply);
-            std::cout << "ÈÏÖ¤³É¹¦" << std::endl;
-            // ½«Á¬½Ó¼ÓÈëÁ¬½Ó³Ø
+            std::cout << "è®¤è¯æˆåŠŸ" << std::endl;
+            // å°†è¿æ¥åŠ å…¥è¿æ¥æ± 
             connections_.push(context);
         }
 
     }
 
-    // Îö¹¹º¯Êı£ºÇåÀíËùÓĞÁ¬½Ó
+    // ææ„å‡½æ•°ï¼šæ¸…ç†æ‰€æœ‰è¿æ¥
     ~RedisConPool() {
         std::lock_guard<std::mutex> lock(mutex_);
         while (!connections_.empty()) {
@@ -66,18 +66,18 @@ public:
         }
     }
 
-    // »ñÈ¡RedisÁ¬½Ó
+    // è·å–Redisè¿æ¥
     // 
-    // ·µ»ØÖµ£º
-    //   Á¬½Ó³É¹¦·µ»ØredisContextÖ¸Õë£¬·ñÔò·µ»Ønullptr
+    // è¿”å›å€¼ï¼š
+    //   è¿æ¥æˆåŠŸè¿”å›redisContextæŒ‡é’ˆï¼Œå¦åˆ™è¿”å›nullptr
     // 
-    // ÊµÏÖÂß¼­£º
-    //   1. µÈ´ıÖ±µ½ÓĞ¿ÉÓÃÁ¬½Ó
-    //   2. ´Ó¶ÓÁĞÖĞÈ¡³öÒ»¸öÁ¬½Ó
-    //   3. ·µ»ØÁ¬½Ó
+    // å®ç°é€»è¾‘ï¼š
+    //   1. ç­‰å¾…ç›´åˆ°æœ‰å¯ç”¨è¿æ¥
+    //   2. ä»é˜Ÿåˆ—ä¸­å–å‡ºä¸€ä¸ªè¿æ¥
+    //   3. è¿”å›è¿æ¥
     redisContext* getConnection() {
         std::unique_lock<std::mutex> lock(mutex_);
-        // µÈ´ıÖ±µ½ÓĞ¿ÉÓÃÁ¬½Ó»òÒÑ¾­Í£Ö¹
+        // ç­‰å¾…ç›´åˆ°æœ‰å¯ç”¨è¿æ¥æˆ–å·²ç»åœæ­¢
         cond_.wait(lock, [this] {
             if (b_stop_) {
                 return true;
@@ -85,25 +85,25 @@ public:
             return !connections_.empty();
             });
 
-        // Èç¹ûÒÑÍ£Ö¹£¬Ö±½Ó·µ»Ø¿ÕÖ¸Õë
+        // å¦‚æœå·²åœæ­¢ï¼Œç›´æ¥è¿”å›ç©ºæŒ‡é’ˆ
         if (b_stop_) {
             return  nullptr;
         }
 
-        // ´Ó¶ÓÁĞÖĞÈ¡³öÁ¬½Ó
+        // ä»é˜Ÿåˆ—ä¸­å–å‡ºè¿æ¥
         auto* context = connections_.front();
         connections_.pop();
         return context;
     }
 
-    // ¹é»¹RedisÁ¬½Óµ½Á¬½Ó³Ø
+    // å½’è¿˜Redisè¿æ¥åˆ°è¿æ¥æ± 
     // 
-    // ²ÎÊı£º
-    //   - context: RedisÁ¬½ÓÖ¸Õë
+    // å‚æ•°ï¼š
+    //   - context: Redisè¿æ¥æŒ‡é’ˆ
     // 
-    // ÊµÏÖÂß¼­£º
-    //   1. ½«Á¬½Ó·Å»Ø¶ÓÁĞ
-    //   2. Í¨ÖªµÈ´ıÁ¬½ÓµÄÏß³Ì
+    // å®ç°é€»è¾‘ï¼š
+    //   1. å°†è¿æ¥æ”¾å›é˜Ÿåˆ—
+    //   2. é€šçŸ¥ç­‰å¾…è¿æ¥çš„çº¿ç¨‹
     void returnConnection(redisContext* context) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (b_stop_) {
@@ -113,174 +113,174 @@ public:
         cond_.notify_one();
     }
 
-    // ¹Ø±ÕÁ¬½Ó³Ø
+    // å…³é—­è¿æ¥æ± 
     void Close() {
         b_stop_ = true;
         cond_.notify_all();
     }
 
 private:
-    std::atomic<bool> b_stop_;           // Í£Ö¹±êÖ¾
-    size_t poolSize_;                    // Á¬½Ó³Ø´óĞ¡
-    const char* host_;                   // RedisÖ÷»úµØÖ·
-    int port_;                           // Redis¶Ë¿Ú
-    std::queue<redisContext*> connections_;  // Á¬½Ó¶ÓÁĞ
-    std::mutex mutex_;                   // »¥³âËø£¨±£Ö¤Ïß³Ì°²È«£©
-    std::condition_variable cond_;      // Ìõ¼ş±äÁ¿£¨ÓÃÓÚµÈ´ıÁ¬½Ó£©
+    std::atomic<bool> b_stop_;           // åœæ­¢æ ‡å¿—
+    size_t poolSize_;                    // è¿æ¥æ± å¤§å°
+    const char* host_;                   // Redisä¸»æœºåœ°å€
+    int port_;                           // Redisç«¯å£
+    std::queue<redisContext*> connections_;  // è¿æ¥é˜Ÿåˆ—
+    std::mutex mutex_;                   // äº’æ–¥é”ï¼ˆä¿è¯çº¿ç¨‹å®‰å…¨ï¼‰
+    std::condition_variable cond_;      // æ¡ä»¶å˜é‡ï¼ˆç”¨äºç­‰å¾…è¿æ¥ï¼‰
 };
 
-// RedisMgrÀà£ºRedis¹ÜÀíÆ÷
+// RedisMgrç±»ï¼šRedisç®¡ç†å™¨
 // 
-// ×÷ÓÃ£º
-//   Ìá¹©Redis²Ù×÷µÄÍ³Ò»½Ó¿Ú£¬·â×°µ×²ãhiredis¿âµ÷ÓÃ
-//   ÊµÏÖ³£ÓÃRedisÃüÁîµÄ·â×°
+// ä½œç”¨ï¼š
+//   æä¾›Redisæ“ä½œçš„ç»Ÿä¸€æ¥å£ï¼Œå°è£…åº•å±‚hiredisåº“è°ƒç”¨
+//   å®ç°å¸¸ç”¨Rediså‘½ä»¤çš„å°è£…
 // 
-// Éè¼ÆÄ£Ê½£º
-//   1. µ¥ÀıÄ£Ê½£¨Singleton£©- È·±£È«¾ÖÎ¨Ò»ÊµÀı
-//   2. ÃÅÃæÄ£Ê½£¨Facade£©- ¼ò»¯Redis²Ù×÷½Ó¿Ú
-//   3. Á¬½Ó³ØÄ£Ê½ - Ê¹ÓÃRedisConPool¹ÜÀíÁ¬½Ó
+// è®¾è®¡æ¨¡å¼ï¼š
+//   1. å•ä¾‹æ¨¡å¼ï¼ˆSingletonï¼‰- ç¡®ä¿å…¨å±€å”¯ä¸€å®ä¾‹
+//   2. é—¨é¢æ¨¡å¼ï¼ˆFacadeï¼‰- ç®€åŒ–Redisæ“ä½œæ¥å£
+//   3. è¿æ¥æ± æ¨¡å¼ - ä½¿ç”¨RedisConPoolç®¡ç†è¿æ¥
 // 
-// ¹¦ÄÜ·ÖÀà£º
-//   - ×Ö·û´®²Ù×÷£ºGet¡¢Set
-//   - ÁĞ±í²Ù×÷£ºLPush¡¢LPop¡¢RPush¡¢RPop
-//   - ¹şÏ£²Ù×÷£ºHSet¡¢HGet¡¢HDel
-//   - Í¨ÓÃ²Ù×÷£ºDel¡¢ExistsKey¡¢Auth
+// åŠŸèƒ½åˆ†ç±»ï¼š
+//   - å­—ç¬¦ä¸²æ“ä½œï¼šGetã€Set
+//   - åˆ—è¡¨æ“ä½œï¼šLPushã€LPopã€RPushã€RPop
+//   - å“ˆå¸Œæ“ä½œï¼šHSetã€HGetã€HDel
+//   - é€šç”¨æ“ä½œï¼šDelã€ExistsKeyã€Auth
 class RedisMgr : public Singleton<RedisMgr>,
     public std::enable_shared_from_this<RedisMgr>
 {
-    friend class Singleton<RedisMgr>;  // ÔÊĞíSingleton·ÃÎÊË½ÓĞ¹¹Ôìº¯Êı
+    friend class Singleton<RedisMgr>;  // å…è®¸Singletonè®¿é—®ç§æœ‰æ„é€ å‡½æ•°
 public:
-    // Îö¹¹º¯Êı£ºÇåÀí×ÊÔ´
+    // ææ„å‡½æ•°ï¼šæ¸…ç†èµ„æº
     ~RedisMgr();
 
-    // --------- ×Ö·û´®²Ù×÷ ---------
+    // --------- å­—ç¬¦ä¸²æ“ä½œ ---------
 
-    // »ñÈ¡¼üÖµ£¨×Ö·û´®£©
-    // ²ÎÊı£º
-    //   - key: ¼üÃû
-    //   - value: Êä³ö²ÎÊı£¬¼üÖµ
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // è·å–é”®å€¼ï¼ˆå­—ç¬¦ä¸²ï¼‰
+    // å‚æ•°ï¼š
+    //   - key: é”®å
+    //   - value: è¾“å‡ºå‚æ•°ï¼Œé”®å€¼
+    // è¿”å›å€¼ï¼š
+    //   æˆåŠŸè¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool Get(const std::string& key, std::string& value);
 
-    // ÉèÖÃ¼üÖµ£¨×Ö·û´®£©
-    // ²ÎÊı£º
-    //   - key: ¼üÃû
-    //   - value: ¼üÖµ
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // è®¾ç½®é”®å€¼ï¼ˆå­—ç¬¦ä¸²ï¼‰
+    // å‚æ•°ï¼š
+    //   - key: é”®å
+    //   - value: é”®å€¼
+    // è¿”å›å€¼ï¼š
+    //   æˆåŠŸè¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool Set(const std::string& key, const std::string& value);
 
-    // [Cascade Change][FriendNotify] ·¢²¼ÏûÏ¢µ½ÆµµÀ£¨PUBLISH£©
-    // ·µ»Ø£ºtrue ±íÊ¾ÃüÁîÖ´ĞĞ³É¹¦£¨²»´ú±íÓĞ¶©ÔÄÕß½ÓÊÕ£©£¬false ±íÊ¾Ö´ĞĞÊ§°Ü
+    // å‘å¸ƒæ¶ˆæ¯åˆ°é¢‘é“ï¼ˆPUBLISHï¼‰
+    // è¿”å›ï¼štrue è¡¨ç¤ºå‘½ä»¤æ‰§è¡ŒæˆåŠŸï¼ˆä¸ä»£è¡¨æœ‰è®¢é˜…è€…æ¥æ”¶ï¼‰ï¼Œfalse è¡¨ç¤ºæ‰§è¡Œå¤±è´¥
     bool Publish(const std::string& channel, const std::string& message);
 
-    // Éí·İÈÏÖ¤
-    // ²ÎÊı£º
-    //   - password: RedisÃÜÂë
-    // ·µ»ØÖµ£º
-    //   ÈÏÖ¤³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // èº«ä»½è®¤è¯
+    // å‚æ•°ï¼š
+    //   - password: Rediså¯†ç 
+    // è¿”å›å€¼ï¼š
+    //   è®¤è¯æˆåŠŸè¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool Auth(const std::string& password);
 
-    // --------- ÁĞ±í²Ù×÷ ---------
+    // --------- åˆ—è¡¨æ“ä½œ ---------
 
-    // ´ÓÁĞ±í×ó¶ËÍÆÈëÔªËØ
-    // ²ÎÊı£º
-    //   - key: ¼üÃû
-    //   - value: Öµ
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // ä»åˆ—è¡¨å·¦ç«¯æ¨å…¥å…ƒç´ 
+    // å‚æ•°ï¼š
+    //   - key: é”®å
+    //   - value: å€¼
+    // è¿”å›å€¼ï¼š
+    //   æˆåŠŸè¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool LPush(const std::string& key, const std::string& value);
 
-    // ´ÓÁĞ±í×ó¶Ëµ¯³öÔªËØ
-    // ²ÎÊı£º
-    //   - key: ¼üÃû
-    //   - value: Êä³ö²ÎÊı£¬µ¯³öµÄÖµ
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // ä»åˆ—è¡¨å·¦ç«¯å¼¹å‡ºå…ƒç´ 
+    // å‚æ•°ï¼š
+    //   - key: é”®å
+    //   - value: è¾“å‡ºå‚æ•°ï¼Œå¼¹å‡ºçš„å€¼
+    // è¿”å›å€¼ï¼š
+    //   æˆåŠŸè¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool LPop(const std::string& key, std::string& value);
 
-    // ´ÓÁĞ±íÓÒ¶ËÍÆÈëÔªËØ
-    // ²ÎÊı£º
-    //   - key: ¼üÃû
-    //   - value: Öµ
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // ä»åˆ—è¡¨å³ç«¯æ¨å…¥å…ƒç´ 
+    // å‚æ•°ï¼š
+    //   - key: é”®å
+    //   - value: å€¼
+    // è¿”å›å€¼ï¼š
+    //   æˆåŠŸè¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool RPush(const std::string& key, const std::string& value);
 
-    // ´ÓÁĞ±íÓÒ¶Ëµ¯³öÔªËØ
-    // ²ÎÊı£º
-    //   - key: ¼üÃû
-    //   - value: Êä³ö²ÎÊı£¬µ¯³öµÄÖµ
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // ä»åˆ—è¡¨å³ç«¯å¼¹å‡ºå…ƒç´ 
+    // å‚æ•°ï¼š
+    //   - key: é”®å
+    //   - value: è¾“å‡ºå‚æ•°ï¼Œå¼¹å‡ºçš„å€¼
+    // è¿”å›å€¼ï¼š
+    //   æˆåŠŸè¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool RPop(const std::string& key, std::string& value);
 
-    // --------- ¹şÏ£²Ù×÷ ---------
+    // --------- å“ˆå¸Œæ“ä½œ ---------
 
-    // ÉèÖÃ¹şÏ£×Ö¶ÎÖµ£¨×Ö·û´®°æ±¾£©
-    // ²ÎÊı£º
-    //   - key: ¹şÏ£¼üÃû
-    //   - hkey: ×Ö¶ÎÃû
-    //   - value: ×Ö¶ÎÖµ
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // è®¾ç½®å“ˆå¸Œå­—æ®µå€¼ï¼ˆå­—ç¬¦ä¸²ç‰ˆæœ¬ï¼‰
+    // å‚æ•°ï¼š
+    //   - key: å“ˆå¸Œé”®å
+    //   - hkey: å­—æ®µå
+    //   - value: å­—æ®µå€¼
+    // è¿”å›å€¼ï¼š
+    //   æˆåŠŸè¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool HSet(const std::string& key, const std::string& hkey, const std::string& value);
 
-    // ÉèÖÃ¹şÏ£×Ö¶ÎÖµ£¨¶ş½øÖÆ°æ±¾£©
-    // ²ÎÊı£º
-    //   - key: ¹şÏ£¼üÃû
-    //   - hkey: ×Ö¶ÎÃû
-    //   - hvalue: ×Ö¶ÎÖµ£¨¶ş½øÖÆÊı¾İ£©
-    //   - hvaluelen: Êı¾İ³¤¶È
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // è®¾ç½®å“ˆå¸Œå­—æ®µå€¼ï¼ˆäºŒè¿›åˆ¶ç‰ˆæœ¬ï¼‰
+    // å‚æ•°ï¼š
+    //   - key: å“ˆå¸Œé”®å
+    //   - hkey: å­—æ®µå
+    //   - hvalue: å­—æ®µå€¼ï¼ˆäºŒè¿›åˆ¶æ•°æ®ï¼‰
+    //   - hvaluelen: æ•°æ®é•¿åº¦
+    // è¿”å›å€¼ï¼š
+    //   æˆåŠŸè¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool HSet(const char* key, const char* hkey, const char* hvalue, size_t hvaluelen);
 
-    // É¾³ı¹şÏ£×Ö¶Î
-    // ²ÎÊı£º
-    //   - key: ¹şÏ£¼üÃû
-    //   - field: ×Ö¶ÎÃû
-    // ·µ»ØÖµ£º
-    //   ³É¹¦É¾³ı·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // åˆ é™¤å“ˆå¸Œå­—æ®µ
+    // å‚æ•°ï¼š
+    //   - key: å“ˆå¸Œé”®å
+    //   - field: å­—æ®µå
+    // è¿”å›å€¼ï¼š
+    //   æˆåŠŸåˆ é™¤è¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool HDel(const std::string& key, const std::string& field);
 
-    // »ñÈ¡¹şÏ£×Ö¶ÎÖµ
-    // ²ÎÊı£º
-    //   - key: ¹şÏ£¼üÃû
-    //   - hkey: ×Ö¶ÎÃû
-    // ·µ»ØÖµ£º
-    //   ×Ö¶ÎÖµ£¬²»´æÔÚ·µ»Ø¿Õ×Ö·û´®
+    // è·å–å“ˆå¸Œå­—æ®µå€¼
+    // å‚æ•°ï¼š
+    //   - key: å“ˆå¸Œé”®å
+    //   - hkey: å­—æ®µå
+    // è¿”å›å€¼ï¼š
+    //   å­—æ®µå€¼ï¼Œä¸å­˜åœ¨è¿”å›ç©ºå­—ç¬¦ä¸²
     std::string HGet(const std::string& key, const std::string& hkey);
 
-    // --------- Í¨ÓÃ²Ù×÷ ---------
+    // --------- é€šç”¨æ“ä½œ ---------
 
-    // É¾³ı¼ü
-    // ²ÎÊı£º
-    //   - key: ¼üÃû
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // åˆ é™¤é”®
+    // å‚æ•°ï¼š
+    //   - key: é”®å
+    // è¿”å›å€¼ï¼š
+    //   æˆåŠŸè¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool Del(const std::string& key);
 
-    // ¼ì²é¼üÊÇ·ñ´æÔÚ
-    // ²ÎÊı£º
-    //   - key: ¼üÃû
-    // ·µ»ØÖµ£º
-    //   ´æÔÚ·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // æ£€æŸ¥é”®æ˜¯å¦å­˜åœ¨
+    // å‚æ•°ï¼š
+    //   - key: é”®å
+    // è¿”å›å€¼ï¼š
+    //   å­˜åœ¨è¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool ExistsKey(const std::string& key);
 
-    // ¹Ø±ÕÁ¬½Ó³Ø
+    // å…³é—­è¿æ¥æ± 
     void Close();
 
 private:
-    // Ë½ÓĞ¹¹Ôìº¯Êı£ºµ¥ÀıÄ£Ê½
+    // ç§æœ‰æ„é€ å‡½æ•°ï¼šå•ä¾‹æ¨¡å¼
     // 
-    // ÊµÏÖÂß¼­£º
-    //   ´ÓÅäÖÃÎÄ¼şÖĞ¶ÁÈ¡RedisÁ¬½ÓĞÅÏ¢
-    //   ´´½¨RedisÁ¬½Ó³Ø£¨Ä¬ÈÏ5¸öÁ¬½Ó£©
+    // å®ç°é€»è¾‘ï¼š
+    //   ä»é…ç½®æ–‡ä»¶ä¸­è¯»å–Redisè¿æ¥ä¿¡æ¯
+    //   åˆ›å»ºRedisè¿æ¥æ± ï¼ˆé»˜è®¤5ä¸ªè¿æ¥ï¼‰
     RedisMgr();
 
-    // RedisÁ¬½Ó³ØÖ¸Õë
+    // Redisè¿æ¥æ± æŒ‡é’ˆ
     std::unique_ptr<RedisConPool> con_pool_;
 };
 

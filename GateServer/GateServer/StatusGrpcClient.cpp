@@ -1,36 +1,36 @@
 #include"StatusGrpcClient.h"
 
-// »ñÈ¡ÁÄÌì·þÎñÆ÷ÐÅÏ¢
+// èŽ·å–èŠå¤©æœåŠ¡å™¨ä¿¡æ¯
 // 
-// ¹¦ÄÜ£º
-//   Í¨¹ýgRPCµ÷ÓÃStatusServer£¬¸ù¾ÝÓÃ»§ID»ñÈ¡¿ÉÓÃµÄChatServerÐÅÏ¢
+// åŠŸèƒ½ï¼š
+//   é€šè¿‡gRPCè°ƒç”¨StatusServerï¼Œæ ¹æ®ç”¨æˆ·IDèŽ·å–å¯ç”¨çš„ChatServerä¿¡æ¯
 // 
-// ²ÎÊý£º
-//   - uid: ÓÃ»§ID
+// å‚æ•°ï¼š
+//   - uid: ç”¨æˆ·ID
 // 
-// ·µ»ØÖµ£º
-//   GetChatServerRsp£º°üº¬ÒÔÏÂÐÅÏ¢
-//     - error: ´íÎóÂë£¨0±íÊ¾³É¹¦£©
-//     - host: ChatServerÖ÷»úµØÖ·
-//     - port: ChatServer¶Ë¿Ú
-//     - token: ÈÏÖ¤ÁîÅÆ
+// è¿”å›žå€¼ï¼š
+//   GetChatServerRspï¼šåŒ…å«ä»¥ä¸‹ä¿¡æ¯
+//     - error: é”™è¯¯ç ï¼ˆ0è¡¨ç¤ºæˆåŠŸï¼‰
+//     - host: ChatServerä¸»æœºåœ°å€
+//     - port: ChatServerç«¯å£
+//     - token: è®¤è¯ä»¤ç‰Œ
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ´ÓÁ¬½Ó³Ø»ñÈ¡Stub
-//   2. ÉèÖÃRPC³¬Ê±Ê±¼ä£¨10Ãë£©
-//   3. µ÷ÓÃStatusServerµÄGetChatServer·½·¨
-//   4. ´¦Àí·µ»Ø½á¹û£¨³¬Ê±¡¢´íÎóµÈ£©
-//   5. ¹é»¹Stubµ½Á¬½Ó³Ø
+// å®žçŽ°é€»è¾‘ï¼š
+//   1. ä»Žè¿žæŽ¥æ± èŽ·å–Stub
+//   2. è®¾ç½®RPCè¶…æ—¶æ—¶é—´ï¼ˆ10ç§’ï¼‰
+//   3. è°ƒç”¨StatusServerçš„GetChatServeræ–¹æ³•
+//   4. å¤„ç†è¿”å›žç»“æžœï¼ˆè¶…æ—¶ã€é”™è¯¯ç­‰ï¼‰
+//   5. å½’è¿˜Stubåˆ°è¿žæŽ¥æ± 
 // 
-// Ê¹ÓÃ³¡¾°£º
-//   ÔÚÓÃ»§µÇÂ¼³É¹¦Ê±µ÷ÓÃ£¬»ñÈ¡ChatServerµØÖ·²¢·µ»Ø¸ø¿Í»§¶Ë
+// ä½¿ç”¨åœºæ™¯ï¼š
+//   åœ¨ç”¨æˆ·ç™»å½•æˆåŠŸæ—¶è°ƒç”¨ï¼ŒèŽ·å–ChatServeråœ°å€å¹¶è¿”å›žç»™å®¢æˆ·ç«¯
 GetChatServerRsp StatusGrpcClient::GetChatServer(int uid)
 {
     GetChatServerRsp reply;
     GetChatServerReq request;
     request.set_uid(uid);
 
-    // ÏÈ´ÓÁ¬½Ó³Ø»ñÈ¡Stub£¨´ø³¬Ê±µÈ´ý£©
+    // å…ˆä»Žè¿žæŽ¥æ± èŽ·å–Stubï¼ˆå¸¦è¶…æ—¶ç­‰å¾…ï¼‰
     auto stub = pool_->getConnection();
     if (!stub) {
         std::cerr << "[StatusGrpcClient] no stub from pool (timeout or stopped)\n";
@@ -38,24 +38,24 @@ GetChatServerRsp StatusGrpcClient::GetChatServer(int uid)
         return reply;
     }
 
-    // È·±£µ÷ÓÃºóStub»á¹é»¹£¨Ê¹ÓÃRAIIÄ£Ê½£©
+    // ç¡®ä¿è°ƒç”¨åŽStubä¼šå½’è¿˜ï¼ˆä½¿ç”¨RAIIæ¨¡å¼ï¼‰
     Defer defer([&stub, this]() {
         pool_->returnConnection(std::move(stub));
         });
 
-    // ÉèÖÃgRPC³¬Ê±Ê±¼ä£¨10Ãë£©
+    // è®¾ç½®gRPCè¶…æ—¶æ—¶é—´ï¼ˆ10ç§’ï¼‰
     grpc::ClientContext context;
     auto rpc_deadline = std::chrono::system_clock::now() + std::chrono::seconds(10);
     context.set_deadline(rpc_deadline);
 
     std::cout << "[StatusGrpcClient] calling GetChatServer uid=" << uid << "\n";
-    // µ÷ÓÃStatusServerµÄGetChatServer·½·¨
+    // è°ƒç”¨StatusServerçš„GetChatServeræ–¹æ³•
     grpc::Status status = stub->GetChatServer(&context, request, &reply);
     if (!status.ok()) {
         std::cerr << "[StatusGrpcClient] GetChatServer RPC failed: "
             << status.error_message() << " (code " << status.error_code() << ")\n";
 
-        // Èç¹ûÊÇ³¬Ê±£¬´òÓ¡¾ßÌåµÄ³¬Ê±ÐÅÏ¢
+        // å¦‚æžœæ˜¯è¶…æ—¶ï¼Œæ‰“å°å…·ä½“çš„è¶…æ—¶ä¿¡æ¯
         if (status.error_code() == grpc::StatusCode::DEADLINE_EXCEEDED) {
             std::cerr << "[StatusGrpcClient] RPC deadline exceeded for uid=" << uid << "\n";
         }
@@ -64,7 +64,7 @@ GetChatServerRsp StatusGrpcClient::GetChatServer(int uid)
         return reply;
     }
 
-    // ´òÓ¡³É¹¦µÄÐÅÏ¢
+    // æ‰“å°æˆåŠŸçš„ä¿¡æ¯
     std::cout << "[StatusGrpcClient] GetChatServer reply: error=" << reply.error()
         << " host='" << reply.host() << "' port='" << reply.port()
         << "' token='" << reply.token() << "'\n";
@@ -72,11 +72,11 @@ GetChatServerRsp StatusGrpcClient::GetChatServer(int uid)
     return reply;
 }
 
-// ¹¹Ôìº¯Êý£º³õÊ¼»¯StatusGrpcClient
+// æž„é€ å‡½æ•°ï¼šåˆå§‹åŒ–StatusGrpcClient
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ´ÓÅäÖÃ¹ÜÀíÆ÷»ñÈ¡StatusServerµÄÁ¬½ÓÐÅÏ¢
-//   2. ´´½¨StatusServerµÄÁ¬½Ó³Ø£¨Ä¬ÈÏ5¸öÁ¬½Ó£©
+// å®žçŽ°é€»è¾‘ï¼š
+//   1. ä»Žé…ç½®ç®¡ç†å™¨èŽ·å–StatusServerçš„è¿žæŽ¥ä¿¡æ¯
+//   2. åˆ›å»ºStatusServerçš„è¿žæŽ¥æ± ï¼ˆé»˜è®¤5ä¸ªè¿žæŽ¥ï¼‰
 StatusGrpcClient::StatusGrpcClient()
 {
     auto& gCfgMgr = ConfigMgr::Inst();

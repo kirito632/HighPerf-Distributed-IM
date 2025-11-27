@@ -57,7 +57,7 @@ enum MSG_IDS {
     ID_NOTIFY_TEXT_CHAT_MSG_REQ = 1019,
     ID_NOTIFY_TEXT_CHAT_MSG_RSP = 1024,
     ID_GET_OFFLINE_MSG_REQ = 1023,
-    // [Cascade Change][FriendNotify] Align with Qt client
+    // Align with Qt client
     ID_NOTIFY_ADD_FRIEND_REQ = 1021,
     ID_NOTIFY_FRIEND_REPLY = 1022
 };

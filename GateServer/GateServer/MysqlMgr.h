@@ -2,118 +2,118 @@
 #include "const.h"
 #include "MysqlDao.h"
 
-// MysqlMgrÀà£ºMySQL¹ÜÀíÆ÷£¬×÷ÎªÒµÎñÂß¼­²ãºÍDAO²ãÖ®¼äµÄÖÐ¼ä²ã
+// MysqlMgrç±»ï¼šMySQLç®¡ç†å™¨ï¼Œä½œä¸ºä¸šåŠ¡é€»è¾‘å±‚å’ŒDAOå±‚ä¹‹é—´çš„ä¸­é—´å±‚
 // 
-// ×÷ÓÃ£º
-//   1. ·â×°MysqlDao£¬Ìá¹©Í³Ò»µÄÊý¾Ý¿â·ÃÎÊ½Ó¿Ú
-//   2. ×÷ÎªÒµÎñÂß¼­²ãºÍÊý¾Ý¿â·ÃÎÊ²ãÖ®¼äµÄÇÅÁº
-//   3. Ìá¹©µ¥ÀýÄ£Ê½£¬È·±£È«¾ÖÎ¨Ò»µÄÊý¾Ý¿â¹ÜÀíÆ÷
+// ä½œç”¨ï¼š
+//   1. å°è£…MysqlDaoï¼Œæä¾›ç»Ÿä¸€çš„æ•°æ®åº“è®¿é—®æŽ¥å£
+//   2. ä½œä¸ºä¸šåŠ¡é€»è¾‘å±‚å’Œæ•°æ®åº“è®¿é—®å±‚ä¹‹é—´çš„æ¡¥æ¢
+//   3. æä¾›å•ä¾‹æ¨¡å¼ï¼Œç¡®ä¿å…¨å±€å”¯ä¸€çš„æ•°æ®åº“ç®¡ç†å™¨
 // 
-// Éè¼ÆÄ£Ê½£º
-//   1. µ¥ÀýÄ£Ê½£¨Singleton£©- È·±£È«¾ÖÎ¨Ò»ÊµÀý
-//   2. ÃÅÃæÄ£Ê½£¨Facade£©- ¼ò»¯Êý¾Ý¿â²Ù×÷½Ó¿Ú
-//   3. Î¯ÍÐÄ£Ê½£¨Delegation£©- ½«Êµ¼Ê²Ù×÷Î¯ÍÐ¸øMysqlDao
+// è®¾è®¡æ¨¡å¼ï¼š
+//   1. å•ä¾‹æ¨¡å¼ï¼ˆSingletonï¼‰- ç¡®ä¿å…¨å±€å”¯ä¸€å®žä¾‹
+//   2. é—¨é¢æ¨¡å¼ï¼ˆFacadeï¼‰- ç®€åŒ–æ•°æ®åº“æ“ä½œæŽ¥å£
+//   3. å§”æ‰˜æ¨¡å¼ï¼ˆDelegationï¼‰- å°†å®žé™…æ“ä½œå§”æ‰˜ç»™MysqlDao
 // 
-// ¹¦ÄÜ·ÖÀà£º
-//   - ÓÃ»§¹ÜÀí£º×¢²á¡¢µÇÂ¼¡¢ÃÜÂë¹ÜÀí
-//   - ºÃÓÑ¹ÜÀí£ºËÑË÷¡¢ÉêÇë¡¢»Ø¸´¡¢ÁÐ±í²éÑ¯
+// åŠŸèƒ½åˆ†ç±»ï¼š
+//   - ç”¨æˆ·ç®¡ç†ï¼šæ³¨å†Œã€ç™»å½•ã€å¯†ç ç®¡ç†
+//   - å¥½å‹ç®¡ç†ï¼šæœç´¢ã€ç”³è¯·ã€å›žå¤ã€åˆ—è¡¨æŸ¥è¯¢
 class MysqlMgr : public Singleton<MysqlMgr>
 {
-    friend class Singleton<MysqlMgr>;  // ÔÊÐíSingleton·ÃÎÊË½ÓÐ¹¹Ôìº¯Êý
+    friend class Singleton<MysqlMgr>;  // å…è®¸Singletonè®¿é—®ç§æœ‰æž„é€ å‡½æ•°
 public:
-    // Îö¹¹º¯Êý
+    // æžæž„å‡½æ•°
     ~MysqlMgr();
 
-    // --------- ÓÃ»§¹ÜÀí¹¦ÄÜ ---------
+    // --------- ç”¨æˆ·ç®¡ç†åŠŸèƒ½ ---------
 
-    // ×¢²áÓÃ»§
-    // ²ÎÊý£º
-    //   - name: ÓÃ»§Ãû
-    //   - email: ÓÊÏä
-    //   - pwd: ÃÜÂë£¨ÒÑ¹þÏ££©
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»ØÓÃ»§ID£¬Ê§°Ü·µ»Ø0»ò-1
+    // æ³¨å†Œç”¨æˆ·
+    // å‚æ•°ï¼š
+    //   - name: ç”¨æˆ·å
+    //   - email: é‚®ç®±
+    //   - pwd: å¯†ç ï¼ˆå·²å“ˆå¸Œï¼‰
+    // è¿”å›žå€¼ï¼š
+    //   æˆåŠŸè¿”å›žç”¨æˆ·IDï¼Œå¤±è´¥è¿”å›ž0æˆ–-1
     int RegUser(const std::string& name, const std::string& email, const std::string& pwd);
 
-    // ¼ì²éÓÊÏäÊÇ·ñÓëÓÃ»§ÃûÆ¥Åä
-    // ²ÎÊý£º
-    //   - name: ÓÃ»§Ãû
-    //   - email: ÓÊÏä
-    // ·µ»ØÖµ£º
-    //   Æ¥Åä·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // æ£€æŸ¥é‚®ç®±æ˜¯å¦ä¸Žç”¨æˆ·ååŒ¹é…
+    // å‚æ•°ï¼š
+    //   - name: ç”¨æˆ·å
+    //   - email: é‚®ç®±
+    // è¿”å›žå€¼ï¼š
+    //   åŒ¹é…è¿”å›žtrueï¼Œå¦åˆ™è¿”å›žfalse
     bool CheckEmail(const std::string& name, const std::string& email);
 
-    // ¸ù¾ÝÓÊÏä¸üÐÂÃÜÂë
-    // ²ÎÊý£º
-    //   - email: ÓÊÏä
-    //   - pwd: ÐÂÃÜÂë£¨Ã÷ÎÄ£¬ÄÚ²¿»á¹þÏ££©
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // æ ¹æ®é‚®ç®±æ›´æ–°å¯†ç 
+    // å‚æ•°ï¼š
+    //   - email: é‚®ç®±
+    //   - pwd: æ–°å¯†ç ï¼ˆæ˜Žæ–‡ï¼Œå†…éƒ¨ä¼šå“ˆå¸Œï¼‰
+    // è¿”å›žå€¼ï¼š
+    //   æˆåŠŸè¿”å›žtrueï¼Œå¦åˆ™è¿”å›žfalse
     bool UpdatePwdByEmail(const std::string& email, const std::string& pwd);
 
-    // ¼ì²éÃÜÂëÊÇ·ñÕýÈ·
-    // ²ÎÊý£º
-    //   - email: ÓÃ»§Ãû»òÓÊÏä
-    //   - pwd: ÃÜÂë£¨Ã÷ÎÄ£©
-    //   - userInfo: Êä³ö²ÎÊý£¬ÓÃ»§ÐÅÏ¢
-    // ·µ»ØÖµ£º
-    //   ÕýÈ··µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // æ£€æŸ¥å¯†ç æ˜¯å¦æ­£ç¡®
+    // å‚æ•°ï¼š
+    //   - email: ç”¨æˆ·åæˆ–é‚®ç®±
+    //   - pwd: å¯†ç ï¼ˆæ˜Žæ–‡ï¼‰
+    //   - userInfo: è¾“å‡ºå‚æ•°ï¼Œç”¨æˆ·ä¿¡æ¯
+    // è¿”å›žå€¼ï¼š
+    //   æ­£ç¡®è¿”å›žtrueï¼Œå¦åˆ™è¿”å›žfalse
     bool CheckPwd(const std::string& email, const std::string& pwd, UserInfo& userInfo);
 
-    // --------- ºÃÓÑ¹ÜÀí¹¦ÄÜ ---------
+    // --------- å¥½å‹ç®¡ç†åŠŸèƒ½ ---------
 
-    // ËÑË÷ÓÃ»§
-    // ²ÎÊý£º
-    //   - keyword: ËÑË÷¹Ø¼ü´Ê£¨ÓÃ»§Ãû»òÓÊÏä£©
-    // ·µ»ØÖµ£º
-    //   Æ¥ÅäµÄÓÃ»§ÁÐ±í
+    // æœç´¢ç”¨æˆ·
+    // å‚æ•°ï¼š
+    //   - keyword: æœç´¢å…³é”®è¯ï¼ˆç”¨æˆ·åæˆ–é‚®ç®±ï¼‰
+    // è¿”å›žå€¼ï¼š
+    //   åŒ¹é…çš„ç”¨æˆ·åˆ—è¡¨
     std::vector<UserInfo> SearchUsers(const std::string& keyword);
 
-    // Ìí¼ÓºÃÓÑÉêÇë
-    // ²ÎÊý£º
-    //   - fromUid: ÉêÇëÕßÓÃ»§ID
-    //   - toUid: ±»ÉêÇëÕßÓÃ»§ID
-    //   - desc: ÉêÇëÃèÊö
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // æ·»åŠ å¥½å‹ç”³è¯·
+    // å‚æ•°ï¼š
+    //   - fromUid: ç”³è¯·è€…ç”¨æˆ·ID
+    //   - toUid: è¢«ç”³è¯·è€…ç”¨æˆ·ID
+    //   - desc: ç”³è¯·æè¿°
+    // è¿”å›žå€¼ï¼š
+    //   æˆåŠŸè¿”å›žtrueï¼Œå¦åˆ™è¿”å›žfalse
     bool AddFriendRequest(int fromUid, int toUid, const std::string& desc);
 
-    // »ñÈ¡ºÃÓÑÉêÇëÁÐ±í
-    // ²ÎÊý£º
-    //   - uid: ÓÃ»§ID
-    // ·µ»ØÖµ£º
-    //   ¸ÃÓÃ»§ÊÕµ½µÄºÃÓÑÉêÇëÁÐ±í
+    // èŽ·å–å¥½å‹ç”³è¯·åˆ—è¡¨
+    // å‚æ•°ï¼š
+    //   - uid: ç”¨æˆ·ID
+    // è¿”å›žå€¼ï¼š
+    //   è¯¥ç”¨æˆ·æ”¶åˆ°çš„å¥½å‹ç”³è¯·åˆ—è¡¨
     std::vector<ApplyInfo> GetFriendRequests(int uid);
 
-    // »Ø¸´ºÃÓÑÉêÇë
-    // ²ÎÊý£º
-    //   - fromUid: ÉêÇëÕßÓÃ»§ID
-    //   - toUid: ±»ÉêÇëÕßÓÃ»§ID
-    //   - agree: ÊÇ·ñÍ¬Òâ£¨true=Í¬Òâ£¬false=¾Ü¾ø£©
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // å›žå¤å¥½å‹ç”³è¯·
+    // å‚æ•°ï¼š
+    //   - fromUid: ç”³è¯·è€…ç”¨æˆ·ID
+    //   - toUid: è¢«ç”³è¯·è€…ç”¨æˆ·ID
+    //   - agree: æ˜¯å¦åŒæ„ï¼ˆtrue=åŒæ„ï¼Œfalse=æ‹’ç»ï¼‰
+    // è¿”å›žå€¼ï¼š
+    //   æˆåŠŸè¿”å›žtrueï¼Œå¦åˆ™è¿”å›žfalse
     bool ReplyFriendRequest(int fromUid, int toUid, bool agree);
 
-    // »ñÈ¡ÎÒµÄºÃÓÑÁÐ±í
-    // ²ÎÊý£º
-    //   - uid: ÓÃ»§ID
-    // ·µ»ØÖµ£º
-    //   ¸ÃÓÃ»§µÄºÃÓÑÁÐ±í
+    // èŽ·å–æˆ‘çš„å¥½å‹åˆ—è¡¨
+    // å‚æ•°ï¼š
+    //   - uid: ç”¨æˆ·ID
+    // è¿”å›žå€¼ï¼š
+    //   è¯¥ç”¨æˆ·çš„å¥½å‹åˆ—è¡¨
     std::vector<UserInfo> GetMyFriends(int uid);
 
-    // ¼ì²éÁ½¸öÓÃ»§ÊÇ·ñÎªºÃÓÑ
-    // ²ÎÊý£º
-    //   - uid1: ÓÃ»§1µÄID
-    //   - uid2: ÓÃ»§2µÄID
-    // ·µ»ØÖµ£º
-    //   ÊÇºÃÓÑ·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // æ£€æŸ¥ä¸¤ä¸ªç”¨æˆ·æ˜¯å¦ä¸ºå¥½å‹
+    // å‚æ•°ï¼š
+    //   - uid1: ç”¨æˆ·1çš„ID
+    //   - uid2: ç”¨æˆ·2çš„ID
+    // è¿”å›žå€¼ï¼š
+    //   æ˜¯å¥½å‹è¿”å›žtrueï¼Œå¦åˆ™è¿”å›žfalse
     bool IsFriend(int uid1, int uid2);
 
 private:
-    // Ë½ÓÐ¹¹Ôìº¯Êý£ºµ¥ÀýÄ£Ê½
+    // ç§æœ‰æž„é€ å‡½æ•°ï¼šå•ä¾‹æ¨¡å¼
     MysqlMgr();
 
-    // MySQLÊý¾Ý·ÃÎÊ¶ÔÏó£¨Êµ¼ÊÖ´ÐÐÊý¾Ý¿â²Ù×÷£©
+    // MySQLæ•°æ®è®¿é—®å¯¹è±¡ï¼ˆå®žé™…æ‰§è¡Œæ•°æ®åº“æ“ä½œï¼‰
     MysqlDao  _dao;
 };
 

@@ -2,13 +2,13 @@
 
 std::string ConfigMgr::GetValue(const std::string& section, const std::string& key)
 {
-	// ��� section �Ƿ����
+	// 判断 section 是否存在
 	if (_config_map.find(section) == _config_map.end()) {
 		std::cerr << "[ConfigMgr] Section not found: " << section << std::endl;
 		return "";
 	}
 
-	// ʹ�� SectionInfo �� operator[] ��ȡ key ��ֵ
+	// 使用 SectionInfo 的 operator[] 获取 key 的值
 	return _config_map[section][key];
 }
 
@@ -35,7 +35,7 @@ ConfigMgr::ConfigMgr()
 		sectionInfo._section_datas = section_config;
 		_config_map[section_name] = sectionInfo;
 
-		// ������е�section��key-value��  
+		// 打印所有的section和key-value对
 		for (const auto& section_entry : _config_map) {
 			const std::string& section_name = section_entry.first;
 			SectionInfo section_config = section_entry.second;

@@ -1,7 +1,7 @@
 #include "MysqlMgr.h"
 
-// �ϲ㣬��Ϊ ҵ���߼��� DAO ֮����м�㡣
-// �� MysqlDao ��װ�������ṩ���򵥡�ͳһ�Ľӿڸ�ϵͳ�������ֵ��á�
+// 上层，作为 业务逻辑与 DAO 之间的中间层。
+// 把 MysqlDao 封装起来，提供更简单、统一的接口给系统其他部分调用。
 MysqlMgr::~MysqlMgr() {
 
 }

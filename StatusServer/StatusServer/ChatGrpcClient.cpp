@@ -1,15 +1,15 @@
 #include "ChatGrpcClient.h"
 
-// ¹¹Ôìº¯Êı£º³õÊ¼»¯ChatGrpcClient
+// æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–ChatGrpcClient
 // 
-// ×÷ÓÃ£º
-//   ´ÓÅäÖÃÎÄ¼şÖĞ¶ÁÈ¡ËùÓĞChatServerµÄÁĞ±í£¬ÎªÃ¿¸öChatServer´´½¨Á¬½Ó³Ø
+// ä½œç”¨ï¼š
+//   ä»é…ç½®æ–‡ä»¶ä¸­è¯»å–æ‰€æœ‰ChatServerçš„åˆ—è¡¨ï¼Œä¸ºæ¯ä¸ªChatServeråˆ›å»ºè¿æ¥æ± 
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ´ÓÅäÖÃÎÄ¼ş¶ÁÈ¡ChatServerÁĞ±í£¨¶ººÅ·Ö¸ôµÄserverÃû³Æ£©
-//   2. ½âÎöserverÁĞ±í
-//   3. ÎªÃ¿¸öserver´´½¨Á¬½Ó³Ø
-//   4. Ê¹ÓÃserverµÄName×÷Îªkey£¬´æ´¢ÔÚunordered_mapÖĞ
+// å®ç°é€»è¾‘ï¼š
+//   1. ä»é…ç½®æ–‡ä»¶è¯»å–ChatServeråˆ—è¡¨ï¼ˆé€—å·åˆ†éš”çš„serveråç§°ï¼‰
+//   2. è§£æserveråˆ—è¡¨
+//   3. ä¸ºæ¯ä¸ªserveråˆ›å»ºè¿æ¥æ± 
+//   4. ä½¿ç”¨serverçš„Nameä½œä¸ºkeyï¼Œå­˜å‚¨åœ¨unordered_mapä¸­
 ChatGrpcClient::ChatGrpcClient()
 {
     auto& cfg = ConfigMgr::Inst();
@@ -17,7 +17,7 @@ ChatGrpcClient::ChatGrpcClient()
 
     std::vector<std::string> words;
 
-    // ½âÎö¶ººÅ·Ö¸ôµÄserverÁĞ±í
+    // è§£æé€—å·åˆ†éš”çš„serveråˆ—è¡¨
     std::stringstream ss(server_list);
     std::string word;
 
@@ -25,36 +25,36 @@ ChatGrpcClient::ChatGrpcClient()
         words.push_back(word);
     }
 
-    // ÎªÃ¿¸öserver´´½¨Á¬½Ó³Ø
+    // ä¸ºæ¯ä¸ªserveråˆ›å»ºè¿æ¥æ± 
     for (auto& word : words) {
-        // ¼ì²éserverÅäÖÃÊÇ·ñ´æÔÚ
+        // æ£€æŸ¥serveré…ç½®æ˜¯å¦å­˜åœ¨
         if (cfg[word]["Name"].empty()) {
             continue;
         }
-        // ´´½¨Á¬½Ó³Ø£¨Ã¿¸öÁ¬½Ó³Ø5¸öÁ¬½Ó£©
+        // åˆ›å»ºè¿æ¥æ± ï¼ˆæ¯ä¸ªè¿æ¥æ± 5ä¸ªè¿æ¥ï¼‰
         _pools[cfg[word]["Name"]] = std::make_unique<ChatConPool>(5, cfg[word]["Host"], cfg[word]["Port"]);
     }
 
 }
 
-// Í¨ÖªÌí¼ÓºÃÓÑ£¨µ±Ç°Î´ÊµÏÖ£©
+// é€šçŸ¥æ·»åŠ å¥½å‹ï¼ˆå½“å‰æœªå®ç°ï¼‰
 AddFriendRsp ChatGrpcClient::NotifyAddFriend(std::string server_ip, const AddFriendReq& req) {
     AddFriendRsp rsp;
     return rsp;
 }
 
-// Í¨ÖªÈÏÖ¤ºÃÓÑ£¨µ±Ç°Î´ÊµÏÖ£©
+// é€šçŸ¥è®¤è¯å¥½å‹ï¼ˆå½“å‰æœªå®ç°ï¼‰
 AuthFriendRsp ChatGrpcClient::NotifyAuthFriend(std::string server_ip, const AuthFriendReq& req) {
     AuthFriendRsp rsp;
     return rsp;
 }
 
-// »ñÈ¡ÓÃ»§»ù´¡ĞÅÏ¢£¨µ±Ç°Î´ÊµÏÖ£©
+// è·å–ç”¨æˆ·åŸºç¡€ä¿¡æ¯ï¼ˆå½“å‰æœªå®ç°ï¼‰
 bool ChatGrpcClient::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<UserInfo>& userinfo) {
     return true;
 }
 
-// Í¨ÖªÎÄ±¾ÁÄÌìÏûÏ¢£¨µ±Ç°Î´ÊµÏÖ£©
+// é€šçŸ¥æ–‡æœ¬èŠå¤©æ¶ˆæ¯ï¼ˆå½“å‰æœªå®ç°ï¼‰
 TextChatMsgRsp ChatGrpcClient::NotifyTextChatMsg(std::string server_ip,
     const TextChatMsgReq& req, const Json::Value& rtvalue) {
 

@@ -11,7 +11,7 @@ public:
     ~AsioIOServicePool();
     AsioIOServicePool(const AsioIOServicePool&) = delete;
     AsioIOServicePool& operator=(const AsioIOServicePool&) = delete;
-    // Ê¹ÓÃ round-robin µÄ·½Ê½·µ»ØÒ»¸ö io_service
+    // ä½¿ç”¨ round-robin çš„æ–¹å¼è¿”å›ä¸€ä¸ª io_service
     boost::asio::io_context& GetIOService();
     void Stop();
 private:

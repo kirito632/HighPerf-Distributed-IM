@@ -42,8 +42,11 @@ RedisMgr::RedisMgr()
     auto host = gCfgMgr["Redis"]["Host"];
     auto port = gCfgMgr["Redis"]["Port"];
     auto pwd = gCfgMgr["Redis"]["Passwd"];
-    // 默认 pool size 5（可按需调整）
-    con_pool_.reset(new RedisConPool(5, host.c_str(), atoi(port.c_str()), pwd.c_str()));
+    // 根据CPU核心数动态设置连接池大小
+    size_t pool_size = std::max(16u, std::thread::hardware_concurrency() * 2);
+    std::cout << "[RedisMgr] CPU cores: " << std::thread::hardware_concurrency() 
+              << ", Redis pool size: " << pool_size << std::endl;
+    con_pool_.reset(new RedisConPool(pool_size, host.c_str(), atoi(port.c_str()), pwd.c_str()));
 }
 
 RedisMgr::~RedisMgr()

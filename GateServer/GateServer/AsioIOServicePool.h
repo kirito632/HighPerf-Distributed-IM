@@ -2,66 +2,65 @@
 #include <boost/asio.hpp>
 #include "Singleton.h"
 
-// AsioIOServicePoolÀà£ºIO·þÎñ³Ø£¬ÊµÏÖ¸ºÔØ¾ùºâ
+// AsioIOServicePoolç±»ï¼šIOæœåŠ¡æ± ï¼Œå®žçŽ°è´Ÿè½½å‡è¡¡
 // 
-// ×÷ÓÃ£º
-//   ¹ÜÀí¶à¸öboost::asio::io_context£¬ÊµÏÖIO·þÎñµÄ¸ºÔØ¾ùºâ
-//   Í¨¹ý¶àÏß³ÌºÍ¶à¸öio_contextÌá¸ß²¢·¢´¦ÀíÄÜÁ¦
+// ä½œç”¨ï¼š
+//   ç®¡ç†å¤šä¸ªboost::asio::io_contextï¼Œå®žçŽ°IOæœåŠ¡çš„è´Ÿè½½å‡è¡¡
+//   é€šè¿‡å¤šçº¿ç¨‹å’Œå¤šä¸ªio_contextæé«˜å¹¶å‘å¤„ç†èƒ½åŠ›
 // 
-// Éè¼ÆÄ£Ê½£º
-//   ¼Ì³ÐSingletonµ¥ÀýÄ£Ê½£¬È·±£È«¾ÖÖ»ÓÐÒ»¸öIO·þÎñ³ØÊµÀý
+// è®¾è®¡æ¨¡å¼ï¼š
+//   ç»§æ‰¿Singletonå•ä¾‹æ¨¡å¼ï¼Œç¡®ä¿å…¨å±€åªæœ‰ä¸€ä¸ªIOæœåŠ¡æ± å®žä¾‹
 // 
-// ÊµÏÖÔ­Àí£º
-//   1. ´´½¨¶à¸öio_context£¨Ä¬ÈÏ2¸ö£©
-//   2. ÎªÃ¿¸öio_context´´½¨work_guard£¨±£³ÖÔËÐÐ×´Ì¬£©
-//   3. ÎªÃ¿¸öio_contextÆô¶¯¶ÀÁ¢µÄ¹¤×÷Ïß³Ì
-//   4. Ê¹ÓÃRound-RobinÂÖÑ¯·½Ê½·ÖÅäÈÎÎñ
+// å®žçŽ°åŽŸç†ï¼š
+//   1. åˆ›å»ºå¤šä¸ªio_context
+//   2. ä¸ºæ¯ä¸ªio_contextåˆ›å»ºwork_guardï¼ˆä¿æŒè¿è¡ŒçŠ¶æ€ï¼‰
+//   3. ä¸ºæ¯ä¸ªio_contextå¯åŠ¨ç‹¬ç«‹çš„å·¥ä½œçº¿ç¨‹
+//   4. ä½¿ç”¨Round-Robinè½®è¯¢æ–¹å¼åˆ†é…ä»»åŠ¡
 class AsioIOServicePool :public Singleton<AsioIOServicePool>
 {
     friend Singleton<AsioIOServicePool>;
 public:
-    using IOService = boost::asio::io_context;  // IO·þÎñÀàÐÍ±ðÃû
-    using Work = boost::asio::executor_work_guard<boost::asio::io_context::executor_type>;  // WorkÀàÐÍ±ðÃû
-    using WorkPtr = std::unique_ptr<Work>;  // WorkÖ¸ÕëÀàÐÍ±ðÃû
+    using IOService = boost::asio::io_context;  // IOæœåŠ¡ç±»åž‹åˆ«å
+    using Work = boost::asio::executor_work_guard<boost::asio::io_context::executor_type>;  // Workç±»åž‹åˆ«å
+    using WorkPtr = std::unique_ptr<Work>;  // WorkæŒ‡é’ˆç±»åž‹åˆ«å
 
-    // Îö¹¹º¯Êý£ºÍ£Ö¹ËùÓÐIO·þÎñ
+    // æžæž„å‡½æ•°ï¼šåœæ­¢æ‰€æœ‰IOæœåŠ¡
     ~AsioIOServicePool();
 
-    // ½ûÖ¹¿½±´¹¹Ôì
+    // ç¦æ­¢æ‹·è´æž„é€ 
     AsioIOServicePool(const AsioIOServicePool&) = delete;
 
-    // ½ûÖ¹¸³Öµ
+    // ç¦æ­¢èµ‹å€¼
     AsioIOServicePool& operator=(const AsioIOServicePool&) = delete;
 
-    // Ê¹ÓÃ round-robin ÂÖÑ¯µÄ·½Ê½»ñÈ¡Ò»¸ö io_service
+    // ä½¿ç”¨ round-robin è½®è¯¢çš„æ–¹å¼èŽ·å–ä¸€ä¸ª io_service
     // 
-    // ·µ»ØÖµ£º
-    //   Ò»¸öio_contextµÄÒýÓÃ
+    // è¿”å›žå€¼ï¼š
+    //   ä¸€ä¸ªio_contextçš„å¼•ç”¨
     // 
-    // ËµÃ÷£º
-    //   Ã¿´Îµ÷ÓÃ¶¼»á·µ»ØÏÂÒ»¸öio_context£¬ÊµÏÖ¸ºÔØ¾ùºâ
+    // è¯´æ˜Žï¼š
+    //   æ¯æ¬¡è°ƒç”¨éƒ½ä¼šè¿”å›žä¸‹ä¸€ä¸ªio_contextï¼Œå®žçŽ°è´Ÿè½½å‡è¡¡
     boost::asio::io_context& GetIOService();
 
-    // Í£Ö¹ËùÓÐIO·þÎñ²¢µÈ´ýÏß³Ì½áÊø
+    // åœæ­¢æ‰€æœ‰IOæœåŠ¡å¹¶ç­‰å¾…çº¿ç¨‹ç»“æŸ
     void Stop();
 
 private:
-    // Ë½ÓÐ¹¹Ôìº¯Êý£ºµ¥ÀýÄ£Ê½
-    // ²ÎÊý£º
-    //   - size: IO·þÎñ³ØµÄ´óÐ¡£¨Ä¬ÈÏ2£©
-    AsioIOServicePool(std::size_t size = 2/*std::thread::hardware_concurrency()*/);
+    // ç§æœ‰æž„é€ å‡½æ•°ï¼šå•ä¾‹æ¨¡å¼
+    // å‚æ•°ï¼š
+    //   - size: IOæœåŠ¡æ± çš„å¤§å°
+    AsioIOServicePool(std::size_t size = std::thread::hardware_concurrency());
 
-    // IO·þÎñÁÐ±í
+    // IOæœåŠ¡åˆ—è¡¨
     std::vector<IOService> _ioServices;
 
-    // WorkÖ¸ÕëÁÐ±í£º±£³Öio_contextÔËÐÐ
+    // WorkæŒ‡é’ˆåˆ—è¡¨ï¼šä¿æŒio_contextè¿è¡Œ
     std::vector<WorkPtr> _works;
 
-    // ¹¤×÷Ïß³ÌÁÐ±í
+    // å·¥ä½œçº¿ç¨‹åˆ—è¡¨
     std::vector<std::thread> _threads;
 
-    // ÏÂÒ»¸öÒªÊ¹ÓÃµÄIO·þÎñË÷Òý£¨ÓÃÓÚRound-RobinÂÖÑ¯£©
+    // ä¸‹ä¸€ä¸ªè¦ä½¿ç”¨çš„IOæœåŠ¡ç´¢å¼•ï¼ˆç”¨äºŽRound-Robinè½®è¯¢ï¼‰
     std::size_t _nextIOService;
 };
 
-/* SingletonÊÇÒ»¸öÃ»ÓÐ¿½±´¹¹Ôì¡¢ÒÆ¶¯¹¹ÔìµÄ»ùÀà£¬¹©ÕâÐ©pool¼Ì³Ð */

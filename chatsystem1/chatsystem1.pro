@@ -1,4 +1,4 @@
-QT       += core gui network
+QT       += core gui network sql
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -26,7 +26,8 @@ SOURCES += \
     sidebarbutton.cpp \
     tcpmgr.cpp \
     timerbtn.cpp \
-    usermgr.cpp
+    usermgr.cpp \
+    localdb.cpp
 
 HEADERS += \
     QObjectSingleton.h \
@@ -45,7 +46,8 @@ HEADERS += \
     singleton.h \
     tcpmgr.h \
     timerbtn.h \
-    usermgr.h
+    usermgr.h \
+    localdb.h
 
 FORMS += \
     forgetdialog.ui \

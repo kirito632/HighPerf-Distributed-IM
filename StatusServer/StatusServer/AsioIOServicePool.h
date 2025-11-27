@@ -3,67 +3,67 @@
 #include <boost/asio.hpp>
 #include "Singleton.h"
 
-// AsioIOServicePoolÀà£º¹ÜÀíBoost.AsioµÄio_context³Ø£¬ÊµÏÖ¸ºÔØ¾ùºâ
+// AsioIOServicePoolç±»ï¼šç®¡ç†Boost.Asioçš„io_contextæ± ï¼Œå®žçŽ°è´Ÿè½½å‡è¡¡
 // 
-// ×÷ÓÃ£º
-//   Ìá¹©Ò»¸öio_contextµÄ³Ø£¬²¢Í¨¹ýRound-Robin²ßÂÔ·Ö·¢¸ø²»Í¬µÄÈÎÎñ£¬
-//   ´Ó¶ø½«IO²Ù×÷·ÖÉ¢µ½¶à¸öÏß³ÌÖÐ£¬Ìá¸ß²¢·¢´¦ÀíÄÜÁ¦¡£
+// ä½œç”¨ï¼š
+//   æä¾›ä¸€ä¸ªio_contextçš„æ± ï¼Œå¹¶é€šè¿‡Round-Robinç­–ç•¥åˆ†å‘ç»™ä¸åŒçš„ä»»åŠ¡ï¼Œ
+//   ä»Žè€Œå°†IOæ“ä½œåˆ†æ•£åˆ°å¤šä¸ªçº¿ç¨‹ä¸­ï¼Œæé«˜å¹¶å‘å¤„ç†èƒ½åŠ›ã€‚
 // 
-// Éè¼ÆÄ£Ê½£º
-//   µ¥ÀýÄ£Ê½£¬È·±£È«¾ÖÖ»ÓÐÒ»¸öIO·þÎñ³ØÊµÀý¡£
+// è®¾è®¡æ¨¡å¼ï¼š
+//   å•ä¾‹æ¨¡å¼ï¼Œç¡®ä¿å…¨å±€åªæœ‰ä¸€ä¸ªIOæœåŠ¡æ± å®žä¾‹ã€‚
 // 
-// ¹¤×÷Ô­Àí£º
-//   1. ´´½¨¶à¸öio_contextÊµÀý
-//   2. ÎªÃ¿¸öio_context´´½¨work_guard£¨·ÀÖ¹Ã»ÓÐÈÎÎñÊ±ÍË³ö£©
-//   3. ÎªÃ¿¸öio_contextÆô¶¯¶ÀÁ¢µÄÏß³ÌÔËÐÐevent loop
-//   4. Ê¹ÓÃRound-Robin·½Ê½·ÖÅäio_context
+// å·¥ä½œåŽŸç†ï¼š
+//   1. åˆ›å»ºå¤šä¸ªio_contextå®žä¾‹
+//   2. ä¸ºæ¯ä¸ªio_contextåˆ›å»ºwork_guardï¼ˆé˜²æ­¢æ²¡æœ‰ä»»åŠ¡æ—¶é€€å‡ºï¼‰
+//   3. ä¸ºæ¯ä¸ªio_contextå¯åŠ¨ç‹¬ç«‹çš„çº¿ç¨‹è¿è¡Œevent loop
+//   4. ä½¿ç”¨Round-Robinæ–¹å¼åˆ†é…io_context
 class AsioIOServicePool :public Singleton<AsioIOServicePool>
 {
-    friend Singleton<AsioIOServicePool>;  // ÔÊÐíSingleton·ÃÎÊË½ÓÐ¹¹Ôìº¯Êý
+    friend Singleton<AsioIOServicePool>;  // å…è®¸Singletonè®¿é—®ç§æœ‰æž„é€ å‡½æ•°
 public:
-    // ÀàÐÍ±ðÃû£¬¼ò»¯io_contextµÄÊ¹ÓÃ
+    // ç±»åž‹åˆ«åï¼Œç®€åŒ–io_contextçš„ä½¿ç”¨
     using IOService = boost::asio::io_context;
-    // ÀàÐÍ±ðÃû£¬ÓÃÓÚ±£³Öio_contextµÄÔËÐÐ×´Ì¬
+    // ç±»åž‹åˆ«åï¼Œç”¨äºŽä¿æŒio_contextçš„è¿è¡ŒçŠ¶æ€
     using Work = boost::asio::executor_work_guard<boost::asio::io_context::executor_type>;
-    // Work¶ÔÏóµÄÖÇÄÜÖ¸Õë
+    // Workå¯¹è±¡çš„æ™ºèƒ½æŒ‡é’ˆ
     using WorkPtr = std::unique_ptr<Work>;
 
-    // Îö¹¹º¯Êý£ºÍ£Ö¹ËùÓÐIO·þÎñ²¢ÇåÀí×ÊÔ´
+    // æžæž„å‡½æ•°ï¼šåœæ­¢æ‰€æœ‰IOæœåŠ¡å¹¶æ¸…ç†èµ„æº
     ~AsioIOServicePool();
 
-    // ½ûÓÃ¿½±´¹¹Ôìº¯ÊýºÍ¸³ÖµÔËËã·û
+    // ç¦ç”¨æ‹·è´æž„é€ å‡½æ•°å’Œèµ‹å€¼è¿ç®—ç¬¦
     AsioIOServicePool(const AsioIOServicePool&) = delete;
     AsioIOServicePool& operator=(const AsioIOServicePool&) = delete;
 
-    // »ñÈ¡Ò»¸öio_contextÊµÀý£¨Ê¹ÓÃRound-RobinÂÖÑ¯·½Ê½£©
-    // ×÷ÓÃ£º
-    //   ÊµÏÖ¸ºÔØ¾ùºâ£¬½«ÐÂµÄÈÎÎñ·ÖÅä¸øÏÂÒ»¸ö¿ÉÓÃµÄio_context
-    // ·µ»ØÖµ£º
-    //   Ò»¸öio_contextµÄÒýÓÃ
+    // èŽ·å–ä¸€ä¸ªio_contextå®žä¾‹ï¼ˆä½¿ç”¨Round-Robinè½®è¯¢æ–¹å¼ï¼‰
+    // ä½œç”¨ï¼š
+    //   å®žçŽ°è´Ÿè½½å‡è¡¡ï¼Œå°†æ–°çš„ä»»åŠ¡åˆ†é…ç»™ä¸‹ä¸€ä¸ªå¯ç”¨çš„io_context
+    // è¿”å›žå€¼ï¼š
+    //   ä¸€ä¸ªio_contextçš„å¼•ç”¨
     boost::asio::io_context& GetIOService();
 
-    // Í£Ö¹ËùÓÐIO·þÎñºÍ¹¤×÷Ïß³Ì
-    // ×÷ÓÃ£º
-    //   ÓÅÑÅµØ¹Ø±ÕËùÓÐio_context£¬²¢µÈ´ýËùÓÐ¹¤×÷Ïß³Ì½áÊø
+    // åœæ­¢æ‰€æœ‰IOæœåŠ¡å’Œå·¥ä½œçº¿ç¨‹
+    // ä½œç”¨ï¼š
+    //   ä¼˜é›…åœ°å…³é—­æ‰€æœ‰io_contextï¼Œå¹¶ç­‰å¾…æ‰€æœ‰å·¥ä½œçº¿ç¨‹ç»“æŸ
     void Stop();
 
 private:
-    // Ë½ÓÐ¹¹Ôìº¯Êý£º³õÊ¼»¯IO·þÎñ³Ø
-    // ²ÎÊý£º
-    //   - size: IO·þÎñµÄÊýÁ¿£¬Ä¬ÈÏÎª2
+    // ç§æœ‰æž„é€ å‡½æ•°ï¼šåˆå§‹åŒ–IOæœåŠ¡æ± 
+    // å‚æ•°ï¼š
+    //   - size: IOæœåŠ¡çš„æ•°é‡ï¼Œé»˜è®¤ä¸º2
     // 
-    // ÊµÏÖÂß¼­£º
-    //   1. ´´½¨Ö¸¶¨ÊýÁ¿µÄio_context
-    //   2. ÎªÃ¿¸öio_context´´½¨work_guard
-    //   3. ÎªÃ¿¸öio_contextÆô¶¯¶ÀÁ¢µÄÏß³Ì
+    // å®žçŽ°é€»è¾‘ï¼š
+    //   1. åˆ›å»ºæŒ‡å®šæ•°é‡çš„io_context
+    //   2. ä¸ºæ¯ä¸ªio_contextåˆ›å»ºwork_guard
+    //   3. ä¸ºæ¯ä¸ªio_contextå¯åŠ¨ç‹¬ç«‹çš„çº¿ç¨‹
     AsioIOServicePool(std::size_t size = 2/*std::thread::hardware_concurrency()*/);
 
-    // ´æ´¢io_context¶ÔÏóµÄÏòÁ¿
+    // å­˜å‚¨io_contextå¯¹è±¡çš„å‘é‡
     std::vector<IOService> _ioServices;
-    // ´æ´¢work_guard¶ÔÏóµÄÖÇÄÜÖ¸ÕëÏòÁ¿£¬ÓÃÓÚ±£³Öio_contextÔËÐÐ
+    // å­˜å‚¨work_guardå¯¹è±¡çš„æ™ºèƒ½æŒ‡é’ˆå‘é‡ï¼Œç”¨äºŽä¿æŒio_contextè¿è¡Œ
     std::vector<WorkPtr> _works;
-    // ´æ´¢¹¤×÷Ïß³ÌµÄÏòÁ¿
+    // å­˜å‚¨å·¥ä½œçº¿ç¨‹çš„å‘é‡
     std::vector<std::thread> _threads;
-    // ÏÂÒ»¸öÒª·ÖÅäµÄio_contextµÄË÷Òý£¨ÓÃÓÚRound-Robin£©
+    // ä¸‹ä¸€ä¸ªè¦åˆ†é…çš„io_contextçš„ç´¢å¼•ï¼ˆç”¨äºŽRound-Robinï¼‰
     std::size_t _nextIOService;
 };

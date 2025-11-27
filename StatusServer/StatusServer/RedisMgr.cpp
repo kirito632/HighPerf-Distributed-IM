@@ -6,29 +6,29 @@
 #include <stdexcept>
 #include <vector>
 
-// hiredis header (¸ù¾İÄãµÄÏîÄ¿ include Â·¾¶µ÷Õû)
+// hiredis header (ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¿ include Â·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
 #include <hiredis/hiredis.h>
 
 namespace {
-    // Ğ¡µÄ¸¨Öúº¯Êı£º°²È«µØ°Ñ reply->str ¿½±´µ½ std::string£¨·ÀÖ¹ reply==nullptr£©
+    // Ğ¡ï¿½Ä¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È«ï¿½Ø°ï¿½ reply->str ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ std::stringï¿½ï¿½ï¿½ï¿½Ö¹ reply==nullptrï¿½ï¿½
     static std::string replyToString(redisReply* reply) {
         if (!reply || reply->type != REDIS_REPLY_STRING) return {};
         return std::string(reply->str, reply->len);
     }
 } // namespace
 
-// RAII guard£ºÈ·±£È¡µ½µÄÁ¬½Ó»áÔÚÎö¹¹Ê±¹é»¹µ½³ØÀï
+// RAII guardï¿½ï¿½È·ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½é»¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 class RedisConnectionGuard {
 public:
     RedisConnectionGuard(RedisConPool* pool, redisContext* ctx) : pool_(pool), ctx_(ctx) {}
     ~RedisConnectionGuard() {
         if (pool_ && ctx_) {
             pool_->returnConnection(ctx_);
-            // ²»ÖÃ ctx_ Îª nullptr£¬ÒòÎªÎö¹¹ºó²»»áÔÙÓÃ
+            // ï¿½ï¿½ï¿½ï¿½ ctx_ Îª nullptrï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½ó²»»ï¿½ï¿½ï¿½ï¿½ï¿½
         }
     }
     redisContext* get() const { return ctx_; }
-    // ½ûÖ¹¸´ÖÆ
+    // ï¿½ï¿½Ö¹ï¿½ï¿½ï¿½ï¿½
     RedisConnectionGuard(const RedisConnectionGuard&) = delete;
     RedisConnectionGuard& operator=(const RedisConnectionGuard&) = delete;
 private:
@@ -36,15 +36,18 @@ private:
     redisContext* ctx_;
 };
 
-// RedisMgr ¹¹ÔìÓëÎö¹¹
+// RedisMgr ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 RedisMgr::RedisMgr()
 {
     auto& gCfgMgr = ConfigMgr::Inst();
     auto host = gCfgMgr["Redis"]["Host"];
     auto port = gCfgMgr["Redis"]["Port"];
     auto pwd = gCfgMgr["Redis"]["Passwd"];
-    // Ä¬ÈÏ pool size 5£¨¿É°´Ğèµ÷Õû£©
-    con_pool_.reset(new RedisConPool(5, host.c_str(), atoi(port.c_str()), pwd.c_str()));
+    // æ ¹æ®CPUæ ¸å¿ƒæ•°åŠ¨æ€è®¾ç½®è¿æ¥æ± å¤§å°
+    size_t pool_size = std::max(16u, std::thread::hardware_concurrency() * 2);
+    std::cout << "[RedisMgr] CPU cores: " << std::thread::hardware_concurrency() 
+              << ", Redis pool size: " << pool_size << std::endl;
+    con_pool_.reset(new RedisConPool(pool_size, host.c_str(), atoi(port.c_str()), pwd.c_str()));
 }
 
 RedisMgr::~RedisMgr()
@@ -141,8 +144,8 @@ bool RedisMgr::Auth(const std::string& password)
     }
     freeReplyObject(reply);
 
-    if (ok) std::cout << "ÈÏÖ¤³É¹¦" << std::endl;
-    else std::cout << "ÈÏÖ¤Ê§°Ü" << std::endl;
+    if (ok) std::cout << "ï¿½ï¿½Ö¤ï¿½É¹ï¿½" << std::endl;
+    else std::cout << "ï¿½ï¿½Ö¤Ê§ï¿½ï¿½" << std::endl;
     return ok;
 }
 
@@ -334,24 +337,24 @@ bool RedisMgr::HDel(const std::string& key, const std::string& field)
         std::cout << "[RedisMgr::HDel] getConnection returned nullptr for key=" << key << " field=" << field << std::endl;
         return false;
     }
-    // RAII: È·±£Á¬½Ó»á±»¹é»¹µ½Á¬½Ó³Ø
+    // RAII: È·ï¿½ï¿½ï¿½ï¿½ï¿½Ó»á±»ï¿½é»¹ï¿½ï¿½ï¿½ï¿½ï¿½Ó³ï¿½
     RedisConnectionGuard guard(con_pool_.get(), connect);
 
-    // Ö´ĞĞ HDEL ÃüÁî
+    // Ö´ï¿½ï¿½ HDEL ï¿½ï¿½ï¿½ï¿½
     redisReply* reply = (redisReply*)redisCommand(connect, "HDEL %s %s", key.c_str(), field.c_str());
     if (reply == nullptr) {
         std::cout << "Execut command [ HDEL " << key << " " << field << " ] failure (reply==NULL)!\n";
         return false;
     }
 
-    // HDEL ·µ»ØÕûÊı£¬±íÊ¾±»É¾³ıµÄ×Ö¶ÎÊıÁ¿
+    // HDEL ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¾ï¿½ï¿½É¾ï¿½ï¿½ï¿½ï¿½ï¿½Ö¶ï¿½ï¿½ï¿½ï¿½ï¿½
     bool ok = false;
     if (reply->type == REDIS_REPLY_INTEGER) {
         if (reply->integer > 0) {
-            ok = true; // ÓĞ×Ö¶Î±»É¾³ı
+            ok = true; // ï¿½ï¿½ï¿½Ö¶Î±ï¿½É¾ï¿½ï¿½
         }
         else {
-            ok = false; // ×Ö¶Î²»´æÔÚ»òÎ´É¾³ı
+            ok = false; // ï¿½Ö¶Î²ï¿½ï¿½ï¿½ï¿½Ú»ï¿½Î´É¾ï¿½ï¿½
         }
     }
     else {
@@ -472,8 +475,8 @@ void RedisMgr::Close()
 {
     if (con_pool_) {
         con_pool_->Close();
-        // ×¢Òâ£ºRedisConPool::Close() Ó¦¸ÃÊÍ·ÅËùÓĞ redisContext£¨redisFree£©
-        // Èç¹ûÄã»¹Ã»ÔÚ RedisConPool ÖĞÊµÏÖÊÍ·Å£¬ÇëÔÚ RedisConPool::Close/Îö¹¹ÀïÊÍ·Å ctx
+        // ×¢ï¿½â£ºRedisConPool::Close() Ó¦ï¿½ï¿½ï¿½Í·ï¿½ï¿½ï¿½ï¿½ï¿½ redisContextï¿½ï¿½redisFreeï¿½ï¿½
+        // ï¿½ï¿½ï¿½ï¿½ã»¹Ã»ï¿½ï¿½ RedisConPool ï¿½ï¿½Êµï¿½ï¿½ï¿½Í·Å£ï¿½ï¿½ï¿½ï¿½ï¿½ RedisConPool::Close/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í·ï¿½ ctx
         con_pool_.reset();
     }
 }

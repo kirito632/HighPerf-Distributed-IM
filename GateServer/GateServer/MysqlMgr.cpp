@@ -1,150 +1,150 @@
 #include "MysqlMgr.h"
 
-// MysqlMgr�ࣺ��Ϊҵ���߼����DAO��֮����м��
+// MysqlMgr类：作为业务逻辑层和DAO层之间的中间层
 // 
-// ���ã�
-//   ��װMysqlDao���ṩ���򵥡�ͳһ�Ľӿڸ�ҵ���߼���ʹ��
-//   ����ҵ���߼��������ת����DAO�㴦��
+// 作用：
+//   封装MysqlDao，提供更简单、统一的接口给业务逻辑层使用
+//   负责将业务逻辑层的请求转发给DAO层处理
 // 
-// ���ģʽ��
-//   ����ģʽ��Facade�����򻯸��ӵ����ݷ��ʽӿ�
-//   ί��ģʽ��Delegation�������в���ί�и�MysqlDao
+// 设计模式：
+//   门面模式（Facade）：简化复杂的数据访问接口
+//   委托模式（Delegation）：所有操作委托给MysqlDao
 
-// ����������������Դ
+// 析构函数：清理资源
 MysqlMgr::~MysqlMgr() {
 
 }
 
-// ע���û�
+// 注册用户
 // 
-// ���ܣ����û���Ϣ���ӵ����ݿ�
+// 功能：将用户信息添加到数据库
 // 
-// ʵ�֣�
-//   ֱ��ί�и�MysqlDao����
+// 实现：
+//   直接委托给MysqlDao处理
 int MysqlMgr::RegUser(const std::string& name, const std::string& email, const std::string& pwd)
 {
     return _dao.RegUser(name, email, pwd);
 }
 
-// ��������Ƿ����û���ƥ��
+// 检查邮箱是否与用户名匹配
 // 
-// ���ܣ���֤�û�����Ӧ�������Ƿ���ȷ
+// 功能：验证用户名对应的邮箱是否正确
 // 
-// ʵ�֣�
-//   ֱ��ί�и�MysqlDao����
+// 实现：
+//   直接委托给MysqlDao处理
 bool MysqlMgr::CheckEmail(const std::string& name, const std::string& email)
 {
     return _dao.CheckEmail(name, email);
 }
 
-// ���������������
+// 根据邮箱更新密码
 // 
-// ���ܣ�ͨ�������޸��û�����
+// 功能：通过邮箱修改用户密码
 // 
-// ʵ�֣�
-//   ֱ��ί�и�MysqlDao����
-//   ע�⣺������email�������루���ģ���DAO�����й�ϣ����
+// 实现：
+//   直接委托给MysqlDao处理
+//   注意：参数是email和新密码（明文），DAO层会进行哈希处理
 bool MysqlMgr::UpdatePwdByEmail(const std::string& email, const std::string& pwd)
 {
-    // ���޸ġ�ί�е� DAO���������������
+    // 【修改】委托到 DAO：按邮箱更新密码
     return _dao.UpdatePwdByEmail(email, pwd);
 }
 
-// ��������Ƿ���ȷ
+// 检查密码是否正确
 // 
-// ���ܣ���֤�û������Ƿ�ƥ��
+// 功能：验证用户密码是否匹配
 // 
-// ʵ�֣�
-//   ֱ��ί�и�MysqlDao����
-//   ֧���û����������¼
+// 实现：
+//   直接委托给MysqlDao处理
+//   支持用户名或邮箱登录
 bool MysqlMgr::CheckPwd(const std::string& email, const std::string& pwd, UserInfo& userInfo)
 {
     return _dao.CheckPwd(email, pwd, userInfo);
 }
 
-// ���캯������ʼ��MysqlMgr
+// 构造函数：初始化MysqlMgr
 // 
-// ʵ���߼���
-//   ����MysqlDaoʵ������ʵ�����Զ���ȡMySQL���ӳص���
+// 实现逻辑：
+//   创建MysqlDao实例，该实例会自动获取MySQL连接池单例
 MysqlMgr::MysqlMgr() {
 }
 
-// --------- ���ѹ�������ʵ�� ---------
+// --------- 好友管理功能实现 ---------
 
-// �����û�
+// 搜索用户
 // 
-// ���ܣ����ݹؼ��������û����û��������䣩
+// 功能：根据关键词搜索用户（用户名或邮箱）
 // 
-// ʵ�֣�
-//   ί�и�MysqlDao����
-//   �������20��ƥ����
+// 实现：
+//   委托给MysqlDao处理
+//   返回最多20个匹配结果
 std::vector<UserInfo> MysqlMgr::SearchUsers(const std::string& keyword)
 {
-    // ���޸ġ�ί�е� DAO�������û�
+    // 【修改】委托到 DAO：搜索用户
     return _dao.SearchUsers(keyword);
 }
 
-// ���Ӻ�������
+// 添加好友申请
 // 
-// ���ܣ����ͺ�������
+// 功能：发送好友申请
 // 
-// ʵ�֣�
-//   ί�и�MysqlDao����
-//   ���Զ�����Ƿ��Ѵ���δ����������
+// 实现：
+//   委托给MysqlDao处理
+//   会自动检查是否已存在未处理的申请
 bool MysqlMgr::AddFriendRequest(int fromUid, int toUid, const std::string& desc)
 {
-    // ���޸ġ�ί�е� DAO�����Ӻ�������
+    // 【修改】委托到 DAO：添加好友申请
     return _dao.AddFriendRequest(fromUid, toUid, desc);
 }
 
-// ��ȡ���������б�
+// 获取好友申请列表
 // 
-// ���ܣ���ȡ�û��յ��ĺ�������
+// 功能：获取用户收到的好友申请
 // 
-// ʵ�֣�
-//   ί�и�MysqlDao����
-//   �������д�������status=0��������
+// 实现：
+//   委托给MysqlDao处理
+//   返回所有待处理（status=0）的申请
 std::vector<ApplyInfo> MysqlMgr::GetFriendRequests(int uid)
 {
-    // ���޸ġ�ί�е� DAO����ȡ���������б�
+    // 【修改】委托到 DAO：获取好友申请列表
     return _dao.GetFriendRequests(uid);
 }
 
-// �ظ���������
+// 回复好友申请
 // 
-// ���ܣ������������루ͬ���ܾ���
+// 功能：处理好友申请（同意或拒绝）
 // 
-// ʵ�֣�
-//   ί�и�MysqlDao����
-//   ͬ��ʱ���Զ�����˫����ѹ�ϵ
+// 实现：
+//   委托给MysqlDao处理
+//   同意时会自动建立双向好友关系
 bool MysqlMgr::ReplyFriendRequest(int fromUid, int toUid, bool agree)
 {
-    // ���޸ġ�ί�е� DAO���ظ���������
+    // 【修改】委托到 DAO：回复好友申请
     return _dao.ReplyFriendRequest(fromUid, toUid, agree);
 }
 
-// ��ȡ�ҵĺ����б�
+// 获取我的好友列表
 // 
-// ���ܣ���ȡ�û������к���
+// 功能：获取用户的所有好友
 // 
-// ʵ�֣�
-//   ί�и�MysqlDao����
-//   �������ǳ���������
+// 实现：
+//   委托给MysqlDao处理
+//   按好友昵称升序排列
 std::vector<UserInfo> MysqlMgr::GetMyFriends(int uid)
 {
-    // ���޸ġ�ί�е� DAO����ȡ�ҵĺ����б�
+    // 【修改】委托到 DAO：获取我的好友列表
     return _dao.GetMyFriends(uid);
 }
 
-// ��������û��Ƿ�Ϊ����
+// 检查两个用户是否为好友
 // 
-// ���ܣ��ж������û��Ƿ��ѽ������ѹ�ϵ
+// 功能：判断两个用户是否已建立好友关系
 // 
-// ʵ�֣�
-//   ί�и�MysqlDao����
-//   ���˫��ĺ��ѹ�ϵ
+// 实现：
+//   委托给MysqlDao处理
+//   检查双向的好友关系
 bool MysqlMgr::IsFriend(int uid1, int uid2)
 {
-    // ���޸ġ�ί�е� DAO������Ƿ�Ϊ����
+    // 【修改】委托到 DAO：检查是否为好友
     return _dao.IsFriend(uid1, uid2);
 }

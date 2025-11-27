@@ -23,7 +23,7 @@ ConfigMgr::ConfigMgr()
 		sectionInfo._section_datas = section_config;
 		_config_map[section_name] = sectionInfo;
 
-		// ������е�section��key-value��  
+		// 锟斤拷锟斤拷锟斤拷械锟絪ection锟斤拷key-value锟斤拷  
 		for (const auto& section_entry : _config_map) {
 			const std::string& section_name = section_entry.first;
 			SectionInfo section_config = section_entry.second;

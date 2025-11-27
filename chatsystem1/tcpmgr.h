@@ -6,10 +6,10 @@
 #include<functional>
 #include<QObject>
 #include<QMap>
-// [Cascade Change] 为 std::shared_ptr 添加头文件
+// 为 std::shared_ptr 添加头文件
 #include <memory>
 
-// [Cascade Change] 调整：取消对 AddFriendApply 的依赖（不再需要前向声明）
+// 调整：取消对 AddFriendApply 的依赖（不再需要前向声明）
 
 constexpr int MAX_LENGTH = 4096; // 4KB：单条消息最大长度
 
@@ -79,14 +79,15 @@ signals:
     // 通知上层：收到解析过的包（id + body）
     void sig_recv_pkg(ReqId id, const QString &body);
 
-    // [Cascade Change] 调整：收到“好友申请”TCP通知（由 ChatServer 推送）→ 改为无参信号
+    // 调整：收到“好友申请”TCP通知（由 ChatServer 推送）→ 改为无参信号
     void sig_friend_apply();
 
-    // [Cascade Change] 新增：收到“好友回复结果”TCP通知（由 ChatServer 推送）
+    // 新增：收到“好友回复结果”TCP通知（由 ChatServer 推送）
     void sig_friend_reply(int fromUid, bool agree);
 
     // 文本聊天下行（1019）通知：fromuid -> touid 的一条文本（仅传首条内容，列表由上层自行遍历需要的话）
-    void sig_text_notify(int fromUid, int toUid, const QString &content);
+    // 增加 msgId 参数，用于去重和ACK
+    void sig_text_notify(int fromUid, int toUid, const QString &msgId, const QString &content);
 };
 
 #endif // TCPMGR_H

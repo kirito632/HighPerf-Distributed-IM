@@ -6,7 +6,7 @@
 #include"const.h"
 #include"data.h"
 
-// gRPCÏà¹ØµÄÀàĞÍ±ğÃû
+// gRPCç›¸å…³çš„ç±»å‹åˆ«å
 using grpc::Channel;
 using grpc::ClientContext;
 using grpc::Status;
@@ -14,72 +14,72 @@ using grpc::Server;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
 
-// ÏûÏ¢ÀàĞÍ±ğÃû
-using message::AddFriendReq;      // Ìí¼ÓºÃÓÑÇëÇó
-using message::AddFriendRsp;      // Ìí¼ÓºÃÓÑÏìÓ¦
-using message::AuthFriendReq;     // ÈÏÖ¤ºÃÓÑÇëÇó
-using message::AuthFriendRsp;     // ÈÏÖ¤ºÃÓÑÏìÓ¦
-using message::ChatService;       // ChatServerµÄgRPC·şÎñ
-using message::GetChatServerRsp;  // »ñÈ¡ÁÄÌì·şÎñÆ÷ÏìÓ¦
-using message::LoginReq;          // µÇÂ¼ÇëÇó
-using message::LoginRsp;         // µÇÂ¼ÏìÓ¦
-using message::TextChatMsgReq;    // ÎÄ±¾ÁÄÌìÏûÏ¢ÇëÇó
-using message::TextChatMsgRsp;    // ÎÄ±¾ÁÄÌìÏûÏ¢ÏìÓ¦
-using message::TextChatData;     // ÎÄ±¾ÁÄÌìÊı¾İ
+// æ¶ˆæ¯ç±»å‹åˆ«å
+using message::AddFriendReq;      // æ·»åŠ å¥½å‹è¯·æ±‚
+using message::AddFriendRsp;      // æ·»åŠ å¥½å‹å“åº”
+using message::AuthFriendReq;     // è®¤è¯å¥½å‹è¯·æ±‚
+using message::AuthFriendRsp;     // è®¤è¯å¥½å‹å“åº”
+using message::ChatService;       // ChatServerçš„gRPCæœåŠ¡
+using message::GetChatServerRsp;  // è·å–èŠå¤©æœåŠ¡å™¨å“åº”
+using message::LoginReq;          // ç™»å½•è¯·æ±‚
+using message::LoginRsp;         // ç™»å½•å“åº”
+using message::TextChatMsgReq;    // æ–‡æœ¬èŠå¤©æ¶ˆæ¯è¯·æ±‚
+using message::TextChatMsgRsp;    // æ–‡æœ¬èŠå¤©æ¶ˆæ¯å“åº”
+using message::TextChatData;     // æ–‡æœ¬èŠå¤©æ•°æ®
 
-// ChatServiceImplÀà£ºChatServerµÄgRPC·şÎñÊµÏÖ
+// ChatServiceImplç±»ï¼šChatServerçš„gRPCæœåŠ¡å®ç°
 // 
-// ×÷ÓÃ£º
-//   ÊµÏÖChatService½Ó¿Ú£¬´¦ÀíÀ´×ÔÆäËûChatServer»òStatusServerµÄgRPCµ÷ÓÃ
+// ä½œç”¨ï¼š
+//   å®ç°ChatServiceæ¥å£ï¼Œå¤„ç†æ¥è‡ªå…¶ä»–ChatServeræˆ–StatusServerçš„gRPCè°ƒç”¨
 // 
-// Ö÷Òª¹¦ÄÜ£º
-//   - NotifyAddFriend: Í¨ÖªÌí¼ÓºÃÓÑ£¨¿çChatServer£©
-//   - NotifyAuthFriend: Í¨ÖªÈÏÖ¤ºÃÓÑ£¨¿çChatServer£©
-//   - NotifyTextChatMsg: Í¨ÖªÎÄ±¾ÁÄÌìÏûÏ¢£¨¿çChatServer£©
-//   - GetBaseInfo: »ñÈ¡ÓÃ»§»ù´¡ĞÅÏ¢
+// ä¸»è¦åŠŸèƒ½ï¼š
+//   - NotifyAddFriend: é€šçŸ¥æ·»åŠ å¥½å‹ï¼ˆè·¨ChatServerï¼‰
+//   - NotifyAuthFriend: é€šçŸ¥è®¤è¯å¥½å‹ï¼ˆè·¨ChatServerï¼‰
+//   - NotifyTextChatMsg: é€šçŸ¥æ–‡æœ¬èŠå¤©æ¶ˆæ¯ï¼ˆè·¨ChatServerï¼‰
+//   - GetBaseInfo: è·å–ç”¨æˆ·åŸºç¡€ä¿¡æ¯
 // 
-// Éè¼ÆÄ£Ê½£º
-//   ¼Ì³ĞgRPC×Ô¶¯Éú³ÉµÄService»ùÀà£¬ÊµÏÖ¾ßÌåµÄ·şÎñ·½·¨
+// è®¾è®¡æ¨¡å¼ï¼š
+//   ç»§æ‰¿gRPCè‡ªåŠ¨ç”Ÿæˆçš„ServiceåŸºç±»ï¼Œå®ç°å…·ä½“çš„æœåŠ¡æ–¹æ³•
 class ChatServiceImpl final : public ChatService::Service
 {
 public:
-    // ¹¹Ôìº¯Êı£º³õÊ¼»¯·şÎñÊµÏÖ
+    // æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–æœåŠ¡å®ç°
     ChatServiceImpl();
 
-    // Í¨ÖªÌí¼ÓºÃÓÑ£¨gRPC·½·¨ÊµÏÖ£©
-    // ²ÎÊı£º
-    //   - context: gRPC·şÎñÉÏÏÂÎÄ
-    //   - request: Ìí¼ÓºÃÓÑÇëÇó
-    //   - reply: Ìí¼ÓºÃÓÑÏìÓ¦
-    // ·µ»ØÖµ£º
-    //   gRPC×´Ì¬Âë
+    // é€šçŸ¥æ·»åŠ å¥½å‹ï¼ˆgRPCæ–¹æ³•å®ç°ï¼‰
+    // å‚æ•°ï¼š
+    //   - context: gRPCæœåŠ¡ä¸Šä¸‹æ–‡
+    //   - request: æ·»åŠ å¥½å‹è¯·æ±‚
+    //   - reply: æ·»åŠ å¥½å‹å“åº”
+    // è¿”å›å€¼ï¼š
+    //   gRPCçŠ¶æ€ç 
     Status NotifyAddFriend(ServerContext* context, const AddFriendReq* request, AddFriendRsp* reply) override;
 
-    // Í¨ÖªÈÏÖ¤ºÃÓÑ£¨gRPC·½·¨ÊµÏÖ£©
-    // ²ÎÊı£º
-    //   - context: gRPC·şÎñÉÏÏÂÎÄ
-    //   - request: ÈÏÖ¤ºÃÓÑÇëÇó
-    //   - response: ÈÏÖ¤ºÃÓÑÏìÓ¦
-    // ·µ»ØÖµ£º
-    //   gRPC×´Ì¬Âë
+    // é€šçŸ¥è®¤è¯å¥½å‹ï¼ˆgRPCæ–¹æ³•å®ç°ï¼‰
+    // å‚æ•°ï¼š
+    //   - context: gRPCæœåŠ¡ä¸Šä¸‹æ–‡
+    //   - request: è®¤è¯å¥½å‹è¯·æ±‚
+    //   - response: è®¤è¯å¥½å‹å“åº”
+    // è¿”å›å€¼ï¼š
+    //   gRPCçŠ¶æ€ç 
     Status NotifyAuthFriend(ServerContext* context, const AuthFriendReq* request, AuthFriendRsp* response) override;
 
-    // Í¨ÖªÎÄ±¾ÁÄÌìÏûÏ¢£¨gRPC·½·¨ÊµÏÖ£©
-    // ²ÎÊı£º
-    //   - context: gRPC·şÎñÉÏÏÂÎÄ
-    //   - request: ÎÄ±¾ÁÄÌìÏûÏ¢ÇëÇó
-    //   - response: ÎÄ±¾ÁÄÌìÏûÏ¢ÏìÓ¦
-    // ·µ»ØÖµ£º
-    //   gRPC×´Ì¬Âë
+    // é€šçŸ¥æ–‡æœ¬èŠå¤©æ¶ˆæ¯ï¼ˆgRPCæ–¹æ³•å®ç°ï¼‰
+    // å‚æ•°ï¼š
+    //   - context: gRPCæœåŠ¡ä¸Šä¸‹æ–‡
+    //   - request: æ–‡æœ¬èŠå¤©æ¶ˆæ¯è¯·æ±‚
+    //   - response: æ–‡æœ¬èŠå¤©æ¶ˆæ¯å“åº”
+    // è¿”å›å€¼ï¼š
+    //   gRPCçŠ¶æ€ç 
     Status NotifyTextChatMsg(ServerContext* context, const TextChatMsgReq* request, TextChatMsgRsp* response) override;
 
-    // »ñÈ¡ÓÃ»§»ù´¡ĞÅÏ¢
-    // ²ÎÊı£º
-    //   - base_key: »ù´¡¼üÃû
-    //   - uid: ÓÃ»§ID
-    //   - userinfo: Êä³ö²ÎÊı£¬ÓÃ»§ĞÅÏ¢
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»Øtrue£¬·ñÔò·µ»Øfalse
+    // è·å–ç”¨æˆ·åŸºç¡€ä¿¡æ¯
+    // å‚æ•°ï¼š
+    //   - base_key: åŸºç¡€é”®å
+    //   - uid: ç”¨æˆ·ID
+    //   - userinfo: è¾“å‡ºå‚æ•°ï¼Œç”¨æˆ·ä¿¡æ¯
+    // è¿”å›å€¼ï¼š
+    //   æˆåŠŸè¿”å›trueï¼Œå¦åˆ™è¿”å›false
     bool GetBaseInfo(std::string base_key, int uid, std::shared_ptr<UserInfo>& userinfo);
 
 private:

@@ -11,44 +11,44 @@
 #include <cctype>
 #include "const.h"
 
-// ×¢²áPOSTÇëÇó´¦ÀíÆ÷,,,,Ó¦¸ÃĞ´³ÉReqPostµÄ£¬Ğ´´íÁË£¬ÒÔºóÔÙ¸Ä
-// ²ÎÊı£º
-//   - url: ÇëÇóÂ·¾¶
-//   - handler: ´¦Àíº¯Êı
+// æ³¨å†ŒPOSTè¯·æ±‚å¤„ç†å™¨,,,,åº”è¯¥å†™æˆReqPostçš„ï¼Œå†™é”™äº†ï¼Œä»¥åå†æ”¹
+// å‚æ•°ï¼š
+//   - url: è¯·æ±‚è·¯å¾„
+//   - handler: å¤„ç†å‡½æ•°
 void LogicSystem::RegPost(std::string url, HttpHandler handler)
 {
     _post_handlers.emplace(make_pair(url, handler));
 }
 
-// ×¢²áGETÇëÇó´¦ÀíÆ÷
-// ²ÎÊı£º
-//   - url: ÇëÇóÂ·¾¶
-//   - handler: ´¦Àíº¯Êı
+// æ³¨å†ŒGETè¯·æ±‚å¤„ç†å™¨
+// å‚æ•°ï¼š
+//   - url: è¯·æ±‚è·¯å¾„
+//   - handler: å¤„ç†å‡½æ•°
 void LogicSystem::RegGet(std::string url, HttpHandler handler)
 {
     _get_handlers.emplace(make_pair(url, handler));
 }
 
-// ¹¹Ôìº¯Êı£º×¢²áËùÓĞAPIÂ·ÓÉ
+// æ„é€ å‡½æ•°ï¼šæ³¨å†Œæ‰€æœ‰APIè·¯ç”±
 // 
-// ×÷ÓÃ£º
-//   ÔÚ¹¹Ôìº¯ÊıÖĞ×¢²áËùÓĞµÄHTTPÇëÇó´¦Àíº¯Êı
+// ä½œç”¨ï¼š
+//   åœ¨æ„é€ å‡½æ•°ä¸­æ³¨å†Œæ‰€æœ‰çš„HTTPè¯·æ±‚å¤„ç†å‡½æ•°
 // 
-// ×¢²áµÄAPI¶Ëµã£º
-//   - /get_verifycode: »ñÈ¡ÑéÖ¤Âë
-//   - /user_register: ÓÃ»§×¢²á
-//   - /reset_password: ÖØÖÃÃÜÂë
-//   - /user_login: ÓÃ»§µÇÂ¼
-//   - /search_friends: ËÑË÷ºÃÓÑ
-//   - /get_friend_requests: »ñÈ¡ºÃÓÑÉêÇëÁĞ±í
-//   - /get_my_friends: »ñÈ¡ÎÒµÄºÃÓÑÁĞ±í
-//   - /send_friend_request: ·¢ËÍºÃÓÑÉêÇë
-//   - /reply_friend_request: »Ø¸´ºÃÓÑÉêÇë
+// æ³¨å†Œçš„APIç«¯ç‚¹ï¼š
+//   - /get_verifycode: è·å–éªŒè¯ç 
+//   - /user_register: ç”¨æˆ·æ³¨å†Œ
+//   - /reset_password: é‡ç½®å¯†ç 
+//   - /user_login: ç”¨æˆ·ç™»å½•
+//   - /search_friends: æœç´¢å¥½å‹
+//   - /get_friend_requests: è·å–å¥½å‹ç”³è¯·åˆ—è¡¨
+//   - /get_my_friends: è·å–æˆ‘çš„å¥½å‹åˆ—è¡¨
+//   - /send_friend_request: å‘é€å¥½å‹ç”³è¯·
+//   - /reply_friend_request: å›å¤å¥½å‹ç”³è¯·
 LogicSystem::LogicSystem() {
-    // ×¢²á»ñÈ¡ÑéÖ¤ÂëAPI
-    // ¹¦ÄÜ£ºÍ¨¹ıgRPCµ÷ÓÃVerifyServer»ñÈ¡ÑéÖ¤Âë£¬²¢´æ´¢µ½Redis
-    // ÇëÇó²ÎÊı£º{"email": "xxx@example.com"}
-    // ·µ»Ø£º{"error": ´íÎóÂë, "email": "xxx@example.com"}
+    // æ³¨å†Œè·å–éªŒè¯ç API
+    // åŠŸèƒ½ï¼šé€šè¿‡gRPCè°ƒç”¨VerifyServerè·å–éªŒè¯ç ï¼Œå¹¶å­˜å‚¨åˆ°Redis
+    // è¯·æ±‚å‚æ•°ï¼š{"email": "xxx@example.com"}
+    // è¿”å›ï¼š{"error": é”™è¯¯ç , "email": "xxx@example.com"}
     RegPost("/get_verifycode", [](std::shared_ptr<HttpConnection> connection) {
         auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
         std::cout << "receive body is " << body_str << std::endl;
@@ -63,7 +63,7 @@ LogicSystem::LogicSystem() {
             std::string jsonstr = root.toStyledString();
             beast::ostream(connection->_response.body()) << jsonstr;
 
-            //      §Õ ??   
+            //      Ğ´ ??   
             connection->_response.set(http::field::content_type, "application/json"); //  ?? ?    
             connection->WriteResponse();
             return true;
@@ -75,7 +75,7 @@ LogicSystem::LogicSystem() {
             std::string jsonstr = root.toStyledString();
             beast::ostream(connection->_response.body()) << jsonstr;
 
-            //      §Õ ??   
+            //      Ğ´ ??   
             connection->_response.set(http::field::content_type, "application/json");
             connection->WriteResponse();
             return true;
@@ -90,7 +90,7 @@ LogicSystem::LogicSystem() {
         std::string jsonstr = root.toStyledString();
         beast::ostream(connection->_response.body()) << jsonstr;
 
-        //      §Õ ??   
+        //      Ğ´ ??   
         connection->_response.set(http::field::content_type, "application/json");
         connection->WriteResponse();
         return true;
@@ -140,7 +140,7 @@ LogicSystem::LogicSystem() {
             std::string jsonstr = root.toStyledString();
             beast::ostream(connection->_response.body()) << jsonstr;
 
-            //      §Õ ??   
+            //      Ğ´ ??   
             connection->_response.set(http::field::content_type, "application/json");
             connection->WriteResponse();
             return true;
@@ -152,16 +152,16 @@ LogicSystem::LogicSystem() {
             std::string jsonstr = root.toStyledString();
             beast::ostream(connection->_response.body()) << jsonstr;
 
-            //      §Õ ??   
+            //      Ğ´ ??   
             connection->_response.set(http::field::content_type, "application/json");
             connection->WriteResponse();
             return true;
         }
 
-        // registerµÄÊ±ºòÓÃ¹şÏ£
+        // registerçš„æ—¶å€™ç”¨å“ˆå¸Œ
         std::string hashed = sha256_hex(pwd);
 
-        //      ?  §Ø  ?  ?    
+        //      ?  Ğ¶  ?  ?    
         int uid = MysqlMgr::GetInstance()->RegUser(name, email, hashed);
         if (uid == 0 || uid == -1) {
             std::cout << " user or email exist" << std::endl;
@@ -205,7 +205,7 @@ LogicSystem::LogicSystem() {
         }
 
         std::string email = src_root.get("email", "").asString();
-        // ?      ?   ?¦Ì  ? passwd    new_password  
+        // ?      ?   ?Î¼  ? passwd    new_password  
         std::string pwd_plain = src_root.isMember("passwd") ? src_root["passwd"].asString()
             : src_root.get("new_password", "").asString();
         std::string verifycode = src_root.get("verifycode", "").asString();
@@ -217,7 +217,7 @@ LogicSystem::LogicSystem() {
             return true;
         }
 
-        // §µ   Redis  §Ö   ? ?     ? ? 
+        // Ğ£   Redis  Ğµ   ? ?     ? ? 
         std::string verify_code;
         bool b_get_verify = RedisMgr::GetInstance()->Get(CODEPREFIX + email, verify_code);
         if (!b_get_verify) {
@@ -268,11 +268,11 @@ LogicSystem::LogicSystem() {
             return true;
         }
 
-        // ? ?        user  ?¦Ï      ?   ?         ?   ? ? ? 
+        // ? ?        user  ?Î¿      ?   ?         ?   ? ? ? 
         std::string identifier = src_root.get("user", "").asString();
         std::string pwd_plain = src_root.get("passwd", "").asString();
 
-        // ÁÙÊ±µ÷ÊÔÈÕÖ¾£º´òÓ¡ÃÜÂë³¤¶ÈÓëÊ®Áù½øÖÆ£¨²»´òÓ¡Ã÷ÎÄ£©
+        // ä¸´æ—¶è°ƒè¯•æ—¥å¿—ï¼šæ‰“å°å¯†ç é•¿åº¦ä¸åå…­è¿›åˆ¶ï¼ˆä¸æ‰“å°æ˜æ–‡ï¼‰
         auto rtrim_copy = [](std::string s) {
             while (!s.empty() && (s.back() == ' ' || s.back() == '\r' || s.back() == '\n' || s.back() == '\t' || s.back() == '\0')) {
                 s.pop_back();
@@ -332,7 +332,7 @@ LogicSystem::LogicSystem() {
         //   ? ?       ?
         std::cout << "succeed to load userinfo uid is " << userInfo.uid << std::endl;
 
-        // Ğ´ÈëÓÃ»§»ù´¡ĞÅÏ¢µ½ Redis£¬¹© ChatServer ¶ÁÈ¡
+        // å†™å…¥ç”¨æˆ·åŸºç¡€ä¿¡æ¯åˆ° Redisï¼Œä¾› ChatServer è¯»å–
         // key: USER_BASE_INFO + uid
         try {
             std::string base_key = std::string(USER_BASE_INFO) + std::to_string(userInfo.uid);
@@ -348,7 +348,7 @@ LogicSystem::LogicSystem() {
             RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
         }
         catch (...) {
-            // ºöÂÔ»º´æÊ§°Ü£¬²»Ó°ÏìµÇÂ¼Ö÷Á÷³Ì
+            // å¿½ç•¥ç¼“å­˜å¤±è´¥ï¼Œä¸å½±å“ç™»å½•ä¸»æµç¨‹
         }
 
         root["error"] = 0;
@@ -362,7 +362,7 @@ LogicSystem::LogicSystem() {
         return true;
         });
 
-    // ËÑË÷ºÃÓÑAPI
+    // æœç´¢å¥½å‹API
     RegPost("/search_friends", [](std::shared_ptr<HttpConnection> connection) {
         auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
         std::cout << "receive search_friends body is " << body_str << std::endl;
@@ -388,10 +388,10 @@ LogicSystem::LogicSystem() {
             return true;
         }
 
-        // µ÷ÓÃÊı¾İ¿âËÑË÷ÓÃ»§
-        std::cout << "[LogicSystem] /search_friends ÇëÇó - uid: " << uid << " keyword: \"" << keyword << "\"" << std::endl;
+        // è°ƒç”¨æ•°æ®åº“æœç´¢ç”¨æˆ·
+        std::cout << "[LogicSystem] /search_friends è¯·æ±‚ - uid: " << uid << " keyword: \"" << keyword << "\"" << std::endl;
         auto users = MysqlMgr::GetInstance()->SearchUsers(keyword);
-        std::cout << "[LogicSystem] Êı¾İ¿â·µ»Ø " << users.size() << " ¸öÓÃ»§" << std::endl;
+        std::cout << "[LogicSystem] æ•°æ®åº“è¿”å› " << users.size() << " ä¸ªç”¨æˆ·" << std::endl;
 
         root["error"] = 0;
         Json::Value usersArray(Json::arrayValue);
@@ -404,20 +404,20 @@ LogicSystem::LogicSystem() {
             userObj["icon"] = user.icon;
             userObj["sex"] = user.sex;
             userObj["desc"] = user.desc;
-            // ¼ì²éÊÇ·ñÒÑ¾­ÊÇºÃÓÑ
+            // æ£€æŸ¥æ˜¯å¦å·²ç»æ˜¯å¥½å‹
             userObj["isFriend"] = MysqlMgr::GetInstance()->IsFriend(uid, user.uid);
             usersArray.append(userObj);
-            std::cout << "[LogicSystem] Ìí¼ÓÓÃ»§µ½ÏìÓ¦: uid=" << user.uid << " name=" << user.name << std::endl;
+            std::cout << "[LogicSystem] æ·»åŠ ç”¨æˆ·åˆ°å“åº”: uid=" << user.uid << " name=" << user.name << std::endl;
         }
         root["users"] = usersArray;
-        std::cout << "[LogicSystem] ·µ»Ø " << usersArray.size() << " ¸öÓÃ»§µÄJSONÏìÓ¦" << std::endl;
+        std::cout << "[LogicSystem] è¿”å› " << usersArray.size() << " ä¸ªç”¨æˆ·çš„JSONå“åº”" << std::endl;
 
         beast::ostream(connection->_response.body()) << root.toStyledString();
         connection->WriteResponse();
         return true;
         });
 
-    // »ñÈ¡ºÃÓÑÉêÇëÁĞ±íAPI
+    // è·å–å¥½å‹ç”³è¯·åˆ—è¡¨API
     RegPost("/get_friend_requests", [](std::shared_ptr<HttpConnection> connection) {
         auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
         std::cout << "receive get_friend_requests body is " << body_str << std::endl;
@@ -441,7 +441,7 @@ LogicSystem::LogicSystem() {
             return true;
         }
 
-        // »ñÈ¡ºÃÓÑÉêÇëÁĞ±í
+        // è·å–å¥½å‹ç”³è¯·åˆ—è¡¨
         auto requests = MysqlMgr::GetInstance()->GetFriendRequests(uid);
 
         root["error"] = 0;
@@ -464,7 +464,7 @@ LogicSystem::LogicSystem() {
         return true;
         });
 
-    // »ñÈ¡ÎÒµÄºÃÓÑÁĞ±íAPI
+    // è·å–æˆ‘çš„å¥½å‹åˆ—è¡¨API
     RegPost("/get_my_friends", [](std::shared_ptr<HttpConnection> connection) {
         auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
         std::cout << "receive get_my_friends body is " << body_str << std::endl;
@@ -488,7 +488,7 @@ LogicSystem::LogicSystem() {
             return true;
         }
 
-        // »ñÈ¡ÎÒµÄºÃÓÑÁĞ±í
+        // è·å–æˆ‘çš„å¥½å‹åˆ—è¡¨
         auto friends = MysqlMgr::GetInstance()->GetMyFriends(uid);
 
         root["error"] = 0;
@@ -511,7 +511,7 @@ LogicSystem::LogicSystem() {
         return true;
         });
 
-    // ·¢ËÍºÃÓÑÉêÇëAPI
+    // å‘é€å¥½å‹ç”³è¯·API
     RegPost("/send_friend_request", [](std::shared_ptr<HttpConnection> connection) {
         auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
         std::cout << "receive send_friend_request body is " << body_str << std::endl;
@@ -530,7 +530,7 @@ LogicSystem::LogicSystem() {
         int fromUid = src_root.get("from_uid", 0).asInt();
         int toUid = src_root.get("to_uid", 0).asInt();
         std::string desc = src_root.get("desc", "").asString();
-        // [Cascade Change][FriendNotify]
+        // [FriendNotify]
         std::cout << "[FriendNotify][Gate] /send_friend_request parsed from_uid=" << fromUid
             << " to_uid=" << toUid << " desc=\"" << desc << "\"" << std::endl;
 
@@ -541,22 +541,22 @@ LogicSystem::LogicSystem() {
             return true;
         }
 
-        // ¼ì²éÊÇ·ñÒÑ¾­ÊÇºÃÓÑ
+        // æ£€æŸ¥æ˜¯å¦å·²ç»æ˜¯å¥½å‹
         if (MysqlMgr::GetInstance()->IsFriend(fromUid, toUid)) {
-            root["error"] = ErrorCodes::UserExist; // ÒÑ¾­ÊÇºÃÓÑ
+            root["error"] = ErrorCodes::UserExist; // å·²ç»æ˜¯å¥½å‹
             beast::ostream(connection->_response.body()) << root.toStyledString();
             connection->WriteResponse();
             return true;
         }
 
-        // ·¢ËÍºÃÓÑÉêÇë
+        // å‘é€å¥½å‹ç”³è¯·
         bool success = MysqlMgr::GetInstance()->AddFriendRequest(fromUid, toUid, desc);
-        // [Cascade Change][FriendNotify]
+        // [FriendNotify]
         std::cout << "[FriendNotify][Gate] DB AddFriendRequest result success=" << std::boolalpha << success << std::endl;
 
-        root["error"] = success ? 0 : ErrorCodes::UserExist; // Èç¹ûÊ§°Ü£¬¿ÉÄÜÊÇÖØ¸´ÉêÇë
+        root["error"] = success ? 0 : ErrorCodes::UserExist; // å¦‚æœå¤±è´¥ï¼Œå¯èƒ½æ˜¯é‡å¤ç”³è¯·
 
-        // [Cascade Change][FriendNotify] ·¢²¼ friend.apply ÊÂ¼ş£¬¹© ChatServer ÍÆËÍTCPÍ¨Öª
+        // å‘å¸ƒ friend.apply äº‹ä»¶ï¼Œä¾› ChatServer æ¨é€TCPé€šçŸ¥
         Json::Value ev;
         ev["type"] = "apply";
         ev["from_uid"] = fromUid;
@@ -575,7 +575,7 @@ LogicSystem::LogicSystem() {
         return true;
         });
 
-    // »Ø¸´ºÃÓÑÉêÇëAPI
+    // å›å¤å¥½å‹ç”³è¯·API
     RegPost("/reply_friend_request", [](std::shared_ptr<HttpConnection> connection) {
         auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
         std::cout << "receive reply_friend_request body is " << body_str << std::endl;
@@ -594,7 +594,7 @@ LogicSystem::LogicSystem() {
         int fromUid = src_root.get("from_uid", 0).asInt();
         int toUid = src_root.get("to_uid", 0).asInt();
         bool agree = src_root.get("agree", false).asBool();
-        // [Cascade Change][FriendNotify]
+        // [FriendNotify]
         std::cout << "[FriendNotify][Gate] /reply_friend_request parsed from_uid=" << fromUid
             << " to_uid=" << toUid << " agree=" << std::boolalpha << agree << std::endl;
 
@@ -605,14 +605,14 @@ LogicSystem::LogicSystem() {
             return true;
         }
 
-        // »Ø¸´ºÃÓÑÉêÇë
+        // å›å¤å¥½å‹ç”³è¯·
         bool success = MysqlMgr::GetInstance()->ReplyFriendRequest(fromUid, toUid, agree);
-        // [Cascade Change][FriendNotify]
+        // [FriendNotify]
         std::cout << "[FriendNotify][Gate] DB ReplyFriendRequest result success=" << std::boolalpha << success << std::endl;
 
         root["error"] = success ? 0 : ErrorCodes::PasswdUpFailed;
 
-        // [Cascade Change][FriendNotify] ·¢²¼ friend.reply ÊÂ¼ş£¬¹© ChatServer ÍÆËÍTCPÍ¨Öª
+        // å‘å¸ƒ friend.reply äº‹ä»¶ï¼Œä¾› ChatServer æ¨é€TCPé€šçŸ¥
         Json::Value ev;
         ev["type"] = "reply";
         ev["from_uid"] = fromUid;

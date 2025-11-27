@@ -8,69 +8,69 @@
 #include <condition_variable>
 #include <mutex>
 
-// gRPCÏà¹ØµÄÀàĞÍ±ğÃû
-using grpc::Channel;      // gRPCÍ¨µÀ
-using grpc::Status;       // gRPCµ÷ÓÃ×´Ì¬
-using grpc::ClientContext; // ¿Í»§¶ËÉÏÏÂÎÄ
+// gRPCç›¸å…³çš„ç±»å‹åˆ«å
+using grpc::Channel;      // gRPCé€šé“
+using grpc::Status;       // gRPCè°ƒç”¨çŠ¶æ€
+using grpc::ClientContext; // å®¢æˆ·ç«¯ä¸Šä¸‹æ–‡
 
-// ÏûÏ¢ÀàĞÍ±ğÃû
-using message::GetVerifyReq;   // »ñÈ¡ÑéÖ¤ÂëÇëÇó
-using message::GetVerifyRsp;   // »ñÈ¡ÑéÖ¤ÂëÏìÓ¦
-using message::VerifyService; // VerifyServerµÄgRPC·şÎñ
+// æ¶ˆæ¯ç±»å‹åˆ«å
+using message::GetVerifyReq;   // è·å–éªŒè¯ç è¯·æ±‚
+using message::GetVerifyRsp;   // è·å–éªŒè¯ç å“åº”
+using message::VerifyService; // VerifyServerçš„gRPCæœåŠ¡
 
-// RPConPoolÀà£ºVerifyServerµÄgRPC¿Í»§¶ËÁ¬½Ó³Ø
+// RPConPoolç±»ï¼šVerifyServerçš„gRPCå®¢æˆ·ç«¯è¿æ¥æ± 
 // 
-// ×÷ÓÃ£º
-//   ¹ÜÀí¶à¸ögRPC StubÁ¬½Ó£¬ÊµÏÖÁ¬½ÓµÄ¸´ÓÃ
+// ä½œç”¨ï¼š
+//   ç®¡ç†å¤šä¸ªgRPC Stubè¿æ¥ï¼Œå®ç°è¿æ¥çš„å¤ç”¨
 // 
-// ¹¤×÷Ô­Àí£º
-//   1. ³õÊ¼»¯Ê±´´½¨Ö¸¶¨ÊıÁ¿µÄgRPCÍ¨µÀºÍStub
-//   2. Ê¹ÓÃ¶ÓÁĞ´æ´¢Stub
-//   3. Ê¹ÓÃÌõ¼ş±äÁ¿ÊµÏÖÁ¬½ÓµÄµÈ´ı»úÖÆ
-//   4. Ïß³Ì°²È«µÄStub»ñÈ¡ºÍ¹é»¹
+// å·¥ä½œåŸç†ï¼š
+//   1. åˆå§‹åŒ–æ—¶åˆ›å»ºæŒ‡å®šæ•°é‡çš„gRPCé€šé“å’ŒStub
+//   2. ä½¿ç”¨é˜Ÿåˆ—å­˜å‚¨Stub
+//   3. ä½¿ç”¨æ¡ä»¶å˜é‡å®ç°è¿æ¥çš„ç­‰å¾…æœºåˆ¶
+//   4. çº¿ç¨‹å®‰å…¨çš„Stubè·å–å’Œå½’è¿˜
 class RPConPool {
 public:
-    // ¹¹Ôìº¯Êı£º³õÊ¼»¯VerifyServerÁ¬½Ó³Ø
+    // æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–VerifyServerè¿æ¥æ± 
     RPConPool(size_t poolsize, std::string host, std::string port);
 
-    // Îö¹¹º¯Êı£ºÇåÀíËùÓĞÁ¬½Ó
+    // ææ„å‡½æ•°ï¼šæ¸…ç†æ‰€æœ‰è¿æ¥
     ~RPConPool();
 
-    // ¹Ø±ÕÁ¬½Ó³Ø
+    // å…³é—­è¿æ¥æ± 
     void Close();
 
-    // »ñÈ¡Ò»¸öStubÁ¬½Ó
+    // è·å–ä¸€ä¸ªStubè¿æ¥
     std::unique_ptr<VerifyService::Stub> getConnection();
 
-    // ¹é»¹Stubµ½Á¬½Ó³Ø
+    // å½’è¿˜Stubåˆ°è¿æ¥æ± 
     void returnConnection(std::unique_ptr<VerifyService::Stub> context);
 
 private:
-    std::atomic<bool> b_stop_;                              // Í£Ö¹±êÖ¾
-    size_t _poolsize;                                       // Á¬½Ó³Ø´óĞ¡
-    std::string _host;                                      // VerifyServerÖ÷»úµØÖ·
-    std::string _port;                                      // VerifyServer¶Ë¿Ú
-    std::queue<std::unique_ptr<VerifyService::Stub>> _connections;  // Stub¶ÓÁĞ
-    std::condition_variable _cv;                            // Ìõ¼ş±äÁ¿£¨ÓÃÓÚµÈ´ıÁ¬½Ó£©
-    std::mutex _mutex;                                      // »¥³âËø£¨±£Ö¤Ïß³Ì°²È«£©
+    std::atomic<bool> b_stop_;                              // åœæ­¢æ ‡å¿—
+    size_t _poolsize;                                       // è¿æ¥æ± å¤§å°
+    std::string _host;                                      // VerifyServerä¸»æœºåœ°å€
+    std::string _port;                                      // VerifyServerç«¯å£
+    std::queue<std::unique_ptr<VerifyService::Stub>> _connections;  // Stubé˜Ÿåˆ—
+    std::condition_variable _cv;                            // æ¡ä»¶å˜é‡ï¼ˆç”¨äºç­‰å¾…è¿æ¥ï¼‰
+    std::mutex _mutex;                                      // äº’æ–¥é”ï¼ˆä¿è¯çº¿ç¨‹å®‰å…¨ï¼‰
 };
 
 
-// VerifyGrpcClientÀà£ºVerifyServerµÄgRPC¿Í»§¶Ë
+// VerifyGrpcClientç±»ï¼šVerifyServerçš„gRPCå®¢æˆ·ç«¯
 // 
-// ×÷ÓÃ£º
-//   Ìá¹©µ÷ÓÃVerifyServerµÄ½Ó¿Ú£¨µ±Ç°Î´Ê¹ÓÃ£©
+// ä½œç”¨ï¼š
+//   æä¾›è°ƒç”¨VerifyServerçš„æ¥å£ï¼ˆå½“å‰æœªä½¿ç”¨ï¼‰
 // 
-// Éè¼ÆÄ£Ê½£º
-//   µ¥ÀıÄ£Ê½£¨Singleton£©
+// è®¾è®¡æ¨¡å¼ï¼š
+//   å•ä¾‹æ¨¡å¼ï¼ˆSingletonï¼‰
 // 
-// ×¢Òâ£º
-//   ChatServer²»ĞèÒªµ÷ÓÃVerifyServer£¬´Ë¿Í»§¶Ë±£ÁôÓÃÓÚÎ´À´À©Õ¹
+// æ³¨æ„ï¼š
+//   ChatServerä¸éœ€è¦è°ƒç”¨VerifyServerï¼Œæ­¤å®¢æˆ·ç«¯ä¿ç•™ç”¨äºæœªæ¥æ‰©å±•
 class VerifyGrpcClient : public Singleton<VerifyGrpcClient>
 {
-    friend class Singleton<VerifyGrpcClient>;  // ÔÊĞíSingleton·ÃÎÊË½ÓĞ¹¹Ôìº¯Êı
+    friend class Singleton<VerifyGrpcClient>;  // å…è®¸Singletonè®¿é—®ç§æœ‰æ„é€ å‡½æ•°
 public:
-    // »ñÈ¡ÑéÖ¤Âë£¨µ±Ç°Î´Ê¹ÓÃ£©
+    // è·å–éªŒè¯ç ï¼ˆå½“å‰æœªä½¿ç”¨ï¼‰
     GetVerifyRsp GetVerifyCode(const std::string& email) {
         std::cout << "[VerifyGrpcClient] Start GetVerifyCode, email = " << email << std::endl;
 
@@ -91,18 +91,18 @@ public:
 
         Status status = stub->GetVerifyCode(&context, request, &reply);
 
-        // È·±£Á¬½Ó¹é»¹µ½³Ø
+        // ç¡®ä¿è¿æ¥å½’è¿˜åˆ°æ± 
         pool_->returnConnection(std::move(stub));
 
         if (!status.ok()) {
-            std::cerr << "[VerifyGrpcClient] gRPCµ÷ÓÃÊ§°Ü: "
+            std::cerr << "[VerifyGrpcClient] gRPCè°ƒç”¨å¤±è´¥: "
                 << status.error_message()
                 << " (code " << status.error_code() << ")" << std::endl;
             reply.set_error(ErrorCodes::RPCFailed);
             reply.set_email(email);
         }
         else {
-            std::cout << "[VerifyGrpcClient] gRPCµ÷ÓÃ³É¹¦, reply.error = "
+            std::cout << "[VerifyGrpcClient] gRPCè°ƒç”¨æˆåŠŸ, reply.error = "
                 << reply.error() << " , email = "
                 << reply.email() << " , verifycode = "
                 << std::endl;
@@ -112,10 +112,10 @@ public:
     }
 
 private:
-    // Ë½ÓĞ¹¹Ôìº¯Êı£ºµ¥ÀıÄ£Ê½
+    // ç§æœ‰æ„é€ å‡½æ•°ï¼šå•ä¾‹æ¨¡å¼
     VerifyGrpcClient();
 
-    // VerifyServerµÄÁ¬½Ó³ØÖ¸Õë
+    // VerifyServerçš„è¿æ¥æ± æŒ‡é’ˆ
     std::unique_ptr<RPConPool> pool_;
 };
 

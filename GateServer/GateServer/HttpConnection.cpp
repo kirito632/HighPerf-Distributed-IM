@@ -1,33 +1,33 @@
 #include "HttpConnection.h"
 #include"LogicSystem.h"
 
-// ¹¹Ôìº¯Êı£º³õÊ¼»¯HTTPÁ¬½Ó¶ÔÏó
-// ²ÎÊı£º
-//   - ioc: IOÉÏÏÂÎÄÒıÓÃ
+// æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–HTTPè¿æ¥å¯¹è±¡
+// å‚æ•°ï¼š
+//   - ioc: IOä¸Šä¸‹æ–‡å¼•ç”¨
 // 
-// ×÷ÓÃ£º
-//   ´´½¨TCPÌ×½Ó×Ö£¬×¼±¸½ÓÊÕHTTPÇëÇó
+// ä½œç”¨ï¼š
+//   åˆ›å»ºTCPå¥—æ¥å­—ï¼Œå‡†å¤‡æ¥æ”¶HTTPè¯·æ±‚
 HttpConnection::HttpConnection(boost::asio::io_context& ioc) :_socket(ioc)
 {
 }
 
-// Æô¶¯HTTPÁ¬½Ó´¦Àí
+// å¯åŠ¨HTTPè¿æ¥å¤„ç†
 // 
-// ×÷ÓÃ£º
-//   ¿ªÊ¼Òì²½¶ÁÈ¡HTTPÇëÇó
+// ä½œç”¨ï¼š
+//   å¼€å§‹å¼‚æ­¥è¯»å–HTTPè¯·æ±‚
 // 
-// ÊµÏÖÂß¼­£º
-//   1. Òì²½¶ÁÈ¡HTTPÇëÇóÊı¾İ
-//   2. ¶ÁÈ¡Íê³Éºóµ÷ÓÃHandleReq´¦ÀíÇëÇó
-//   3. ÉèÖÃÁ¬½Ó³¬Ê±¼ì²é
+// å®ç°é€»è¾‘ï¼š
+//   1. å¼‚æ­¥è¯»å–HTTPè¯·æ±‚æ•°æ®
+//   2. è¯»å–å®Œæˆåè°ƒç”¨HandleReqå¤„ç†è¯·æ±‚
+//   3. è®¾ç½®è¿æ¥è¶…æ—¶æ£€æŸ¥
 // 
-// ¹¤×÷Á÷³Ì£º
+// å·¥ä½œæµç¨‹ï¼š
 //   Start() -> async_read() -> HandleReq() -> CheckDeadline()
 void HttpConnection::Start()
 {
     auto self = shared_from_this();
 
-    // Òì²½¶ÁÈ¡HTTPÇëÇó
+    // å¼‚æ­¥è¯»å–HTTPè¯·æ±‚
     http::async_read(_socket, _buffer, _request, [self](beast::error_code ec, ::std::size_t bytes_transferrd) {
         try {
             if (ec) {
@@ -36,9 +36,9 @@ void HttpConnection::Start()
 
             boost::ignore_unused(bytes_transferrd);
 
-            // ´¦ÀíHTTPÇëÇó
+            // å¤„ç†HTTPè¯·æ±‚
             self->HandleReq();
-            // Æô¶¯Á¬½Ó³¬Ê±¼ì²é
+            // å¯åŠ¨è¿æ¥è¶…æ—¶æ£€æŸ¥
             self->CheckDeadline();
         }
         catch (std::exception& e) {
@@ -47,21 +47,21 @@ void HttpConnection::Start()
         });
 }
 
-// ½«Ê®Áù½øÖÆÊı×ª»»ÎªASCII×Ö·û
-// ²ÎÊı£º
-//   - x: Ê®Áù½øÖÆÖµ£¨0-15£©
-// ·µ»ØÖµ£º
-//   ASCII×Ö·û£¨0-9¶ÔÓ¦'0'-'9'£¬10-15¶ÔÓ¦'A'-'F'£©
+// å°†åå…­è¿›åˆ¶æ•°è½¬æ¢ä¸ºASCIIå­—ç¬¦
+// å‚æ•°ï¼š
+//   - x: åå…­è¿›åˆ¶å€¼ï¼ˆ0-15ï¼‰
+// è¿”å›å€¼ï¼š
+//   ASCIIå­—ç¬¦ï¼ˆ0-9å¯¹åº”'0'-'9'ï¼Œ10-15å¯¹åº”'A'-'F'ï¼‰
 unsigned char ToHex(unsigned char x)
 {
     return  x > 9 ? x + 55 : x + 48;
 }
 
-// ½«ASCII×Ö·û×ª»»ÎªÊ®Áù½øÖÆÊı
-// ²ÎÊı£º
-//   - x: ASCII×Ö·û
-// ·µ»ØÖµ£º
-//   Ê®Áù½øÖÆÖµ£¨0-15£©
+// å°†ASCIIå­—ç¬¦è½¬æ¢ä¸ºåå…­è¿›åˆ¶æ•°
+// å‚æ•°ï¼š
+//   - x: ASCIIå­—ç¬¦
+// è¿”å›å€¼ï¼š
+//   åå…­è¿›åˆ¶å€¼ï¼ˆ0-15ï¼‰
 unsigned char FromHex(unsigned char x)
 {
     unsigned char y;
@@ -72,34 +72,34 @@ unsigned char FromHex(unsigned char x)
     return y;
 }
 
-// URL±àÂë£º½«ÌØÊâ×Ö·û×ª»»Îª%XX¸ñÊ½
-// ²ÎÊı£º
-//   - str: Ô­Ê¼×Ö·û´®
-// ·µ»ØÖµ£º
-//   ±àÂëºóµÄ×Ö·û´®
+// URLç¼–ç ï¼šå°†ç‰¹æ®Šå­—ç¬¦è½¬æ¢ä¸º%XXæ ¼å¼
+// å‚æ•°ï¼š
+//   - str: åŸå§‹å­—ç¬¦ä¸²
+// è¿”å›å€¼ï¼š
+//   ç¼–ç åçš„å­—ç¬¦ä¸²
 // 
-// ±àÂë¹æÔò£º
-//   1. ×ÖÄ¸¡¢Êı×ÖºÍÄ³Ğ©×Ö·û£¨-¡¢_¡¢.¡¢~£©±£³Ö²»±ä
-//   2. ¿Õ¸ñ×ª»»Îª+
-//   3. ÆäËûÌØÊâ×Ö·û×ª»»Îª%XX£¨XXÎªÊ®Áù½øÖÆ£©
+// ç¼–ç è§„åˆ™ï¼š
+//   1. å­—æ¯ã€æ•°å­—å’ŒæŸäº›å­—ç¬¦ï¼ˆ-ã€_ã€.ã€~ï¼‰ä¿æŒä¸å˜
+//   2. ç©ºæ ¼è½¬æ¢ä¸º+
+//   3. å…¶ä»–ç‰¹æ®Šå­—ç¬¦è½¬æ¢ä¸º%XXï¼ˆXXä¸ºåå…­è¿›åˆ¶ï¼‰
 std::string UrlEncode(const std::string& str)
 {
     std::string strTemp = "";
     size_t length = str.length();
     for (size_t i = 0; i < length; i++)
     {
-        // ÅĞ¶ÏÊÇ·ñÎª×ÖÄ¸¡¢Êı×Ö»òÌØ¶¨·ûºÅ£¨-¡¢_¡¢.¡¢~£©
+        // åˆ¤æ–­æ˜¯å¦ä¸ºå­—æ¯ã€æ•°å­—æˆ–ç‰¹å®šç¬¦å·ï¼ˆ-ã€_ã€.ã€~ï¼‰
         if (isalnum((unsigned char)str[i]) ||
             (str[i] == '-') ||
             (str[i] == '_') ||
             (str[i] == '.') ||
             (str[i] == '~'))
             strTemp += str[i];
-        else if (str[i] == ' ') // Îª¿Õ×Ö·û
+        else if (str[i] == ' ') // ä¸ºç©ºå­—ç¬¦
             strTemp += "+";
         else
         {
-            // ÌØÊâ×Ö·ûĞèÒªÔÚÇ°Ãæ¼Ó%£¬²¢¸ßµÍÎ»·Ö±ğ×ªÎªÊ®Áù½øÖÆ
+            // ç‰¹æ®Šå­—ç¬¦éœ€è¦åœ¨å‰é¢åŠ %ï¼Œå¹¶é«˜ä½ä½åˆ†åˆ«è½¬ä¸ºåå…­è¿›åˆ¶
             strTemp += '%';
             strTemp += ToHex((unsigned char)str[i] >> 4);
             strTemp += ToHex((unsigned char)str[i] & 0x0F);
@@ -108,24 +108,24 @@ std::string UrlEncode(const std::string& str)
     return strTemp;
 }
 
-// URL½âÂë£º½«%XX¸ñÊ½»¹Ô­ÎªÔ­Ê¼×Ö·û
-// ²ÎÊı£º
-//   - str: ±àÂëºóµÄ×Ö·û´®
-// ·µ»ØÖµ£º
-//   ½âÂëºóµÄ×Ö·û´®
+// URLè§£ç ï¼šå°†%XXæ ¼å¼è¿˜åŸä¸ºåŸå§‹å­—ç¬¦
+// å‚æ•°ï¼š
+//   - str: ç¼–ç åçš„å­—ç¬¦ä¸²
+// è¿”å›å€¼ï¼š
+//   è§£ç åçš„å­—ç¬¦ä¸²
 // 
-// ½âÂë¹æÔò£º
-//   1. +×ª»»Îª¿Õ¸ñ
-//   2. %XX×ª»»Îª¶ÔÓ¦×Ö·û£¨XXÎªÊ®Áù½øÖÆ£©
+// è§£ç è§„åˆ™ï¼š
+//   1. +è½¬æ¢ä¸ºç©ºæ ¼
+//   2. %XXè½¬æ¢ä¸ºå¯¹åº”å­—ç¬¦ï¼ˆXXä¸ºåå…­è¿›åˆ¶ï¼‰
 std::string UrlDecode(const std::string& str)
 {
     std::string strTemp = "";
     size_t length = str.length();
     for (size_t i = 0; i < length; i++)
     {
-        // ½«+»¹Ô­Îª¿Õ¸ñ
+        // å°†+è¿˜åŸä¸ºç©ºæ ¼
         if (str[i] == '+') strTemp += ' ';
-        // Óöµ½%£¬Ôò°´Ê®Áù½øÖÆ×ªÎªchar²¢Æ´½Ó
+        // é‡åˆ°%ï¼Œåˆ™æŒ‰åå…­è¿›åˆ¶è½¬ä¸ºcharå¹¶æ‹¼æ¥
         else if (str[i] == '%')
         {
             assert(i + 2 < length);
@@ -138,51 +138,51 @@ std::string UrlDecode(const std::string& str)
     return strTemp;
 }
 
-// ½âÎöGETÇëÇóµÄURL²ÎÊı
+// è§£æGETè¯·æ±‚çš„URLå‚æ•°
 // 
-// ×÷ÓÃ£º
-//   ´ÓGETÇëÇóµÄURLÖĞ½âÎö²éÑ¯²ÎÊı£¬²¢´æ´¢µ½_get_paramsÖĞ
+// ä½œç”¨ï¼š
+//   ä»GETè¯·æ±‚çš„URLä¸­è§£ææŸ¥è¯¢å‚æ•°ï¼Œå¹¶å­˜å‚¨åˆ°_get_paramsä¸­
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ´ÓÇëÇóURIÖĞ»ñÈ¡URL
-//   2. ²éÕÒ²éÑ¯×Ö·û´®ÆğÊ¼Î»ÖÃ£¨'?'Î»ÖÃ£©
-//   3. ½âÎökey=value¶Ô£¨ÓÃ'&'·Ö¸ô£©
-//   4. ¶Ô²ÎÊı½øĞĞURL½âÂë
-//   5. ´æ´¢µ½_get_paramsÓ³Éä±í
+// å®ç°é€»è¾‘ï¼š
+//   1. ä»è¯·æ±‚URIä¸­è·å–URL
+//   2. æŸ¥æ‰¾æŸ¥è¯¢å­—ç¬¦ä¸²èµ·å§‹ä½ç½®ï¼ˆ'?'ä½ç½®ï¼‰
+//   3. è§£ækey=valueå¯¹ï¼ˆç”¨'&'åˆ†éš”ï¼‰
+//   4. å¯¹å‚æ•°è¿›è¡ŒURLè§£ç 
+//   5. å­˜å‚¨åˆ°_get_paramsæ˜ å°„è¡¨
 // 
-// URL¸ñÊ½Ê¾Àı£º
+// URLæ ¼å¼ç¤ºä¾‹ï¼š
 //   http://example.com/api?key1=value1&key2=value2
 void HttpConnection::PreParseGetParam() {
-    // »ñÈ¡URI
+    // è·å–URI
     auto uri = _request.target();
-    // ²éÕÒ²éÑ¯×Ö·û´®µÄÆğÊ¼Î»ÖÃ£¬¼´'?'µÄÎ»ÖÃ
+    // æŸ¥æ‰¾æŸ¥è¯¢å­—ç¬¦ä¸²çš„èµ·å§‹ä½ç½®ï¼Œå³'?'çš„ä½ç½®
     auto query_pos = uri.find('?');
     if (query_pos == std::string::npos) {
         _get_url = uri;
         return;
     }
 
-    // »ñÈ¡URL£¨²»°üº¬²éÑ¯²ÎÊı£©
+    // è·å–URLï¼ˆä¸åŒ…å«æŸ¥è¯¢å‚æ•°ï¼‰
     _get_url = uri.substr(0, query_pos);
-    // »ñÈ¡²éÑ¯×Ö·û´®
+    // è·å–æŸ¥è¯¢å­—ç¬¦ä¸²
     std::string query_string = uri.substr(query_pos + 1);
     std::string key;
     std::string value;
     size_t pos = 0;
 
-    // ½âÎökey=value¶Ô
+    // è§£ækey=valueå¯¹
     while ((pos = query_string.find('&')) != std::string::npos) {
         auto pair = query_string.substr(0, pos);
         size_t eq_pos = pair.find('=');
         if (eq_pos != std::string::npos) {
-            // Ê¹ÓÃurl_decodeÀ´½âÂëURL±àÂë
+            // ä½¿ç”¨url_decodeæ¥è§£ç URLç¼–ç 
             key = UrlDecode(pair.substr(0, eq_pos));
             value = UrlDecode(pair.substr(eq_pos + 1));
             _get_params[key] = value;
         }
         query_string.erase(0, pos + 1);
     }
-    // ´¦Àí×îºóÒ»×é²ÎÊı£¬Ò²¾ÍÊÇÃ»ÓĞ&·Ö¸ôµÄ
+    // å¤„ç†æœ€åä¸€ç»„å‚æ•°ï¼Œä¹Ÿå°±æ˜¯æ²¡æœ‰&åˆ†éš”çš„
     if (!query_string.empty()) {
         size_t eq_pos = query_string.find('=');
         if (eq_pos != std::string::npos) {
@@ -193,39 +193,39 @@ void HttpConnection::PreParseGetParam() {
     }
 }
 
-// ´¦ÀíHTTPÇëÇó
+// å¤„ç†HTTPè¯·æ±‚
 // 
-// ×÷ÓÃ£º
-//   ¸ù¾İÇëÇó·½·¨£¨GET/POST£©´¦ÀíHTTPÇëÇó£¬²¢µ÷ÓÃÂß¼­ÏµÍ³´¦Àí
+// ä½œç”¨ï¼š
+//   æ ¹æ®è¯·æ±‚æ–¹æ³•ï¼ˆGET/POSTï¼‰å¤„ç†HTTPè¯·æ±‚ï¼Œå¹¶è°ƒç”¨é€»è¾‘ç³»ç»Ÿå¤„ç†
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ÉèÖÃÏìÓ¦°æ±¾ºÍKeep-Alive±êÖ¾
-//   2. Èç¹ûÊÇGETÇëÇó£º
-//      - ½âÎöGET²ÎÊı
-//      - µ÷ÓÃLogicSystem´¦ÀíGETÇëÇó
-//      - Èç¹û´¦ÀíÊ§°Ü£¬·µ»Ø404
-//      - Èç¹û´¦Àí³É¹¦£¬·µ»Ø200
-//   3. Èç¹ûÊÇPOSTÇëÇó£º
-//      - µ÷ÓÃLogicSystem´¦ÀíPOSTÇëÇó
-//      - Èç¹û´¦ÀíÊ§°Ü£¬·µ»Ø404
-//      - Èç¹û´¦Àí³É¹¦£¬·µ»Ø200
-//   4. ·¢ËÍÏìÓ¦
+// å®ç°é€»è¾‘ï¼š
+//   1. è®¾ç½®å“åº”ç‰ˆæœ¬å’ŒKeep-Aliveæ ‡å¿—
+//   2. å¦‚æœæ˜¯GETè¯·æ±‚ï¼š
+//      - è§£æGETå‚æ•°
+//      - è°ƒç”¨LogicSystemå¤„ç†GETè¯·æ±‚
+//      - å¦‚æœå¤„ç†å¤±è´¥ï¼Œè¿”å›404
+//      - å¦‚æœå¤„ç†æˆåŠŸï¼Œè¿”å›200
+//   3. å¦‚æœæ˜¯POSTè¯·æ±‚ï¼š
+//      - è°ƒç”¨LogicSystemå¤„ç†POSTè¯·æ±‚
+//      - å¦‚æœå¤„ç†å¤±è´¥ï¼Œè¿”å›404
+//      - å¦‚æœå¤„ç†æˆåŠŸï¼Œè¿”å›200
+//   4. å‘é€å“åº”
 void HttpConnection::HandleReq()
 {
-    // ÉèÖÃÏìÓ¦°æ±¾
+    // è®¾ç½®å“åº”ç‰ˆæœ¬
     _response.version(_request.version());
     _response.keep_alive(false);
 
-    // ´¦ÀíGETÇëÇó
+    // å¤„ç†GETè¯·æ±‚
     if (_request.method() == http::verb::get) {
-        // ½âÎöGET²ÎÊı
+        // è§£æGETå‚æ•°
         PreParseGetParam();
 
-        // µ÷ÓÃÂß¼­ÏµÍ³´¦ÀíGETÇëÇó
+        // è°ƒç”¨é€»è¾‘ç³»ç»Ÿå¤„ç†GETè¯·æ±‚
         bool success = LogicSystem::GetInstance()->HandleGet(_get_url, shared_from_this());
 
         if (!success) {
-            // ´¦ÀíÊ§°Ü£¬·µ»Ø404
+            // å¤„ç†å¤±è´¥ï¼Œè¿”å›404
             _response.result(http::status::not_found);
             _response.set(http::field::content_type, "text/plain");
             beast::ostream(_response.body()) << "url not found\r\n";
@@ -233,20 +233,20 @@ void HttpConnection::HandleReq()
             return;
         }
 
-        // ´¦Àí³É¹¦£¬·µ»Ø200
+        // å¤„ç†æˆåŠŸï¼Œè¿”å›200
         _response.result(http::status::ok);
         _response.set(http::field::server, "GateServer");
         WriteResponse();
         return;
     }
 
-    // ´¦ÀíPOSTÇëÇó
+    // å¤„ç†POSTè¯·æ±‚
     if (_request.method() == http::verb::post) {
-        // µ÷ÓÃÂß¼­ÏµÍ³´¦ÀíPOSTÇëÇó
+        // è°ƒç”¨é€»è¾‘ç³»ç»Ÿå¤„ç†POSTè¯·æ±‚
         bool success = LogicSystem::GetInstance()->HandlePost(_request.target(), shared_from_this());
 
         if (!success) {
-            // ´¦ÀíÊ§°Ü£¬·µ»Ø404
+            // å¤„ç†å¤±è´¥ï¼Œè¿”å›404
             _response.result(http::status::not_found);
             _response.set(http::field::content_type, "text/plain");
             beast::ostream(_response.body()) << "url not found\r\n";
@@ -254,7 +254,7 @@ void HttpConnection::HandleReq()
             return;
         }
 
-        // ´¦Àí³É¹¦£¬·µ»Ø200
+        // å¤„ç†æˆåŠŸï¼Œè¿”å›200
         _response.result(http::status::ok);
         _response.set(http::field::server, "GateServer");
         WriteResponse();
@@ -262,26 +262,26 @@ void HttpConnection::HandleReq()
     }
 }
 
-// Òì²½Ğ´ÈëHTTPÏìÓ¦
+// å¼‚æ­¥å†™å…¥HTTPå“åº”
 // 
-// ×÷ÓÃ£º
-//   ½«HTTPÏìÓ¦·¢ËÍ¸ø¿Í»§¶Ë
+// ä½œç”¨ï¼š
+//   å°†HTTPå“åº”å‘é€ç»™å®¢æˆ·ç«¯
 // 
-// ÊµÏÖÂß¼­£º
-//   1. ÉèÖÃÏìÓ¦ÄÚÈİ³¤¶È
-//   2. Òì²½Ğ´ÈëÏìÓ¦Êı¾İ
-//   3. Ğ´ÈëÍê³Éºó¹Ø±ÕÌ×½Ó×ÖµÄ·¢ËÍ¶Ë
-//   4. È¡Ïû³¬Ê±¶¨Ê±Æ÷
+// å®ç°é€»è¾‘ï¼š
+//   1. è®¾ç½®å“åº”å†…å®¹é•¿åº¦
+//   2. å¼‚æ­¥å†™å…¥å“åº”æ•°æ®
+//   3. å†™å…¥å®Œæˆåå…³é—­å¥—æ¥å­—çš„å‘é€ç«¯
+//   4. å–æ¶ˆè¶…æ—¶å®šæ—¶å™¨
 // 
-// ×¢Òâ£º
-//   Ê¹ÓÃasync_writeÈ·±£ÍêÕû·¢ËÍÏìÓ¦Êı¾İ
+// æ³¨æ„ï¼š
+//   ä½¿ç”¨async_writeç¡®ä¿å®Œæ•´å‘é€å“åº”æ•°æ®
 void HttpConnection::WriteResponse()
 {
     auto self = shared_from_this();
-    // ÉèÖÃÏìÓ¦ÄÚÈİ³¤¶È
+    // è®¾ç½®å“åº”å†…å®¹é•¿åº¦
     _response.content_length(_response.body().size());
 
-    // Òì²½Ğ´ÈëHTTPÏìÓ¦
+    // å¼‚æ­¥å†™å…¥HTTPå“åº”
     http::async_write(_socket, _response,
         [self](beast::error_code ec, std::size_t bytes_transferred)
         {
@@ -294,7 +294,7 @@ void HttpConnection::WriteResponse()
                     << bytes_transferred << " bytes written." << std::endl;
             }
 
-            // ¹Ø±ÕÌ×½Ó×ÖµÄ·¢ËÍ¶Ë£¨ÓÅÑÅ¹Ø±Õ£©
+            // å…³é—­å¥—æ¥å­—çš„å‘é€ç«¯ï¼ˆä¼˜é›…å…³é—­ï¼‰
             beast::error_code shutdown_ec;
             self->_socket.shutdown(tcp::socket::shutdown_send, shutdown_ec);
             if (shutdown_ec) {
@@ -302,30 +302,30 @@ void HttpConnection::WriteResponse()
                     << shutdown_ec.message() << std::endl;
             }
 
-            // È¡Ïû³¬Ê±¶¨Ê±Æ÷
+            // å–æ¶ˆè¶…æ—¶å®šæ—¶å™¨
             self->_deadline.cancel();
         });
 }
 
 
-// ¼ì²éÁ¬½Ó³¬Ê±
+// æ£€æŸ¥è¿æ¥è¶…æ—¶
 // 
-// ×÷ÓÃ£º
-//   ÉèÖÃÁ¬½Ó³¬Ê±¼ì²é£¬Èç¹û60ÃëÄÚÃ»ÓĞÍê³É²Ù×÷Ôò¹Ø±ÕÁ¬½Ó
+// ä½œç”¨ï¼š
+//   è®¾ç½®è¿æ¥è¶…æ—¶æ£€æŸ¥ï¼Œå¦‚æœ60ç§’å†…æ²¡æœ‰å®Œæˆæ“ä½œåˆ™å…³é—­è¿æ¥
 // 
-// ÊµÏÖÂß¼­£º
-//   1. Òì²½µÈ´ı³¬Ê±ÊÂ¼ş
-//   2. Èç¹û³¬Ê±£¬¹Ø±ÕÌ×½Ó×Ö
+// å®ç°é€»è¾‘ï¼š
+//   1. å¼‚æ­¥ç­‰å¾…è¶…æ—¶äº‹ä»¶
+//   2. å¦‚æœè¶…æ—¶ï¼Œå…³é—­å¥—æ¥å­—
 // 
-// ³¬Ê±Ê±¼ä£º
-//   60Ãë£¨ÔÚ¹¹Ôìº¯ÊıÖĞÉèÖÃ£©
+// è¶…æ—¶æ—¶é—´ï¼š
+//   60ç§’ï¼ˆåœ¨æ„é€ å‡½æ•°ä¸­è®¾ç½®ï¼‰
 void HttpConnection::CheckDeadline()
 {
     auto self = shared_from_this();
 
-    // Òì²½µÈ´ı³¬Ê±ÊÂ¼ş
+    // å¼‚æ­¥ç­‰å¾…è¶…æ—¶äº‹ä»¶
     _deadline.async_wait([self](beast::error_code ec) {
-        // Èç¹ûÃ»ÓĞ±»È¡Ïû£¨¼´³¬Ê±£©£¬Ôò¹Ø±ÕÁ¬½Ó
+        // å¦‚æœæ²¡æœ‰è¢«å–æ¶ˆï¼ˆå³è¶…æ—¶ï¼‰ï¼Œåˆ™å…³é—­è¿æ¥
         if (!ec) {
             self->_socket.close(ec);
         }

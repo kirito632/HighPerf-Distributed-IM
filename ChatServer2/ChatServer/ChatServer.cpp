@@ -95,7 +95,10 @@ int main()
         std::string mysql_url = "tcp://" + mysql_host + ":" + mysql_port_str;
         using MySqlPoolSingleton = Singleton<MySqlPool>;
         auto mysqlPool = MySqlPoolSingleton::GetInstance();
-        mysqlPool->Init(mysql_url, mysql_user, mysql_passwd, mysql_schema, 10);
+        // 根据CPU核心数动态设置MySQL连接池大小
+        size_t mysql_pool_size = std::max(16u, std::thread::hardware_concurrency() * 2);
+        std::cout << "[ChatServer] MySQL pool size: " << mysql_pool_size << std::endl;
+        mysqlPool->Init(mysql_url, mysql_user, mysql_passwd, mysql_schema, mysql_pool_size);
 
         // 获取IO服务池单例
         auto pool = AsioIOServicePool::GetInstance();
@@ -121,7 +124,7 @@ int main()
             grpc_server->Wait(); // 阻塞等待 gRPC 服务器关闭
             });
 
-        // [Cascade Change][FriendNotify] 在独立线程中订阅 Redis 事件，并下发 TCP 通知
+        // 在独立线程中订阅 Redis 事件，并下发 TCP 通知
         std::thread redis_sub_thread([]() {
             auto& cfg = ConfigMgr::Inst();
             auto host = cfg["Redis"]["Host"];
@@ -349,7 +352,7 @@ int main()
         RedisMgr::GetInstance()->HDel(LOGIN_COUNT, server_name);
         RedisMgr::GetInstance()->Close();
         grpc_server_thread.join(); // 等待 gRPC 线程退出
-        // [Cascade Change][FriendNotify]
+        // [FriendNotify]
         if (redis_sub_thread.joinable()) redis_sub_thread.join();
 
         std::cout << "Woke from cond_quit wait, bstop=" << bstop.load() << "\n";

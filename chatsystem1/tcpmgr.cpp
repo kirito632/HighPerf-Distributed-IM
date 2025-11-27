@@ -1,6 +1,7 @@
 #include "tcpmgr.h"
 #include<QJsonDocument>
 #include"usermgr.h"
+#include "localdb.h"
 #include <thread>
 #include <QThread>
 #include <QJsonArray>
@@ -130,7 +131,7 @@ TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_message_id(0),_messa
 
             // 循环回到 while(true)，尝试解析下一条消息（如果 buffer 还有数据）
             // 注意：在下一次 loop 里会根据 _b_recv_pending 决定是否需要 parse header
-        } // end while
+        } 
     });
 
     //5.15 之后版本
@@ -197,12 +198,18 @@ void TcpMgr::initHandlers()
         if (jsonObj.contains("name")) UserMgr::GetInstance()->SetName(jsonObj["name"].toString());
         if (jsonObj.contains("token")) UserMgr::GetInstance()->SetToken(jsonObj["token"].toString());
 
+        // 登录成功后，初始化DB并获取Cursor
+        int uid = UserMgr::GetInstance()->GetUid();
+        LocalDb::GetInstance()->Init(uid);
+        long long cursor = LocalDb::GetInstance()->GetMaxMsgId();
+
         // 你可以在这里额外 emit 一个专门的信号，或通过 sig_recv_pkg 被 LoginDialog 捕获
         qDebug() << "Chat login handler processed success.";
 
-        // 登录聊天服成功后，主动拉取离线消息（1023）
+        // 登录聊天服成功后，主动拉取离线消息（1023），带上 cursor
         QJsonObject offReq;
-        offReq["uid"] = UserMgr::GetInstance()->GetUid();
+        offReq["uid"] = uid;
+        offReq["max_msg_id"] = cursor;
         QString offJson = QString::fromUtf8(QJsonDocument(offReq).toJson(QJsonDocument::Compact));
         qDebug() << "[OfflineMsg][UI->TCP] send 1023 json=" << offJson;
         emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_GET_OFFLINE_MSG_REQ, offJson);
@@ -245,7 +252,7 @@ void TcpMgr::initHandlers()
 
     _handlers.insert(ID_NOTIFY_ADD_FRIEND_REQ, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
-        // [Cascade Change][FriendNotify] 收到“好友申请”通知的原始数据
+        // 收到“好友申请”通知的原始数据
         qDebug() << "[FriendNotify] recv ID_NOTIFY_ADD_FRIEND_REQ id=" << static_cast<int>(id)
                  << " raw=" << QString::fromUtf8(data);
         // 将QByteArray转换为QJsonDocument
@@ -253,7 +260,7 @@ void TcpMgr::initHandlers()
 
         // 检查转换是否成功
         if (jsonDoc.isNull()) {
-            // [Cascade Change][FriendNotify]
+            // [FriendNotify]
             qDebug() << "[FriendNotify] parse json failed for friend apply notify";
             return;
         }
@@ -262,7 +269,7 @@ void TcpMgr::initHandlers()
 
         if (!jsonObj.contains("error")) {
             int err = ErrorCodes::ERR_JSON;
-            // [Cascade Change][FriendNotify]
+            // [FriendNotify]
             qDebug() << "[FriendNotify] friend apply notify missing 'error' field, err=" << err;
 
             return;
@@ -270,34 +277,34 @@ void TcpMgr::initHandlers()
 
         int err = jsonObj["error"].toInt();
         if (err != ErrorCodes::SUCCESS) {
-            // [Cascade Change][FriendNotify]
+            // [FriendNotify]
             qDebug() << "[FriendNotify] friend apply notify error code=" << err;
             // emit sig_user_search(nullptr);
             return;
         }
 
-        // [Cascade Change][FriendNotify] 解析成功，发出信号，交由 UI 触发 HTTP 刷新
+        // 解析成功，发出信号，交由 UI 触发 HTTP 刷新
         qDebug() << "[FriendNotify] emit sig_friend_apply() -> will HTTP getFriendRequests() in UI";
         emit sig_friend_apply();
     });
 
-    // [Cascade Change] 新增：好友回复结果通知处理器
+    // 新增：好友回复结果通知处理器
     _handlers.insert(ID_NOTIFY_FRIEND_REPLY, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(id);
         Q_UNUSED(len);
-        // [Cascade Change][FriendNotify] 收到“好友回复结果”通知的原始数据
+        // 收到“好友回复结果”通知的原始数据
         qDebug() << "[FriendNotify] recv ID_NOTIFY_FRIEND_REPLY id=" << static_cast<int>(id)
                  << " raw=" << QString::fromUtf8(data);
 
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
         if (jsonDoc.isNull() || !jsonDoc.isObject()) {
-            // [Cascade Change][FriendNotify]
+            // [FriendNotify]
             qDebug() << "[FriendNotify] parse json failed for friend reply notify";
             return;
         }
         QJsonObject obj = jsonDoc.object();
         if (!obj.contains("error") || obj["error"].toInt() != ErrorCodes::SUCCESS) {
-            // [Cascade Change][FriendNotify]
+            // [FriendNotify]
             qDebug() << "[FriendNotify] friend reply notify missing/failed 'error' field, code="
                      << obj.value("error").toInt(-1);
             return;
@@ -306,7 +313,7 @@ void TcpMgr::initHandlers()
         // 期望字段：from_uid（申请发起方）、agree（bool）
         int from_uid = obj.value("from_uid").toInt();
         bool agree = obj.value("agree").toBool();
-        // [Cascade Change][FriendNotify]
+        // [FriendNotify]
         qDebug() << "[FriendNotify] emit sig_friend_reply(from_uid=" << from_uid
                  << ", agree=" << agree << ") -> will HTTP refresh in UI";
         emit sig_friend_reply(from_uid, agree);
@@ -362,7 +369,7 @@ void TcpMgr::initHandlers()
             const QString content = o.value("content").toString();
             qDebug() << "[TextChat] msg id=" << msgId << " content=" << content;
             // 向上层发送专用信号，便于 UI 直接显示
-            emit sig_text_notify(fromuid, touid, content);
+            emit sig_text_notify(fromuid, touid, msgId, content);
         }
         // 仍然保留通过 sig_recv_pkg 的整包派发（已在上层监听）
     });
@@ -397,7 +404,7 @@ void TcpMgr::slot_send_data(ReqId reqId, QString data)
     // 设置数据流使用网络字节序
     out.setByteOrder(QDataStream::BigEndian);
 
-    // 写入ID和长度
+    // 写入ID和长度,,,
     out << id << len;
 
     // 添加字符串数据

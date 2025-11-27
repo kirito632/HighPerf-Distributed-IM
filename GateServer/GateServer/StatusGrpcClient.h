@@ -7,54 +7,54 @@
 #include <grpcpp/security/credentials.h>
 #include <grpcpp/create_channel.h>
 
-// gRPCÏà¹ØµÄÀàĞÍ±ğÃû
-using grpc::Channel;          // Á¬½ÓµÄÍ¨µÀ
-using grpc::Status;           // grpcµ÷ÓÃµÄ·µ»Ø×´Ì¬
-using grpc::ClientContext;   // ¿Í»§¶ËÉÏÏÂÎÄ
+// gRPCç›¸å…³çš„ç±»å‹åˆ«å
+using grpc::Channel;          // è¿æ¥çš„é€šé“
+using grpc::Status;           // grpcè°ƒç”¨çš„è¿”å›çŠ¶æ€
+using grpc::ClientContext;   // å®¢æˆ·ç«¯ä¸Šä¸‹æ–‡
 
-// ÏûÏ¢ÀàĞÍ±ğÃû
-using message::GetChatServerReq;   // »ñÈ¡ÁÄÌì·şÎñÆ÷ÇëÇó
-using message::GetChatServerRsp;   // »ñÈ¡ÁÄÌì·şÎñÆ÷ÏìÓ¦
-using message::StatusService;      // StatusServerµÄgRPC·şÎñ
-using message::LoginReq;           // µÇÂ¼ÇëÇó
-using message::LoginRsp;           // µÇÂ¼ÏìÓ¦
+// æ¶ˆæ¯ç±»å‹åˆ«å
+using message::GetChatServerReq;   // è·å–èŠå¤©æœåŠ¡å™¨è¯·æ±‚
+using message::GetChatServerRsp;   // è·å–èŠå¤©æœåŠ¡å™¨å“åº”
+using message::StatusService;      // StatusServerçš„gRPCæœåŠ¡
+using message::LoginReq;           // ç™»å½•è¯·æ±‚
+using message::LoginRsp;           // ç™»å½•å“åº”
 
-// StatusConPoolÀà£ºStatusServerµÄgRPC¿Í»§¶ËÁ¬½Ó³Ø
+// StatusConPoolç±»ï¼šStatusServerçš„gRPCå®¢æˆ·ç«¯è¿æ¥æ± 
 // 
-// ×÷ÓÃ£º
-//   ¹ÜÀí¶à¸ögRPC StubÁ¬½Ó£¬ÊµÏÖÁ¬½ÓµÄ¸´ÓÃºÍ¸ºÔØ¾ùºâ
+// ä½œç”¨ï¼š
+//   ç®¡ç†å¤šä¸ªgRPC Stubè¿æ¥ï¼Œå®ç°è¿æ¥çš„å¤ç”¨å’Œè´Ÿè½½å‡è¡¡
 // 
-// Éè¼ÆÄ£Ê½£º
-//   ¶ÔÏó³ØÄ£Ê½ - Ô¤ÏÈ´´½¨Stub£¬°´Ğè·ÖÅä
+// è®¾è®¡æ¨¡å¼ï¼š
+//   å¯¹è±¡æ± æ¨¡å¼ - é¢„å…ˆåˆ›å»ºStubï¼ŒæŒ‰éœ€åˆ†é…
 // 
-// ¹¤×÷Ô­Àí£º
-//   1. ³õÊ¼»¯Ê±´´½¨Ö¸¶¨ÊıÁ¿µÄgRPCÍ¨µÀºÍStub
-//   2. Ê¹ÓÃ¶ÓÁĞ´æ´¢Stub
-//   3. Ê¹ÓÃÌõ¼ş±äÁ¿ÊµÏÖÁ¬½ÓµÄµÈ´ı»úÖÆ
-//   4. Ïß³Ì°²È«µÄStub»ñÈ¡ºÍ¹é»¹
+// å·¥ä½œåŸç†ï¼š
+//   1. åˆå§‹åŒ–æ—¶åˆ›å»ºæŒ‡å®šæ•°é‡çš„gRPCé€šé“å’ŒStub
+//   2. ä½¿ç”¨é˜Ÿåˆ—å­˜å‚¨Stub
+//   3. ä½¿ç”¨æ¡ä»¶å˜é‡å®ç°è¿æ¥çš„ç­‰å¾…æœºåˆ¶
+//   4. çº¿ç¨‹å®‰å…¨çš„Stubè·å–å’Œå½’è¿˜
 class StatusConPool {
 public:
-    // ¹¹Ôìº¯Êı£º³õÊ¼»¯StatusServerÁ¬½Ó³Ø
-    // ²ÎÊı£º
-    //   - poolSize: Á¬½Ó³Ø´óĞ¡
-    //   - host: StatusServerÖ÷»úµØÖ·
-    //   - port: StatusServer¶Ë¿Ú
+    // æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–StatusServerè¿æ¥æ± 
+    // å‚æ•°ï¼š
+    //   - poolSize: è¿æ¥æ± å¤§å°
+    //   - host: StatusServerä¸»æœºåœ°å€
+    //   - port: StatusServerç«¯å£
     StatusConPool(size_t poolSize, std::string host, std::string port)
         : poolSize_(poolSize), host_(host), port_(port), b_stop_(false) {
-        // ´´½¨Ö¸¶¨ÊıÁ¿µÄgRPCÍ¨µÀºÍStub
+        // åˆ›å»ºæŒ‡å®šæ•°é‡çš„gRPCé€šé“å’ŒStub
         for (size_t i = 0; i < poolSize_; ++i) {
             std::string addr = host + ":" + port;
             std::cout << "[StatusConPool] Creating channel to " << addr << std::endl;
-            // ´´½¨gRPCÍ¨µÀ£¨Ê¹ÓÃ²»°²È«Æ¾Ö¤£©
+            // åˆ›å»ºgRPCé€šé“ï¼ˆä½¿ç”¨ä¸å®‰å…¨å‡­è¯ï¼‰
             std::shared_ptr<Channel> channel = grpc::CreateChannel(addr,
                 grpc::InsecureChannelCredentials());
 
-            // ´´½¨Stub²¢¼ÓÈëÁ¬½Ó³Ø
+            // åˆ›å»ºStubå¹¶åŠ å…¥è¿æ¥æ± 
             connections_.push(StatusService::NewStub(channel));
         }
     }
 
-    // Îö¹¹º¯Êı£ºÇåÀíËùÓĞÁ¬½Ó
+    // ææ„å‡½æ•°ï¼šæ¸…ç†æ‰€æœ‰è¿æ¥
     ~StatusConPool() {
         std::lock_guard<std::mutex> lock(mutex_);
         Close();
@@ -63,16 +63,16 @@ public:
         }
     }
 
-    // »ñÈ¡Ò»¸öStubÁ¬½Ó
-    // ·µ»ØÖµ£º
-    //   ³É¹¦·µ»ØStubÖ¸Õë£¬·ñÔò·µ»Ønullptr
-    // ÊµÏÖÂß¼­£º
-    //   1. µÈ´ıÖ±µ½ÓĞ¿ÉÓÃµÄStub
-    //   2. ´Ó¶ÓÁĞÖĞÈ¡³öÒ»¸öStub
-    //   3. ·µ»ØStub
+    // è·å–ä¸€ä¸ªStubè¿æ¥
+    // è¿”å›å€¼ï¼š
+    //   æˆåŠŸè¿”å›StubæŒ‡é’ˆï¼Œå¦åˆ™è¿”å›nullptr
+    // å®ç°é€»è¾‘ï¼š
+    //   1. ç­‰å¾…ç›´åˆ°æœ‰å¯ç”¨çš„Stub
+    //   2. ä»é˜Ÿåˆ—ä¸­å–å‡ºä¸€ä¸ªStub
+    //   3. è¿”å›Stub
     std::unique_ptr<StatusService::Stub> getConnection() {
         std::unique_lock<std::mutex> lock(mutex_);
-        // µÈ´ıÖ±µ½ÓĞ¿ÉÓÃµÄStub»òÒÑ¾­Í£Ö¹
+        // ç­‰å¾…ç›´åˆ°æœ‰å¯ç”¨çš„Stubæˆ–å·²ç»åœæ­¢
         cond_.wait(lock, [this] {
             if (b_stop_) {
                 return true;
@@ -80,23 +80,23 @@ public:
             return !connections_.empty();
             });
 
-        // Èç¹ûÒÑÍ£Ö¹£¬Ö±½Ó·µ»Ø¿ÕÖ¸Õë
+        // å¦‚æœå·²åœæ­¢ï¼Œç›´æ¥è¿”å›ç©ºæŒ‡é’ˆ
         if (b_stop_) {
             return  nullptr;
         }
 
-        // ´Ó¶ÓÁĞÖĞÈ¡³öStub
+        // ä»é˜Ÿåˆ—ä¸­å–å‡ºStub
         auto context = std::move(connections_.front());
         connections_.pop();
         return context;
     }
 
-    // ¹é»¹Stubµ½Á¬½Ó³Ø
-    // ²ÎÊı£º
-    //   - context: StubÖ¸Õë
-    // ÊµÏÖÂß¼­£º
-    //   1. ½«Stub·Å»Ø¶ÓÁĞ
-    //   2. Í¨ÖªµÈ´ıÁ¬½ÓµÄÏß³Ì
+    // å½’è¿˜Stubåˆ°è¿æ¥æ± 
+    // å‚æ•°ï¼š
+    //   - context: StubæŒ‡é’ˆ
+    // å®ç°é€»è¾‘ï¼š
+    //   1. å°†Stubæ”¾å›é˜Ÿåˆ—
+    //   2. é€šçŸ¥ç­‰å¾…è¿æ¥çš„çº¿ç¨‹
     void returnConnection(std::unique_ptr<StatusService::Stub> context) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (b_stop_) {
@@ -106,57 +106,57 @@ public:
         cond_.notify_one();
     }
 
-    // ¹Ø±ÕÁ¬½Ó³Ø
+    // å…³é—­è¿æ¥æ± 
     void Close() {
         b_stop_ = true;
         cond_.notify_all();
     }
 
 private:
-    std::atomic<bool> b_stop_;                         // Í£Ö¹±êÖ¾
-    size_t poolSize_;                                   // Á¬½Ó³Ø´óĞ¡
-    std::string host_;                                  // StatusServerÖ÷»úµØÖ·
-    std::string port_;                                  // StatusServer¶Ë¿Ú
-    std::queue<std::unique_ptr<StatusService::Stub>> connections_;  // Stub¶ÓÁĞ
-    std::mutex mutex_;                                  // »¥³âËø£¨±£Ö¤Ïß³Ì°²È«£©
-    std::condition_variable cond_;                     // Ìõ¼ş±äÁ¿£¨ÓÃÓÚµÈ´ıÁ¬½Ó£©
+    std::atomic<bool> b_stop_;                         // åœæ­¢æ ‡å¿—
+    size_t poolSize_;                                   // è¿æ¥æ± å¤§å°
+    std::string host_;                                  // StatusServerä¸»æœºåœ°å€
+    std::string port_;                                  // StatusServerç«¯å£
+    std::queue<std::unique_ptr<StatusService::Stub>> connections_;  // Stubé˜Ÿåˆ—
+    std::mutex mutex_;                                  // äº’æ–¥é”ï¼ˆä¿è¯çº¿ç¨‹å®‰å…¨ï¼‰
+    std::condition_variable cond_;                     // æ¡ä»¶å˜é‡ï¼ˆç”¨äºç­‰å¾…è¿æ¥ï¼‰
 };
 
-// StatusGrpcClientÀà£ºStatusServerµÄgRPC¿Í»§¶Ë
+// StatusGrpcClientç±»ï¼šStatusServerçš„gRPCå®¢æˆ·ç«¯
 // 
-// ×÷ÓÃ£º
-//   Ìá¹©µ÷ÓÃStatusServerµÄ½Ó¿Ú£¬ÓÃÓÚ»ñÈ¡ÁÄÌì·şÎñÆ÷ĞÅÏ¢
+// ä½œç”¨ï¼š
+//   æä¾›è°ƒç”¨StatusServerçš„æ¥å£ï¼Œç”¨äºè·å–èŠå¤©æœåŠ¡å™¨ä¿¡æ¯
 // 
-// Éè¼ÆÄ£Ê½£º
-//   µ¥ÀıÄ£Ê½£¨Singleton£©- È·±£È«¾ÖÎ¨Ò»ÊµÀı
+// è®¾è®¡æ¨¡å¼ï¼š
+//   å•ä¾‹æ¨¡å¼ï¼ˆSingletonï¼‰- ç¡®ä¿å…¨å±€å”¯ä¸€å®ä¾‹
 // 
-// Ö÷Òª¹¦ÄÜ£º
-//   GetChatServer - ¸ù¾İÓÃ»§ID»ñÈ¡¿ÉÓÃµÄÁÄÌì·şÎñÆ÷ĞÅÏ¢£¨Ö÷»ú¡¢¶Ë¿Ú¡¢token£©
+// ä¸»è¦åŠŸèƒ½ï¼š
+//   GetChatServer - æ ¹æ®ç”¨æˆ·IDè·å–å¯ç”¨çš„èŠå¤©æœåŠ¡å™¨ä¿¡æ¯ï¼ˆä¸»æœºã€ç«¯å£ã€tokenï¼‰
 // 
-// Ê¹ÓÃ³¡¾°£º
-//   ÔÚÓÃ»§µÇÂ¼Ê±£¬µ÷ÓÃ´Ë½Ó¿Ú»ñÈ¡ChatServerµÄµØÖ·£¬È»ºóÈÃ¿Í»§¶ËÁ¬½Óµ½ChatServer
+// ä½¿ç”¨åœºæ™¯ï¼š
+//   åœ¨ç”¨æˆ·ç™»å½•æ—¶ï¼Œè°ƒç”¨æ­¤æ¥å£è·å–ChatServerçš„åœ°å€ï¼Œç„¶åè®©å®¢æˆ·ç«¯è¿æ¥åˆ°ChatServer
 class StatusGrpcClient :public Singleton<StatusGrpcClient>
 {
-    friend class Singleton<StatusGrpcClient>;  // ÔÊĞíSingleton·ÃÎÊË½ÓĞ¹¹Ôìº¯Êı
+    friend class Singleton<StatusGrpcClient>;  // å…è®¸Singletonè®¿é—®ç§æœ‰æ„é€ å‡½æ•°
 public:
-    // Îö¹¹º¯Êı£ºÇåÀí×ÊÔ´
+    // ææ„å‡½æ•°ï¼šæ¸…ç†èµ„æº
     ~StatusGrpcClient() {
 
     }
 
-    // »ñÈ¡ÁÄÌì·şÎñÆ÷ĞÅÏ¢
-    // ²ÎÊı£º
-    //   - uid: ÓÃ»§ID
-    // ·µ»ØÖµ£º
-    //   GetChatServerRsp£º°üº¬Ö÷»úµØÖ·¡¢¶Ë¿Ú¡¢tokenµÈĞÅÏ¢
+    // è·å–èŠå¤©æœåŠ¡å™¨ä¿¡æ¯
+    // å‚æ•°ï¼š
+    //   - uid: ç”¨æˆ·ID
+    // è¿”å›å€¼ï¼š
+    //   GetChatServerRspï¼šåŒ…å«ä¸»æœºåœ°å€ã€ç«¯å£ã€tokenç­‰ä¿¡æ¯
     GetChatServerRsp GetChatServer(int uid);
 
 private:
-    // Ë½ÓĞ¹¹Ôìº¯Êı£ºµ¥ÀıÄ£Ê½
-    // ´ÓÅäÖÃÎÄ¼şÖĞ¶ÁÈ¡StatusServerµÄÁ¬½ÓĞÅÏ¢
+    // ç§æœ‰æ„é€ å‡½æ•°ï¼šå•ä¾‹æ¨¡å¼
+    // ä»é…ç½®æ–‡ä»¶ä¸­è¯»å–StatusServerçš„è¿æ¥ä¿¡æ¯
     StatusGrpcClient();
 
-    // StatusServerµÄÁ¬½Ó³ØÖ¸Õë
+    // StatusServerçš„è¿æ¥æ± æŒ‡é’ˆ
     std::unique_ptr<StatusConPool> pool_;
 
 };

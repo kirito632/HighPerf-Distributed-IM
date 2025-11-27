@@ -2,111 +2,111 @@
 #include <grpcpp/grpcpp.h>
 #include "message.grpc.pb.h"
 
-// gRPCÏà¹ØµÄÀàĞÍ±ğÃû
+// gRPCç›¸å…³çš„ç±»å‹åˆ«å
 using grpc::Server;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::Status;
-using message::GetChatServerReq;   // »ñÈ¡ÁÄÌì·şÎñÆ÷ÇëÇó
-using message::GetChatServerRsp;   // »ñÈ¡ÁÄÌì·şÎñÆ÷ÏìÓ¦
-using message::StatusService;      // StatusServerµÄgRPC·şÎñ
+using message::GetChatServerReq;   // è·å–èŠå¤©æœåŠ¡å™¨è¯·æ±‚
+using message::GetChatServerRsp;   // è·å–èŠå¤©æœåŠ¡å™¨å“åº”
+using message::StatusService;      // StatusServerçš„gRPCæœåŠ¡
 
-// ChatServer½á¹¹Ìå£º´æ´¢ChatServerµÄÅäÖÃĞÅÏ¢
+// ChatServerç»“æ„ä½“ï¼šå­˜å‚¨ChatServerçš„é…ç½®ä¿¡æ¯
 // 
-// ×Ö¶ÎËµÃ÷£º
-//   - host: ChatServerÖ÷»úµØÖ·
-//   - port: ChatServer¶Ë¿Ú
-//   - name: ChatServerÃû³Æ
-//   - con_count: µ±Ç°Á¬½ÓÊı£¨ÓÃÓÚ¸ºÔØ¾ùºâ£©
+// å­—æ®µè¯´æ˜ï¼š
+//   - host: ChatServerä¸»æœºåœ°å€
+//   - port: ChatServerç«¯å£
+//   - name: ChatServeråç§°
+//   - con_count: å½“å‰è¿æ¥æ•°ï¼ˆç”¨äºè´Ÿè½½å‡è¡¡ï¼‰
 struct ChatServer {
-    std::string host;        // ChatServerÖ÷»úµØÖ·
-    std::string port;        // ChatServer¶Ë¿Ú
-    std::string name;        // ChatServerÃû³Æ£¨ÓÃÓÚ±êÊ¶²»Í¬µÄChatServerÊµÀı£©
-    int con_count;          // µ±Ç°Á¬½ÓÊı£¨´ÓRedis¶ÁÈ¡£¬ÓÃÓÚ¸ºÔØ¾ùºâ£©
+    std::string host;        // ChatServerä¸»æœºåœ°å€
+    std::string port;        // ChatServerç«¯å£
+    std::string name;        // ChatServeråç§°ï¼ˆç”¨äºæ ‡è¯†ä¸åŒçš„ChatServerå®ä¾‹ï¼‰
+    int con_count;          // å½“å‰è¿æ¥æ•°ï¼ˆä»Redisè¯»å–ï¼Œç”¨äºè´Ÿè½½å‡è¡¡ï¼‰
 };
 
-// StatusServiceImplÀà£ºStatusServerµÄgRPC·şÎñÊµÏÖ
+// StatusServiceImplç±»ï¼šStatusServerçš„gRPCæœåŠ¡å®ç°
 // 
-// ×÷ÓÃ£º
-//   ÊµÏÖStatusService½Ó¿Ú£¬´¦ÀíGateServerµÄÇëÇó
+// ä½œç”¨ï¼š
+//   å®ç°StatusServiceæ¥å£ï¼Œå¤„ç†GateServerçš„è¯·æ±‚
 // 
-// Ö÷Òª¹¦ÄÜ£º
-//   1. GetChatServer: ¸ù¾İÓÃ»§ID·ÖÅäÒ»¸ö¿ÉÓÃµÄChatServer£¨¸ºÔØ¾ùºâ£©
-//   2. Login: ÑéÖ¤ÓÃ»§token
+// ä¸»è¦åŠŸèƒ½ï¼š
+//   1. GetChatServer: æ ¹æ®ç”¨æˆ·IDåˆ†é…ä¸€ä¸ªå¯ç”¨çš„ChatServerï¼ˆè´Ÿè½½å‡è¡¡ï¼‰
+//   2. Login: éªŒè¯ç”¨æˆ·token
 // 
-// Éè¼ÆÄ£Ê½£º
-//   ¼Ì³ĞgRPC×Ô¶¯Éú³ÉµÄService»ùÀà£¬ÊµÏÖ¾ßÌåµÄ·şÎñ·½·¨
+// è®¾è®¡æ¨¡å¼ï¼š
+//   ç»§æ‰¿gRPCè‡ªåŠ¨ç”Ÿæˆçš„ServiceåŸºç±»ï¼Œå®ç°å…·ä½“çš„æœåŠ¡æ–¹æ³•
 // 
-// ¸ºÔØ¾ùºâ²ßÂÔ£º
-//   ´ÓRedis¶ÁÈ¡Ã¿¸öChatServerµÄµ±Ç°Á¬½ÓÊı£¨LOGIN_COUNT£©£¬
-//   Ñ¡ÔñÁ¬½ÓÊı×îÉÙµÄChatServer·ÖÅä¸øĞÂÓÃ»§
+// è´Ÿè½½å‡è¡¡ç­–ç•¥ï¼š
+//   ä»Redisè¯»å–æ¯ä¸ªChatServerçš„å½“å‰è¿æ¥æ•°ï¼ˆLOGIN_COUNTï¼‰ï¼Œ
+//   é€‰æ‹©è¿æ¥æ•°æœ€å°‘çš„ChatServeråˆ†é…ç»™æ–°ç”¨æˆ·
 class StatusServiceImpl final : public StatusService::Service
 {
 public:
-    // ¹¹Ôìº¯Êı£º³õÊ¼»¯StatusServiceImpl
+    // æ„é€ å‡½æ•°ï¼šåˆå§‹åŒ–StatusServiceImpl
     // 
-    // ÊµÏÖÂß¼­£º
-    //   ´ÓÅäÖÃÎÄ¼ş¶ÁÈ¡ËùÓĞChatServerµÄÅäÖÃĞÅÏ¢£¬´æ´¢ÔÚ_serversÖĞ
+    // å®ç°é€»è¾‘ï¼š
+    //   ä»é…ç½®æ–‡ä»¶è¯»å–æ‰€æœ‰ChatServerçš„é…ç½®ä¿¡æ¯ï¼Œå­˜å‚¨åœ¨_serversä¸­
     StatusServiceImpl();
 
-    // »ñÈ¡ÁÄÌì·şÎñÆ÷£¨´ø¸ºÔØ¾ùºâ£©
+    // è·å–èŠå¤©æœåŠ¡å™¨ï¼ˆå¸¦è´Ÿè½½å‡è¡¡ï¼‰
     // 
-    // ¹¦ÄÜ£º
-    //   ÎªÇëÇóµÄÓÃ»§·ÖÅäÒ»¸ö¿ÉÓÃµÄChatServer
+    // åŠŸèƒ½ï¼š
+    //   ä¸ºè¯·æ±‚çš„ç”¨æˆ·åˆ†é…ä¸€ä¸ªå¯ç”¨çš„ChatServer
     // 
-    // ²ÎÊı£º
-    //   - context: gRPC·şÎñÉÏÏÂÎÄ
-    //   - request: ÇëÇó£¨°üº¬ÓÃ»§ID£©
-    //   - reply: ÏìÓ¦£¨°üº¬ChatServerµÄhost¡¢port¡¢token£©
+    // å‚æ•°ï¼š
+    //   - context: gRPCæœåŠ¡ä¸Šä¸‹æ–‡
+    //   - request: è¯·æ±‚ï¼ˆåŒ…å«ç”¨æˆ·IDï¼‰
+    //   - reply: å“åº”ï¼ˆåŒ…å«ChatServerçš„hostã€portã€tokenï¼‰
     // 
-    // ·µ»ØÖµ£º
-    //   gRPC×´Ì¬Âë
+    // è¿”å›å€¼ï¼š
+    //   gRPCçŠ¶æ€ç 
     Status GetChatServer(ServerContext* context, const GetChatServerReq* request, GetChatServerRsp* reply) override;
 
-    // ÓÃ»§µÇÂ¼ÑéÖ¤
+    // ç”¨æˆ·ç™»å½•éªŒè¯
     // 
-    // ¹¦ÄÜ£º
-    //   ÑéÖ¤ÓÃ»§µÄtokenÊÇ·ñÓĞĞ§
+    // åŠŸèƒ½ï¼š
+    //   éªŒè¯ç”¨æˆ·çš„tokenæ˜¯å¦æœ‰æ•ˆ
     // 
-    // ²ÎÊı£º
-    //   - context: gRPC·şÎñÉÏÏÂÎÄ
-    //   - request: ÇëÇó£¨°üº¬ÓÃ»§IDºÍtoken£©
-    //   - reply: ÏìÓ¦£¨°üº¬ÑéÖ¤½á¹û£©
+    // å‚æ•°ï¼š
+    //   - context: gRPCæœåŠ¡ä¸Šä¸‹æ–‡
+    //   - request: è¯·æ±‚ï¼ˆåŒ…å«ç”¨æˆ·IDå’Œtokenï¼‰
+    //   - reply: å“åº”ï¼ˆåŒ…å«éªŒè¯ç»“æœï¼‰
     // 
-    // ·µ»ØÖµ£º
-    //   gRPC×´Ì¬Âë
+    // è¿”å›å€¼ï¼š
+    //   gRPCçŠ¶æ€ç 
     Status Login(ServerContext* context, const message::LoginReq* request, message::LoginRsp* reply) override;
 
 private:
-    // ²åÈëÓÃ»§token
+    // æ’å…¥ç”¨æˆ·token
     // 
-    // ²ÎÊı£º
-    //   - uid: ÓÃ»§ID
-    //   - token: ÈÏÖ¤ÁîÅÆ
+    // å‚æ•°ï¼š
+    //   - uid: ç”¨æˆ·ID
+    //   - token: è®¤è¯ä»¤ç‰Œ
     // 
-    // ÊµÏÖÂß¼­£º
-    //   ½«token´æ´¢µ½RedisÖĞ£¨key = USERTOKENPREFIX + uid£©
+    // å®ç°é€»è¾‘ï¼š
+    //   å°†tokenå­˜å‚¨åˆ°Redisä¸­ï¼ˆkey = USERTOKENPREFIX + uidï¼‰
     void insertToken(int uid, std::string token);
 
-    // »ñÈ¡¿ÉÓÃµÄChatServer£¨¸ºÔØ¾ùºâ£©
+    // è·å–å¯ç”¨çš„ChatServerï¼ˆè´Ÿè½½å‡è¡¡ï¼‰
     // 
-    // ·µ»ØÖµ£º
-    //   Ò»¸öChatServer½á¹¹Ìå
+    // è¿”å›å€¼ï¼š
+    //   ä¸€ä¸ªChatServerç»“æ„ä½“
     // 
-    // ÊµÏÖÂß¼­£º
-    //   1. ´ÓRedis¶ÁÈ¡Ã¿¸öChatServerµÄµ±Ç°Á¬½ÓÊı
-    //   2. Ñ¡ÔñÁ¬½ÓÊı×îÉÙµÄChatServer
-    //   3. ·µ»ØÑ¡ÖĞµÄChatServer
+    // å®ç°é€»è¾‘ï¼š
+    //   1. ä»Redisè¯»å–æ¯ä¸ªChatServerçš„å½“å‰è¿æ¥æ•°
+    //   2. é€‰æ‹©è¿æ¥æ•°æœ€å°‘çš„ChatServer
+    //   3. è¿”å›é€‰ä¸­çš„ChatServer
     // 
-    // ¸ºÔØ¾ùºâËã·¨£º
-    //   ×îĞ¡Á¬½ÓÊıÓÅÏÈ£¨Least Connections£©
+    // è´Ÿè½½å‡è¡¡ç®—æ³•ï¼š
+    //   æœ€å°è¿æ¥æ•°ä¼˜å…ˆï¼ˆLeast Connectionsï¼‰
     ChatServer getChatServer();
 
-    // ChatServerÁĞ±í£¨name -> ChatServer£©
+    // ChatServeråˆ—è¡¨ï¼ˆname -> ChatServerï¼‰
     std::unordered_map<std::string, ChatServer> _servers;
-    // ChatServerÁĞ±íµÄ»¥³âËø£¨±£Ö¤Ïß³Ì°²È«£©
+    // ChatServeråˆ—è¡¨çš„äº’æ–¥é”ï¼ˆä¿è¯çº¿ç¨‹å®‰å…¨ï¼‰
     std::mutex _server_mtx;
-    // ·şÎñÆ÷Ë÷Òı£¨ÓÃÓÚRound-Robin£¬µ±Ç°Î´Ê¹ÓÃ£©
+    // æœåŠ¡å™¨ç´¢å¼•ï¼ˆç”¨äºRound-Robinï¼Œå½“å‰æœªä½¿ç”¨ï¼‰
     int _server_index;
 };
 
