@@ -97,10 +97,11 @@ std::vector<MessageInfo> LocalDb::GetHistory(int friendUid, int offset, int limi
     if (!_db.isOpen()) return result;
 
     QSqlQuery query;
+    // 直接按 msg_id 升序查询，保证消息顺序正确
     query.prepare("SELECT msg_id, from_uid, to_uid, content, create_time, status, type "
                   "FROM message "
                   "WHERE (from_uid = ? AND to_uid = ?) OR (from_uid = ? AND to_uid = ?) "
-                  "ORDER BY msg_id DESC LIMIT ? OFFSET ?");
+                  "ORDER BY msg_id ASC LIMIT ? OFFSET ?");
     
     query.addBindValue(_uid);
     query.addBindValue(friendUid);
@@ -124,8 +125,6 @@ std::vector<MessageInfo> LocalDb::GetHistory(int friendUid, int offset, int limi
     } else {
         qDebug() << "[LocalDb] GetHistory failed:" << query.lastError();
     }
-    
-    std::reverse(result.begin(), result.end());
     
     return result;
 }

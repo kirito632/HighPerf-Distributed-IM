@@ -5,7 +5,6 @@
 #include "friendmanager.h"
 #include "usermgr.h"
 #include "localdb.h"
-// 新增：接入 TCP 通知（好友申请&回复结果）
 #include "tcpmgr.h"
 #include <QPainter>
 #include <QPainterPath>
@@ -313,7 +312,7 @@ void MainWindow::setupUi()
     // m_friendManager->setServerUrl("http://localhost:8080");
     m_friendManager->setCurrentUser(currentUid); // 设置当前用户ID
     
-    qDebug() << "[MainWindow] 服务器地址已设置为: http://localhost:8080";
+    // qDebug() << "[MainWindow] 服务器地址已设置为: http://localhost:8080";
     
     // 连接好友管理器信号
     connect(m_friendManager, &FriendManager::searchResultsReceived, 
@@ -382,8 +381,7 @@ void MainWindow::setupUi()
                 // 这里简单实现：立即发送 ACK
                 QJsonObject ackRoot;
                 ackRoot["uid"] = UserMgr::GetInstance()->GetUid();
-                ackRoot["max_msg_id"] = msgId.toLongLong(); // 假设是按序到达，或者 LocalDb::GetMaxMsgId()
-                // 更严谨的做法是 LocalDb::GetInstance()->GetMaxMsgId()，但这里为了简单先回这个
+                ackRoot["max_msg_id"] = LocalDb::GetInstance()->GetMaxMsgId();
                 
                 QString ackJson = QString::fromUtf8(QJsonDocument(ackRoot).toJson(QJsonDocument::Compact));
                 emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_NOTIFY_TEXT_CHAT_MSG_RSP, ackJson);
