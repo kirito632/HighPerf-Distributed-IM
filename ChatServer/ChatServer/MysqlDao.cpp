@@ -2,6 +2,7 @@
 #include"ConfigMgr.h"
 #include"crypto_utils.h"
 #include <sstream>
+#include <iomanip>
 
 using MySqlPoolSingleton = Singleton<MySqlPool>;
 
@@ -98,6 +99,19 @@ bool MysqlDao::UpdatePwdByEmail(const std::string& email, const std::string& new
         sql::Connection* con = guard.get();
         std::string hashedPwd = sha256_hex(newpwdPlain);
 
+        // 先查询 uid，用于后续缓存失效
+        int uid = -1;
+        {
+            std::unique_ptr<sql::PreparedStatement> selectStmt(
+                con->prepareStatement("SELECT uid FROM user WHERE email = ?")
+            );
+            selectStmt->setString(1, email);
+            std::unique_ptr<sql::ResultSet> res(selectStmt->executeQuery());
+            if (res->next()) {
+                uid = res->getInt("uid");
+            }
+        }
+
         std::unique_ptr<sql::PreparedStatement> pstmt(
             con->prepareStatement("UPDATE user SET pwd = ? WHERE email = ?")
         );
@@ -106,6 +120,12 @@ bool MysqlDao::UpdatePwdByEmail(const std::string& email, const std::string& new
 
         int updateCount = pstmt->executeUpdate();
         std::cout << "Updated rows: " << updateCount << std::endl;
+
+        // FlashCache: 密码修改后，主动失效缓存（多机同步）
+        if (updateCount > 0 && uid > 0) {
+            PublishCacheInvalidation(uid);
+            std::cout << "[FlashCache] Published cache invalidation for uid: " << uid << std::endl;
+        }
 
         return updateCount > 0;
     }
@@ -153,6 +173,9 @@ bool MysqlDao::CheckPwd(const std::string& identifier, const std::string& pwdPla
             userInfo.email = db_email;
             userInfo.uid = db_uid;
             userInfo.pwd = origin_pwd;
+            
+            // FlashCache: 登录成功，写入缓存
+            userCache_.put(db_uid, userInfo, 300000);  // TTL 5分钟
             return true;
         }
 
@@ -169,6 +192,9 @@ bool MysqlDao::CheckPwd(const std::string& identifier, const std::string& pwdPla
             userInfo.email = db_email;
             userInfo.uid = db_uid;
             userInfo.pwd = origin_pwd;
+            
+            // FlashCache: 登录成功，写入缓存
+            userCache_.put(db_uid, userInfo, 300000);  // TTL 5分钟
             return true;
         }
 
@@ -185,10 +211,86 @@ bool MysqlDao::CheckPwd(const std::string& identifier, const std::string& pwdPla
 
 bool MysqlDao::GetUser(int uid, UserInfo& userInfo)
 {
+    // ==================== Step 1: 查本地缓存 ====================
+    auto cachedUser = userCache_.get(uid);
+    if (cachedUser) {
+        userInfo = *cachedUser;
+        return true;
+    }
+
+    // ==================== Step 2: Singleflight 归并回源 ====================
+    // 
+    // 缓存未命中时，检查是否有其他请求正在查询同一个 uid。
+    // 如果有，等待那个请求的结果；如果没有，发起查询。
+    // 这样可以避免缓存击穿（1000 个请求同时打到 DB）。
+    
+    std::shared_future<std::optional<UserInfo>> future;
+    bool isLeader = false;  // 是否是第一个发起查询的请求
+    std::shared_ptr<std::promise<std::optional<UserInfo>>> promise;
+    
+    {
+        std::lock_guard<std::mutex> lock(inFlightMutex_);
+        
+        auto it = inFlight_.find(uid);
+        if (it != inFlight_.end()) {
+            // 已有请求在查询中，等待结果
+            future = it->second;
+        } else {
+            // 第一个请求，创建 promise 并加入 inFlight_
+            isLeader = true;
+            promise = std::make_shared<std::promise<std::optional<UserInfo>>>();
+            future = promise->get_future().share();
+            inFlight_[uid] = future;
+        }
+    }
+    
+    if (isLeader) {
+        // ==================== Step 3: Leader 查询数据库 ====================
+        std::optional<UserInfo> result = LoadUserFromDB(uid);
+        
+        // 如果查询成功，写入缓存（回填）
+        if (result) {
+            // TTL 5 分钟 = 300000 毫秒
+            userCache_.put(uid, *result, 300000);
+        }
+        
+        // 设置 promise，唤醒所有等待的请求
+        promise->set_value(result);
+        
+        // 从 inFlight_ 中删除
+        {
+            std::lock_guard<std::mutex> lock(inFlightMutex_);
+            inFlight_.erase(uid);
+        }
+        
+        if (result) {
+            userInfo = *result;
+            return true;
+        }
+        return false;
+    } else {
+        // ==================== Step 4: Follower 等待结果 ====================
+        try {
+            auto result = future.get();
+            if (result) {
+                userInfo = *result;
+                return true;
+            }
+            return false;
+        } catch (const std::exception& e) {
+            std::cerr << "[MysqlDao] Singleflight wait failed: " << e.what() << std::endl;
+            return false;
+        }
+    }
+}
+
+// 内部方法：从数据库加载用户（不带 Singleflight）
+std::optional<UserInfo> MysqlDao::LoadUserFromDB(int uid)
+{
     ConnectionGuard guard(pool_);
     if (!guard) {
         std::cerr << "[MysqlDao] Failed to get connection from pool." << std::endl;
-        return false;
+        return std::nullopt;
     }
 
     try {
@@ -201,20 +303,21 @@ bool MysqlDao::GetUser(int uid, UserInfo& userInfo)
 
         if (!res->next()) {
             std::cerr << "[MysqlDao] No user found for uid: " << uid << std::endl;
-            return false;
+            return std::nullopt;
         }
 
-        userInfo.uid = res->getInt("uid");
-        userInfo.name = res->getString("name");
-        userInfo.email = res->getString("email");
-        userInfo.pwd = res->getString("pwd");
+        UserInfo user;
+        user.uid = res->getInt("uid");
+        user.name = res->getString("name");
+        user.email = res->getString("email");
+        user.pwd = res->getString("pwd");
 
-        return true;
+        return user;
     }
     catch (sql::SQLException& e) {
         guard.markBad();
-        std::cerr << "[MysqlDao] SQLException in GetUser: " << e.what() << std::endl;
-        return false;
+        std::cerr << "[MysqlDao] SQLException in LoadUserFromDB: " << e.what() << std::endl;
+        return std::nullopt;
     }
 }
 
@@ -329,6 +432,11 @@ bool MysqlDao::ReplyFriendRequest(int fromUid, int toUid, bool agree) {
             insertFriendStmt->setInt(3, toUid);
             insertFriendStmt->setInt(4, fromUid);
             insertFriendStmt->execute();
+            
+            // FlashCache: 好友关系变更，失效双方缓存
+            InvalidateUserCache(fromUid);
+            InvalidateUserCache(toUid);
+            std::cout << "[FlashCache] Invalidated cache for uid: " << fromUid << " and " << toUid << std::endl;
         }
 
         return updateCount > 0;
@@ -544,4 +652,305 @@ bool MysqlDao::AckOfflineMessages(int uid, long long max_msg_id)
         std::cerr << "[MysqlDao] SQLException in AckOfflineMessages: " << e.what() << std::endl;
         return false;
     }
+}
+
+// ==================== FlashCache 监控 ====================
+
+void MysqlDao::LogCacheMetrics() const
+{
+    auto stats = GetUserCacheStats();
+    
+    std::cout << "\n==================== FlashCache Metrics ====================" << std::endl;
+    
+    // 基础统计
+    std::cout << "[Size]     Current: " << stats.current_size 
+              << " / " << stats.capacity 
+              << " (Peak: " << stats.peak_size << ")" << std::endl;
+    std::cout << "[Usage]    " << std::fixed << std::setprecision(1) 
+              << (stats.usage_rate() * 100.0) << "%" << std::endl;
+    
+    // 命中率统计
+    std::cout << "[Gets]     Total: " << stats.total_gets() 
+              << " (Hits: " << stats.hits 
+              << ", Misses: " << stats.misses << ")" << std::endl;
+    std::cout << "[HitRate]  " << std::fixed << std::setprecision(2) 
+              << (stats.hit_rate() * 100.0) << "%" << std::endl;
+    
+    // 写入和删除统计
+    std::cout << "[Puts]     " << stats.puts << std::endl;
+    std::cout << "[Removes]  " << stats.removes << std::endl;
+    std::cout << "[Evictions] " << stats.evictions << std::endl;
+    std::cout << "[Expired]  " << stats.expired << std::endl;
+    
+    // 时间统计
+    std::cout << "[Uptime]   " << std::fixed << std::setprecision(1) 
+              << stats.uptime_seconds() << " seconds" << std::endl;
+    std::cout << "[AvgQPS]   " << std::fixed << std::setprecision(1) 
+              << stats.avg_qps() << " queries/sec" << std::endl;
+    
+    std::cout << "============================================================\n" << std::endl;
+}
+
+// ==================== 缓存失效接口实现 ====================
+
+void MysqlDao::InvalidateUserCacheMultiple(const std::vector<int>& uids)
+{
+    for (int uid : uids) {
+        userCache_.remove(uid);
+    }
+    std::cout << "[FlashCache] Invalidated " << uids.size() << " users from cache" << std::endl;
+}
+
+void MysqlDao::ClearUserCacheAll()
+{
+    auto stats = GetUserCacheStats();
+    size_t cleared_count = stats.current_size;
+    
+    // 清空所有缓存数据
+    userCache_.clear();
+    
+    std::cout << "[FlashCache] Cleared all " << cleared_count << " users from cache" << std::endl;
+}
+
+// ==================== 多机缓存同步实现 ====================
+
+void MysqlDao::StartCacheSync()
+{
+    if (cacheSync_) {
+        std::cout << "[FlashCache] Cache sync already started" << std::endl;
+        return;
+    }
+    
+    cacheSync_ = std::make_unique<CacheInvalidationSync>("cache:user:invalidation");
+    
+    // 设置回调函数
+    cacheSync_->SetInvalidateCallback([this](int uid) {
+        InvalidateUserCache(uid);
+    });
+    
+    cacheSync_->SetInvalidateBatchCallback([this](const std::vector<int>& uids) {
+        InvalidateUserCacheMultiple(uids);
+    });
+    
+    cacheSync_->SetClearAllCallback([this]() {
+        ClearUserCacheAll();
+    });
+    
+    if (cacheSync_->Start()) {
+        std::cout << "[FlashCache] Cache sync started, channel: " 
+                  << cacheSync_->GetChannel() << std::endl;
+    } else {
+        std::cout << "[FlashCache] Failed to start cache sync" << std::endl;
+        cacheSync_.reset();
+    }
+}
+
+void MysqlDao::StopCacheSync()
+{
+    if (cacheSync_) {
+        cacheSync_->Stop();
+        cacheSync_.reset();
+        std::cout << "[FlashCache] Cache sync stopped" << std::endl;
+    }
+}
+
+void MysqlDao::PublishCacheInvalidation(int uid)
+{
+    // 先失效本地缓存
+    InvalidateUserCache(uid);
+    
+    // 发布到 Redis，通知其他机器
+    if (cacheSync_) {
+        cacheSync_->PublishInvalidation(uid);
+    }
+}
+
+void MysqlDao::PublishCacheInvalidationBatch(const std::vector<int>& uids)
+{
+    // 先失效本地缓存
+    InvalidateUserCacheMultiple(uids);
+    
+    // 发布到 Redis，通知其他机器
+    if (cacheSync_) {
+        cacheSync_->PublishInvalidationBatch(uids);
+    }
+}
+
+void MysqlDao::PublishCacheClearAll()
+{
+    // 先清空本地缓存
+    ClearUserCacheAll();
+    
+    // 发布到 Redis，通知其他机器
+    if (cacheSync_) {
+        cacheSync_->PublishClearAll();
+    }
+}
+
+// ==================== 缓存预热实现 ====================
+
+MysqlDao::WarmupResult MysqlDao::WarmupCache(size_t limit)
+{
+    WarmupResult result;
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
+    std::cout << "[FlashCache] Starting cache warmup, limit: " << limit << std::endl;
+    
+    ConnectionGuard guard(pool_);
+    if (!guard) {
+        std::cout << "[FlashCache] Warmup failed: cannot get database connection" << std::endl;
+        return result;
+    }
+    
+    try {
+        sql::Connection* con = guard.get();
+        
+        // 查询最近活跃的用户（按 uid 降序，假设新用户更活跃）
+        // 实际项目中可以根据登录时间、活跃度等字段排序
+        std::unique_ptr<sql::PreparedStatement> pstmt(
+            con->prepareStatement(
+                "SELECT uid, name, email, nick, `desc`, sex, icon, pwd "
+                "FROM user ORDER BY uid DESC LIMIT ?"
+            )
+        );
+        pstmt->setInt(1, static_cast<int>(limit));
+        
+        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+        
+        while (res->next()) {
+            result.total_users++;
+            
+            try {
+                UserInfo user;
+                user.uid = res->getInt("uid");
+                user.name = res->getString("name");
+                user.email = res->getString("email");
+                user.nick = res->getString("nick");
+                user.desc = res->getString("desc");
+                user.sex = res->getInt("sex");
+                user.icon = res->getString("icon");
+                user.pwd = res->getString("pwd");
+                
+                // 写入缓存（TTL 5 分钟）
+                userCache_.put(user.uid, user, 300000);
+                result.loaded_users++;
+                
+                // 每 100 个用户输出一次进度
+                if (result.loaded_users % 100 == 0) {
+                    std::cout << "[FlashCache] Warmup progress: " 
+                              << result.loaded_users << "/" << result.total_users << std::endl;
+                }
+            }
+            catch (const std::exception& e) {
+                result.failed_users++;
+                std::cerr << "[FlashCache] Warmup error for user: " << e.what() << std::endl;
+            }
+        }
+    }
+    catch (sql::SQLException& e) {
+        guard.markBad();
+        std::cerr << "[FlashCache] Warmup SQL error: " << e.what() << std::endl;
+    }
+    
+    auto end_time = std::chrono::high_resolution_clock::now();
+    result.elapsed_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    
+    std::cout << "[FlashCache] Warmup completed!" << std::endl;
+    std::cout << "  - Total users: " << result.total_users << std::endl;
+    std::cout << "  - Loaded: " << result.loaded_users << std::endl;
+    std::cout << "  - Failed: " << result.failed_users << std::endl;
+    std::cout << "  - Success rate: " << std::fixed << std::setprecision(1) 
+              << result.success_rate() << "%" << std::endl;
+    std::cout << "  - Elapsed: " << std::fixed << std::setprecision(2) 
+              << result.elapsed_ms << " ms" << std::endl;
+    
+    return result;
+}
+
+MysqlDao::WarmupResult MysqlDao::WarmupCacheByUids(const std::vector<int>& uids)
+{
+    WarmupResult result;
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
+    if (uids.empty()) {
+        return result;
+    }
+    
+    std::cout << "[FlashCache] Starting warmup for " << uids.size() << " specific users" << std::endl;
+    
+    ConnectionGuard guard(pool_);
+    if (!guard) {
+        std::cout << "[FlashCache] Warmup failed: cannot get database connection" << std::endl;
+        return result;
+    }
+    
+    try {
+        sql::Connection* con = guard.get();
+        
+        // 构建 IN 查询
+        std::string placeholders;
+        for (size_t i = 0; i < uids.size(); ++i) {
+            if (i > 0) placeholders += ",";
+            placeholders += "?";
+        }
+        
+        std::string sql = "SELECT uid, name, email, nick, `desc`, sex, icon, pwd "
+                          "FROM user WHERE uid IN (" + placeholders + ")";
+        
+        std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement(sql));
+        
+        for (size_t i = 0; i < uids.size(); ++i) {
+            pstmt->setInt(static_cast<int>(i + 1), uids[i]);
+        }
+        
+        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+        result.total_users = uids.size();
+        
+        while (res->next()) {
+            try {
+                UserInfo user;
+                user.uid = res->getInt("uid");
+                user.name = res->getString("name");
+                user.email = res->getString("email");
+                user.nick = res->getString("nick");
+                user.desc = res->getString("desc");
+                user.sex = res->getInt("sex");
+                user.icon = res->getString("icon");
+                user.pwd = res->getString("pwd");
+                
+                userCache_.put(user.uid, user, 300000);
+                result.loaded_users++;
+            }
+            catch (const std::exception& e) {
+                result.failed_users++;
+            }
+        }
+        
+        // 未找到的用户也算失败
+        result.failed_users = result.total_users - result.loaded_users;
+    }
+    catch (sql::SQLException& e) {
+        guard.markBad();
+        std::cerr << "[FlashCache] Warmup SQL error: " << e.what() << std::endl;
+    }
+    
+    auto end_time = std::chrono::high_resolution_clock::now();
+    result.elapsed_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    
+    std::cout << "[FlashCache] Warmup by UIDs completed: " 
+              << result.loaded_users << "/" << result.total_users 
+              << " (" << std::fixed << std::setprecision(1) << result.success_rate() << "%)"
+              << " in " << std::fixed << std::setprecision(2) << result.elapsed_ms << " ms" << std::endl;
+    
+    return result;
+}
+
+void MysqlDao::WarmupCacheAsync(size_t limit)
+{
+    std::thread warmup_thread([this, limit]() {
+        WarmupCache(limit);
+    });
+    warmup_thread.detach();
+    
+    std::cout << "[FlashCache] Async warmup started in background thread" << std::endl;
 }

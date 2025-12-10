@@ -42,11 +42,17 @@ RedisMgr::RedisMgr()
     auto host = gCfgMgr["Redis"]["Host"];
     auto port = gCfgMgr["Redis"]["Port"];
     auto pwd = gCfgMgr["Redis"]["Passwd"];
+    
+    // 保存连接信息（用于 Pub/Sub）
+    host_ = host;
+    port_ = atoi(port.c_str());
+    pwd_ = pwd;
+    
     // 根据CPU核心数动态设置连接池大小
     size_t pool_size = std::max(16u, std::thread::hardware_concurrency() * 2);
     std::cout << "[RedisMgr] CPU cores: " << std::thread::hardware_concurrency() 
               << ", Redis pool size: " << pool_size << std::endl;
-    con_pool_.reset(new RedisConPool(pool_size, host.c_str(), atoi(port.c_str()), pwd.c_str()));
+    con_pool_.reset(new RedisConPool(pool_size, host.c_str(), port_, pwd.c_str()));
 }
 
 RedisMgr::~RedisMgr()
@@ -521,5 +527,35 @@ void RedisMgr::Close()
         // 如果你还没在 RedisConPool 中实现释放，请在 RedisConPool::Close/析构里释放 ctx
         con_pool_.reset();
     }
+}
+
+// ==================== Pub/Sub 支持 ====================
+
+bool RedisMgr::Publish(const std::string& channel, const std::string& message)
+{
+    auto connect = con_pool_->getConnection();
+    if (connect == nullptr) {
+        std::cout << "[RedisMgr::Publish] getConnection nullptr for channel=" << channel << std::endl;
+        return false;
+    }
+    RedisConnectionGuard guard(con_pool_.get(), connect);
+
+    redisReply* reply = (redisReply*)redisCommand(connect, "PUBLISH %s %s", 
+                                                   channel.c_str(), message.c_str());
+    if (reply == nullptr) {
+        std::cout << "[RedisMgr::Publish] redisCommand returned NULL for channel=" << channel << std::endl;
+        return false;
+    }
+
+    bool ok = (reply->type == REDIS_REPLY_INTEGER);
+    if (ok) {
+        std::cout << "[RedisMgr::Publish] Published to " << channel 
+                  << ", subscribers: " << reply->integer << std::endl;
+    } else {
+        std::cout << "[RedisMgr::Publish] Failed, reply type=" << reply->type << std::endl;
+    }
+    
+    freeReplyObject(reply);
+    return ok;
 }
 

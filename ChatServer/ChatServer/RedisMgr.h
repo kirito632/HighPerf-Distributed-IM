@@ -101,6 +101,24 @@ public:
     bool Del(const std::string& key);
     bool ExistsKey(const std::string& key);
     void Close();
+    
+    // ==================== Pub/Sub 支持 ====================
+    
+    /**
+     * @brief 发布消息到指定频道
+     * @param channel 频道名称
+     * @param message 消息内容
+     * @return 成功返回 true
+     */
+    bool Publish(const std::string& channel, const std::string& message);
+    
+    /**
+     * @brief 获取 Redis 连接信息（用于订阅者创建独立连接）
+     */
+    const char* GetHost() const { return host_.c_str(); }
+    int GetPort() const { return port_; }
+    const char* GetPassword() const { return pwd_.c_str(); }
+    
 private:
     RedisMgr();
 
@@ -108,6 +126,11 @@ private:
     //redisReply* _reply;
 
     std::unique_ptr<RedisConPool> con_pool_;
+    
+    // 连接信息（用于 Pub/Sub）
+    std::string host_;
+    int port_;
+    std::string pwd_;
 };
 
 
