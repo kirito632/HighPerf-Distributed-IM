@@ -60,18 +60,16 @@ CServer::~CServer()
 //   3. 从_sessions中删除会话
 void CServer::ClearSession(std::string session_id)
 {
-    // 如果会话存在，移除用户的session映射
-    if (_sessions.find(session_id) != _sessions.end()) {
+    //  修复：扩大锁范围，保证 查找+删除 是原子的，避免竞态条件
+    std::lock_guard<std::mutex> lock(_mutex);
+    
+    auto it = _sessions.find(session_id);
+    if (it != _sessions.end()) {
         // 移除用户的 session 映射
-        UserMgr::GetInstance()->RmvUserSession(_sessions[session_id]->GetUserId());
+        UserMgr::GetInstance()->RmvUserSession(it->second->GetUserId());
+        // 直接用迭代器删除更高效，避免二次查找
+        _sessions.erase(it);
     }
-
-    // 从_sessions中删除会话
-    {
-        std::lock_guard<std::mutex> lock(_mutex);
-        _sessions.erase(session_id);
-    }
-
 }
 
 // 开始异步接受连接
