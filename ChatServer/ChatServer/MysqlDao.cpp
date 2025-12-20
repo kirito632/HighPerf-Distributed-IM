@@ -246,28 +246,47 @@ bool MysqlDao::GetUser(int uid, UserInfo& userInfo)
     
     if (isLeader) {
         // ==================== Step 3: Leader 查询数据库 ====================
-        std::optional<UserInfo> result = LoadUserFromDB(uid);
         
-        // 如果查询成功，写入缓存（回填）
-        if (result) {
-            // TTL 5 分钟 = 300000 毫秒
-            userCache_.put(uid, *result, 300000);
+        // ✅ 修复：使用 ScopeGuard 确保异常安全
+        // 无论函数如何退出（return 或 throw），都会清理 inFlight_
+        auto cleanup_guard = [this, uid, promise](std::optional<UserInfo> result) {
+            // 设置 promise，唤醒所有等待的请求
+            try {
+                promise->set_value(result);
+            } catch (...) {
+                // 如果 set_value 失败，设置异常
+                promise->set_exception(std::current_exception());
+            }
+            
+            // 从 inFlight_ 中删除
+            {
+                std::lock_guard<std::mutex> lock(inFlightMutex_);
+                inFlight_.erase(uid);
+            }
+        };
+        
+        try {
+            std::optional<UserInfo> result = LoadUserFromDB(uid);
+            
+            // 如果查询成功，写入缓存（回填）
+            if (result) {
+                // TTL 5 分钟 = 300000 毫秒
+                userCache_.put(uid, *result, 300000);
+            }
+            
+            // 执行清理并设置结果
+            cleanup_guard(result);
+            
+            if (result) {
+                userInfo = *result;
+                return true;
+            }
+            return false;
+        } catch (...) {
+            // 异常情况下也要执行清理
+            cleanup_guard(std::nullopt);
+            throw;  // 重新抛出异常
         }
-        
-        // 设置 promise，唤醒所有等待的请求
-        promise->set_value(result);
-        
-        // 从 inFlight_ 中删除
-        {
-            std::lock_guard<std::mutex> lock(inFlightMutex_);
-            inFlight_.erase(uid);
-        }
-        
-        if (result) {
-            userInfo = *result;
-            return true;
-        }
-        return false;
     } else {
         // ==================== Step 4: Follower 等待结果 ====================
         try {
