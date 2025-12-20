@@ -49,8 +49,23 @@ std::shared_ptr<CSession>CSession::SharedSelf() {
 void CSession::Send(std::string msg, short msgid) {
 	std::lock_guard<std::mutex> lock(_send_lock);
 	int send_que_size = _send_que.size();
+	
+	// ✅ 修复：增强的发送队列流控
 	if (send_que_size > MAX_SENDQUE) {
 		std::cout << "session: " << _session_id << " send que fulled, size is " << MAX_SENDQUE << std::endl;
+		
+		// P2级修复：踢掉慢消费者，而不是简单丢包
+		// 在高并发IM系统中，保护服务器内存比保护单条消息更重要
+		std::cout << "[FlowControl] Slow consumer detected for session " << _session_id 
+		          << ", uid=" << _user_uid << ". Closing connection to prevent memory exhaustion." << std::endl;
+		
+		// 异步关闭连接，让客户端重连
+		// 这比静默丢包更好，客户端能感知到问题并重连
+		auto self = SharedSelf();
+		boost::asio::post(_socket.get_executor(), [self]() {
+			self->Close();
+			self->_server->ClearSession(self->_session_id);
+		});
 		return;
 	}
 
@@ -89,8 +104,19 @@ void CSession::Send(std::string msg, short msgid) {
 void CSession::Send(char* msg, short max_length, short msgid) {
 	std::lock_guard<std::mutex> lock(_send_lock);
 	int send_que_size = _send_que.size();
+	
+	// ✅ 修复：增强的发送队列流控（与上面的Send方法保持一致）
 	if (send_que_size > MAX_SENDQUE) {
 		std::cout << "session: " << _session_id << " send que fulled, size is " << MAX_SENDQUE << std::endl;
+		
+		std::cout << "[FlowControl] Slow consumer detected for session " << _session_id 
+		          << ", uid=" << _user_uid << ". Closing connection to prevent memory exhaustion." << std::endl;
+		
+		auto self = SharedSelf();
+		boost::asio::post(_socket.get_executor(), [self]() {
+			self->Close();
+			self->_server->ClearSession(self->_session_id);
+		});
 		return;
 	}
 
@@ -155,21 +181,42 @@ void CSession::AsyncReadHead(int total_len)
 			//网络字节序转化为本地字节序
 			msg_id = boost::asio::detail::socket_ops::network_to_host_short(msg_id);
 			std::cout << "msg_id is " << msg_id << std::endl;
-			//id非法
-			if (msg_id > MAX_LENGTH) {
-				std::cout << "invalid msg_id is " << msg_id << std::endl;
+			
+			// ✅ 修复：严格的消息ID验证
+			// 检查消息ID是否在合法范围内（避免负数和过大值）
+			if (msg_id < 0 || msg_id > MAX_LENGTH) {
+				std::cout << "invalid msg_id is " << msg_id << " (must be 0-" << MAX_LENGTH << ")" << std::endl;
+				Close();
 				_server->ClearSession(_session_id);
 				return;
 			}
+			
 			short msg_len = 0;
 			memcpy(&msg_len, _recv_head_node->_data + HEAD_ID_LEN, HEAD_DATA_LEN);
 			//网络字节序转化为本地字节序
 			msg_len = boost::asio::detail::socket_ops::network_to_host_short(msg_len);
 			std::cout << "msg_len is " << msg_len << std::endl;
 
-			//id非法
+			// ✅ 修复：严格的消息长度验证
+			// 1. 检查负数（防止整数溢出攻击）
+			// 2. 检查最大长度（防止内存耗尽攻击）
+			// 3. 添加合理的最大包体限制（10MB）
+			const int MAX_PACKAGE_SIZE = 10 * 1024 * 1024;  // 10MB
+			if (msg_len < 0) {
+				std::cout << "invalid negative msg_len: " << msg_len << std::endl;
+				Close();
+				_server->ClearSession(_session_id);
+				return;
+			}
 			if (msg_len > MAX_LENGTH) {
-				std::cout << "invalid data length is " << msg_len << std::endl;
+				std::cout << "msg_len too large: " << msg_len << " (max: " << MAX_LENGTH << ")" << std::endl;
+				Close();
+				_server->ClearSession(_session_id);
+				return;
+			}
+			if (msg_len > MAX_PACKAGE_SIZE) {
+				std::cout << "potential DoS attack: msg_len=" << msg_len << " exceeds " << MAX_PACKAGE_SIZE << " bytes" << std::endl;
+				Close();
 				_server->ClearSession(_session_id);
 				return;
 			}
