@@ -266,16 +266,12 @@ void LogicSystem::GetOfflineMsgHandler(std::shared_ptr<CSession> session, const 
 	std::cout << "[OfflineMsg] recv get offline msg req, uid=" << uid << std::endl;
 
 	std::string offline_key = OFFLINE_MSG_PREFIX + std::to_string(uid);
-	std::vector<std::string> messages;
-	RedisMgr::GetInstance()->GetAllList(offline_key, messages);
-
-	std::cout << "[OfflineMsg] get " << messages.size() << " offline messages for uid=" << uid << std::endl;
 
 	// 使用 weak_ptr 防止回调时 session 已销毁
 	std::weak_ptr<CSession> weak_sess = session;
 
 	// 投递异步任务到 DB 线程池
-	AsyncDBPool::GetInstance()->PostTask([uid, weak_sess]() {
+	AsyncDBPool::GetInstance()->PostTask([uid, offline_key, weak_sess]() {
 		// 在 DB 线程中执行
 		std::shared_ptr<CSession> shared_sess = weak_sess.lock();
 		if (!shared_sess) {
@@ -295,6 +291,12 @@ void LogicSystem::GetOfflineMsgHandler(std::shared_ptr<CSession> session, const 
 			for (const auto& payload : db_payloads) {
 				shared_sess->Send(payload, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
 			}
+
+			// 消息已从 MySQL 下发，清理 Redis 缓存 key，避免无限堆积
+			// 注意：真正的"已读"由客户端 ACK（OfflineMsgAckHandler）驱动，
+			// 这里只是清理加速缓存，不影响消息可靠性
+			RedisMgr::GetInstance()->Del(offline_key);
+			std::cout << "[OfflineMsg][Async] cleared redis cache key=" << offline_key << std::endl;
 		}
 	});
 }

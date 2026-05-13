@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gate-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gate-server
+  template:
+    metadata:
+      labels:
+        app: gate-server
+    spec:
+      containers:
+        - name: gate-server
+          image: im-gate-server:v1
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: im-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gate-server
+spec:
+  selector:
+    app: gate-server
+  ports:
+    - port: 8080
+      targetPort: 8080
+  type: NodePort   # 允许从集群外访问

@@ -27,7 +27,7 @@ std::atomic<bool> bstop = false;
 std::condition_variable cond_quit;
 std::mutex mutex_quit;
 
-// ✅ 修复：RAII Redis连接管理类，防止内存泄漏
+//  修复：RAII Redis连接管理类，防止内存泄漏
 class RedisConnectionGuard {
 private:
     redisContext* ctx_;
@@ -175,7 +175,7 @@ int main()
             catch (...) {}
 
             while (!bstop.load()) {
-                // ✅ 修复：使用RAII管理Redis连接，防止异常时内存泄漏
+                //  修复：使用RAII管理Redis连接，防止异常时内存泄漏
                 RedisConnectionGuard redis_guard(host.c_str(), port);
                 if (!redis_guard) {
                     std::cout << "[FriendNotify][Chat][Redis] connect failed host=" << host << ":" << port << std::endl;
@@ -190,7 +190,7 @@ int main()
                     if (!auth || auth->type == REDIS_REPLY_ERROR) {
                         std::cout << "[FriendNotify][Chat][Redis] AUTH failed" << std::endl;
                         if (auth) freeReplyObject(auth);
-                        // ✅ 修复：移除手动redisFree，由RAII自动管理
+                        //  修复：移除手动redisFree，由RAII自动管理
                         std::this_thread::sleep_for(std::chrono::seconds(2));
                         continue;
                     }
@@ -215,7 +215,7 @@ int main()
                 redisReply* sub = (redisReply*)redisCommand(ctx, "SUBSCRIBE friend.apply friend.reply");
                 if (!sub) {
                     std::cout << "[FriendNotify][Chat][Redis] SUBSCRIBE send failed" << std::endl;
-                    // ✅ 修复：移除手动redisFree，由RAII自动管理
+                    //  修复：移除手动redisFree，由RAII自动管理
                     std::this_thread::sleep_for(std::chrono::seconds(2));
                     continue;
                 }
@@ -331,7 +331,7 @@ int main()
                     }
                 }
 
-                // ✅ 修复：移除手动redisFree，由RAII自动管理（RedisConnectionGuard析构时自动释放）
+                //  修复：移除手动redisFree，由RAII自动管理（RedisConnectionGuard析构时自动释放）
                 if (!bstop.load()) {
                     std::this_thread::sleep_for(std::chrono::seconds(2));
                 }

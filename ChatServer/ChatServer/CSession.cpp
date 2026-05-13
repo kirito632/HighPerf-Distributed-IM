@@ -50,11 +50,11 @@ void CSession::Send(std::string msg, short msgid) {
 	std::lock_guard<std::mutex> lock(_send_lock);
 	int send_que_size = _send_que.size();
 	
-	// ✅ 修复：增强的发送队列流控
+	//  修复：增强的发送队列流控
 	if (send_que_size > MAX_SENDQUE) {
 		std::cout << "session: " << _session_id << " send que fulled, size is " << MAX_SENDQUE << std::endl;
 		
-		// P2级修复：踢掉慢消费者，而不是简单丢包
+		// 修复：踢掉慢消费者，而不是简单丢包
 		// 在高并发IM系统中，保护服务器内存比保护单条消息更重要
 		std::cout << "[FlowControl] Slow consumer detected for session " << _session_id 
 		          << ", uid=" << _user_uid << ". Closing connection to prevent memory exhaustion." << std::endl;
@@ -105,7 +105,7 @@ void CSession::Send(char* msg, short max_length, short msgid) {
 	std::lock_guard<std::mutex> lock(_send_lock);
 	int send_que_size = _send_que.size();
 	
-	// ✅ 修复：增强的发送队列流控（与上面的Send方法保持一致）
+	//  修复：增强的发送队列流控（与上面的Send方法保持一致）
 	if (send_que_size > MAX_SENDQUE) {
 		std::cout << "session: " << _session_id << " send que fulled, size is " << MAX_SENDQUE << std::endl;
 		
@@ -182,7 +182,7 @@ void CSession::AsyncReadHead(int total_len)
 			msg_id = boost::asio::detail::socket_ops::network_to_host_short(msg_id);
 			std::cout << "msg_id is " << msg_id << std::endl;
 			
-			// ✅ 修复：严格的消息ID验证
+			//  修复：严格的消息ID验证
 			// 检查消息ID是否在合法范围内（避免负数和过大值）
 			if (msg_id < 0 || msg_id > MAX_LENGTH) {
 				std::cout << "invalid msg_id is " << msg_id << " (must be 0-" << MAX_LENGTH << ")" << std::endl;
@@ -197,7 +197,7 @@ void CSession::AsyncReadHead(int total_len)
 			msg_len = boost::asio::detail::socket_ops::network_to_host_short(msg_len);
 			std::cout << "msg_len is " << msg_len << std::endl;
 
-			// ✅ 修复：严格的消息长度验证
+			//  修复：严格的消息长度验证
 			// 1. 检查负数（防止整数溢出攻击）
 			// 2. 检查最大长度（防止内存耗尽攻击）
 			// 3. 添加合理的最大包体限制（10MB）

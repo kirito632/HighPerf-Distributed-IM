@@ -16,16 +16,16 @@ public:
 
             auto reply = (redisReply*)redisCommand(context, "AUTH %s", pwd);
             if (reply->type == REDIS_REPLY_ERROR) {
-                std::cout << "??????" << std::endl;
-                //??г?? ???redisCommand??к????redisReply?????????
+                std::cout << "认证失败" << std::endl;
+                // 认证失败，执行 redisCommand 会返回 redisReply 错误回复
                 redisFree(context);
                 freeReplyObject(reply);
                 continue;
             }
 
-            //??г?? ???redisCommand??к????redisReply?????????
+            // 认证成功，执行 redisCommand 成功返回 redisReply
             freeReplyObject(reply);
-            std::cout << "??????" << std::endl;
+            std::cout << "认证成功" << std::endl;
             connections_.push(context);
         }
 
@@ -46,7 +46,7 @@ public:
             }
             return !connections_.empty();
             });
-        //?????????????????
+        // 如果连接池已停止则返回空
         if (b_stop_) {
             return  nullptr;
         }

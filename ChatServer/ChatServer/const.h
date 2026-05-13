@@ -14,7 +14,7 @@
 #include<boost/filesystem.hpp>
 #include<boost/property_tree/ptree.hpp>
 #include<boost/property_tree/ini_parser.hpp>
-#include <hiredis/hiredis.h> // �޸�Ϊ��ȷ��·�� 
+#include <hiredis/hiredis.h> 
 #include<cassert>
 #include<atomic>
 #include<queue>
@@ -26,11 +26,11 @@ using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
 enum ErrorCodes {
     Success = 0,
-    Error_Json = 1001,           // json��������
-    RPCFailed = 1002,           // RPC�������
-    VerifyExpired = 1003,       // ��֤���ѹ���
-    VerifyCodeErr = 1004,         // ��֤�����
-    UserExist = 1005,       // �û��Ѵ���
+    Error_Json = 1001,           // json解析错误
+    RPCFailed = 1002,           // RPC请求错误
+    VerifyExpired = 1003,       // 验证码已过期
+    VerifyCodeErr = 1004,         // 验证码错误
+    UserExist = 1005,       // 用户已存在
     PasswdErr = 1006,
     EmailNotMatch = 1007,
     PasswdUpFailed = 1008,
@@ -38,7 +38,7 @@ enum ErrorCodes {
     RPCGetFailed = 1010,
     UidInvalid = 1011,
     TokenInvalid = 1012,
-    RecipientOffline = 1020       // ��Ϣ���շ�����
+    RecipientOffline = 1020       // 消息接收方离线
 };
 
 enum MSG_IDS {
@@ -64,7 +64,7 @@ enum MSG_IDS {
 
 class Defer {
 public:
-    // ����һ��lambda����ʽ����ָ��
+    // 接受一个lambda表达式或函数指针
     Defer(std::function<void()> func) :func_(func) {}
 
     ~Defer() {

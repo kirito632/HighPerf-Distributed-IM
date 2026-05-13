@@ -6,29 +6,29 @@
 #include <stdexcept>
 #include <vector>
 
-// hiredis header (���������Ŀ include ·������)
+// hiredis 头文件（需要在项目中包含 include 路径）
 #include <hiredis/hiredis.h>
 
 namespace {
-    // С�ĸ�����������ȫ�ذ� reply->str ������ std::string����ֹ reply==nullptr��
+    // 工具函数：安全地将 reply->str 转换为 std::string，防止 reply==nullptr
     static std::string replyToString(redisReply* reply) {
         if (!reply || reply->type != REDIS_REPLY_STRING) return {};
         return std::string(reply->str, reply->len);
     }
 } // namespace
 
-// RAII guard��ȷ��ȡ�������ӻ�������ʱ�黹������
+// RAII guard 确保获取的连接在作用域结束时归还到连接池
 class RedisConnectionGuard {
 public:
     RedisConnectionGuard(RedisConPool* pool, redisContext* ctx) : pool_(pool), ctx_(ctx) {}
     ~RedisConnectionGuard() {
         if (pool_ && ctx_) {
             pool_->returnConnection(ctx_);
-            // ���� ctx_ Ϊ nullptr����Ϊ�����󲻻�����
+            // 不将 ctx_ 设为 nullptr，因为连接已归还
         }
     }
     redisContext* get() const { return ctx_; }
-    // ��ֹ����
+
     RedisConnectionGuard(const RedisConnectionGuard&) = delete;
     RedisConnectionGuard& operator=(const RedisConnectionGuard&) = delete;
 private:
@@ -36,7 +36,6 @@ private:
     redisContext* ctx_;
 };
 
-// RedisMgr ����������
 RedisMgr::RedisMgr()
 {
     auto& gCfgMgr = ConfigMgr::Inst();
@@ -144,8 +143,8 @@ bool RedisMgr::Auth(const std::string& password)
     }
     freeReplyObject(reply);
 
-    if (ok) std::cout << "��֤�ɹ�" << std::endl;
-    else std::cout << "��֤ʧ��" << std::endl;
+    if (ok) std::cout << "认证成功" << std::endl;
+    else std::cout << "认证失败" << std::endl;
     return ok;
 }
 
@@ -337,24 +336,24 @@ bool RedisMgr::HDel(const std::string& key, const std::string& field)
         std::cout << "[RedisMgr::HDel] getConnection returned nullptr for key=" << key << " field=" << field << std::endl;
         return false;
     }
-    // RAII: ȷ�����ӻᱻ�黹�����ӳ�
+    // RAII: 确保连接会被归还到连接池
     RedisConnectionGuard guard(con_pool_.get(), connect);
 
-    // ִ�� HDEL ����
+    // 执行 HDEL 命令
     redisReply* reply = (redisReply*)redisCommand(connect, "HDEL %s %s", key.c_str(), field.c_str());
     if (reply == nullptr) {
         std::cout << "Execut command [ HDEL " << key << " " << field << " ] failure (reply==NULL)!\n";
         return false;
     }
 
-    // HDEL ������������ʾ��ɾ�����ֶ�����
+    // HDEL 返回整数表示删除的字段数量
     bool ok = false;
     if (reply->type == REDIS_REPLY_INTEGER) {
         if (reply->integer > 0) {
-            ok = true; // ���ֶα�ɾ��
+            ok = true; // 字段被删除
         }
         else {
-            ok = false; // �ֶβ����ڻ�δɾ��
+            ok = false; // 字段不存在或未删除
         }
     }
     else {
@@ -475,9 +474,8 @@ void RedisMgr::Close()
 {
     if (con_pool_) {
         con_pool_->Close();
-        // ע�⣺RedisConPool::Close() Ӧ���ͷ����� redisContext��redisFree��
-        // ����㻹û�� RedisConPool ��ʵ���ͷţ����� RedisConPool::Close/�������ͷ� ctx
+        // 注意：RedisConPool::Close() 应该释放所有 redisContext（redisFree）
+        // 如果还没有 RedisConPool 的实现释放，应在 RedisConPool::Close/析构函数中释放 ctx
         con_pool_.reset();
     }
 }
-

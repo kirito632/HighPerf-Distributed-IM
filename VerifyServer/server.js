@@ -136,7 +136,8 @@ function main() {
     server.addService(message_proto.VerifyService.service, { GetVerifyCode: GetVerifyCode })
     
     // 绑定端口并启动
-    server.bindAsync('127.0.0.1:50051', grpc.ServerCredentials.createInsecure(), () => {
+    // 0.0.0.0 允许容器外访问，127.0.0.1 只允许本机访问
+    server.bindAsync('0.0.0.0:50051', grpc.ServerCredentials.createInsecure(), () => {
         server.start()
         console.log('grpc server started')
     })

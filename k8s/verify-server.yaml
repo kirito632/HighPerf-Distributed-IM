@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: verify-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: verify-server
+  template:
+    metadata:
+      labels:
+        app: verify-server
+    spec:
+      containers:
+        - name: verify-server
+          image: im-verify-server:v1
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 50051
+          envFrom:
+            - configMapRef:
+                name: im-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: verify-server
+spec:
+  selector:
+    app: verify-server
+  ports:
+    - port: 50051
+      targetPort: 50051

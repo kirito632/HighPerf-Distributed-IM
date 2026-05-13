@@ -1,0 +1,118 @@
+version: "3.9"
+
+services:
+  # ── 基础设施 ──────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: chat_system
+      MYSQL_USER: chatuser
+      MYSQL_PASSWORD: "123456"
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass 123456 --port 6380
+    ports:
+      - "6381:6380"   # 宿主机 6381 避免与本机 Redis 冲突
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6380", "-a", "123456", "ping"]
+      interval: 10s
+      retries: 5
+
+  # ── 应用服务（按依赖顺序启动）────────────────────────
+  verify-server:
+    build:
+      context: VerifyServer
+      dockerfile: Dockerfile
+    ports:
+      - "50051:50051"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6380
+      - REDIS_PASS=123456
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  status-server:
+    build:
+      context: .
+      dockerfile: StatusServer/Dockerfile
+    ports:
+      - "50052:50052"
+    environment:
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=chatuser
+      - MYSQL_PASS=123456
+      - REDIS_HOST=redis
+      - REDIS_PORT=6380
+      - REDIS_PASS=123456
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  chat-server:
+    build:
+      context: .
+      dockerfile: ChatServer/Dockerfile
+    ports:
+      - "8090:8090"
+      - "50055:50055"
+    environment:
+      - MYSQL_HOST=mysql
+      - REDIS_HOST=redis
+      - REDIS_PORT=6380
+      - REDIS_PASS=123456
+      - STATUS_HOST=status-server
+      - STATUS_PORT=50052
+      - SELF_HOST=chat-server
+      - SELF_PORT=8090
+      - SELF_RPC_PORT=50055
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      status-server:
+        condition: service_started
+
+  gate-server:
+    build:
+      context: .
+      dockerfile: GateServer/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - MYSQL_HOST=mysql
+      - REDIS_HOST=redis
+      - REDIS_PORT=6380
+      - REDIS_PASS=123456
+      - VERIFY_HOST=verify-server
+      - VERIFY_PORT=50051
+      - STATUS_HOST=status-server
+      - STATUS_PORT=50052
+    depends_on:
+      verify-server:
+        condition: service_started
+      status-server:
+        condition: service_started
+      chat-server:
+        condition: service_started
+
+volumes:
+  mysql_data:
+  redis_data:

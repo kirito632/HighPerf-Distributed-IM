@@ -8,7 +8,7 @@ _works(size), _nextIOService(0) {
         std::cout << "AsioIOServicePool: created work for io[" << i << "]\n";
     }
 
-    //�������ioservice����������̣߳�ÿ���߳��ڲ�����ioservice
+    // 遍历多个ioservice，创建多个线程，每个线程对应一个ioservice
     for (std::size_t i = 0; i < _ioServices.size(); ++i) {
         _threads.emplace_back([this, i]() {
             std::cout << "thread " << i << " start run()\n";
@@ -27,6 +27,7 @@ AsioIOServicePool::~AsioIOServicePool() {
 boost::asio::io_context& AsioIOServicePool::GetIOService() {
     auto idx = _nextIOService;
     auto& service = _ioServices[_nextIOService++];
+    // 遍历多个ioservice，创建多个线程，每个线程对应一个ioservices[_nextIOService++];
     if (_nextIOService == _ioServices.size()) {
         _nextIOService = 0;
     }
@@ -35,11 +36,11 @@ boost::asio::io_context& AsioIOServicePool::GetIOService() {
 }
 
 void AsioIOServicePool::Stop() {
-    //��Ϊ����ִ��work.reset��������iocontext��run��״̬���˳�
-    //��iocontext�Ѿ����˶���д�ļ����¼��󣬻���Ҫ�ֶ�stop�÷���
+    // 因为如果不调用work.reset，那么iocontext的run方法就会一直阻塞
+    // 但是iocontext已经运行了，需要显式调用stop来停止iocontext
     std::cout << "AsioIOServicePool::Stop() called\n";
     for (auto& work : _works) {
-        //�ѷ�����ֹͣ
+        // 获取io_context
         auto& io_context = boost::asio::query(
             work->get_executor(),
             boost::asio::execution::context

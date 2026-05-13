@@ -41,3 +41,7 @@ endif()
 if(WIN32)
     target_link_libraries(chat_server PRIVATE ws2_32)
 endif()
+
+# curl (used by AIAgentIntegration)
+find_package(CURL REQUIRED)
+target_link_libraries(chat_server PRIVATE CURL::libcurl)

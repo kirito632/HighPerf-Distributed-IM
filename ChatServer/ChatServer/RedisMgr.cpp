@@ -518,7 +518,7 @@ void RedisMgr::Close()
     if (con_pool_) {
         con_pool_->Close();
         // 注意：RedisConPool::Close() 应该释放所有 redisContext（redisFree）
-        // 如果你还没在 RedisConPool 中实现释放，请在 RedisConPool::Close/析构里释放 ctx
+        // 如果还没在 RedisConPool 中实现释放，请在 RedisConPool::Close/析构里释放 ctx
         con_pool_.reset();
     }
 }

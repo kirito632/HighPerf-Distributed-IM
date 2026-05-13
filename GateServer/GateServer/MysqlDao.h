@@ -11,7 +11,6 @@
 #include <vector>
 #include <string>
 
-// ����ԭ������Ŀͷ
 #include "const.h"
 #include "data.h"
 
@@ -19,17 +18,17 @@
 class MySqlPool {
 public:
     MySqlPool();
-    // Init ���� url������ "tcp://127.0.0.1:3306"
+    // Init 连接 url，格式为 "tcp://127.0.0.1:3306"
     void Init(const std::string& url,
         const std::string& user,
         const std::string& pass,
         const std::string& schema,
         int poolSize);
 
-    // �ӳ�����ȡһ�����ӣ����û�У��������ȴ���
+    // 获取数据库连接
     std::unique_ptr<sql::Connection> getConnection();
 
-    // ��������ӷŻس���
+    // 归还数据库连接
     void returnConnection(std::unique_ptr<sql::Connection> con);
 
     void Close();
@@ -63,11 +62,11 @@ public:
     bool CheckEmail(const std::string& name, const std::string& email);
     bool UpdatePwd(const std::string& name, const std::string& newpwd);
     bool CheckPwd(const std::string& email, const std::string& pwd, UserInfo& userInfo);
-    // ��������������������루���ϲ�ӿ�ƥ�䣩
+    // 根据邮箱更新密码
     bool UpdatePwdByEmail(const std::string& email, const std::string& newpwdPlain);
 
-    // ������������/������ؽӿ��������� ChatServer ���룩
-    // �����˵����Ϊ֧�� /search_friends �Ƚӿڣ����� DAO �㷽��
+    // 好友相关接口/好友管理接口（主要供 ChatServer 调用）
+    // 说明：为了支持 /search_friends 等接口，添加 DAO 层方法
     std::vector<UserInfo> SearchUsers(const std::string& keyword);
     bool AddFriendRequest(int fromUid, int toUid, const std::string& desc);
     std::vector<ApplyInfo> GetFriendRequests(int uid);

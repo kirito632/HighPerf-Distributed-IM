@@ -16,7 +16,6 @@ public:
 
     std::shared_ptr<UserInfo> GetUserByName(const std::string& name);
 
-    // ������ع���
     std::vector<ApplyInfo> GetFriendRequests(int uid);
     bool ReplyFriendRequest(int fromUid, int toUid, bool agree);
     std::vector<UserInfo> GetMyFriends(int uid);

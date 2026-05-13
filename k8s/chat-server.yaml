@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat-server
+  template:
+    metadata:
+      labels:
+        app: chat-server
+    spec:
+      containers:
+        - name: chat-server
+          image: im-chat-server:v2
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8090
+            - containerPort: 50055
+          envFrom:
+            - configMapRef:
+                name: im-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-server
+spec:
+  selector:
+    app: chat-server
+  ports:
+    - name: tcp
+      port: 8090
+      targetPort: 8090
+    - name: grpc
+      port: 50055
+      targetPort: 50055

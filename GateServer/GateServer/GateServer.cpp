@@ -12,27 +12,27 @@
 #include<csignal>
 class MysqlPool;
 
-// ���ڹ���ȫ��Ψһ��MySQL���ӳ�
-// ʹ�õ���ģʽȷ����������ֻ��һ��MySQL���ӳ�ʵ��
+// 用于管理全局唯一的MySQL连接池
+// 使用单例模式确保整个程序只有一个MySQL连接池实例
 using MySqlPoolSingleton = Singleton<MySqlPool>;
 
-// ����Redis���Ӻͻ�������
+// 测试Redis连接和基本操作
 // 
-// ���ã�
-//   ����Redis���ݿ�����ӡ���֤�����������ȹ���
+// 功能：
+//   测试Redis数据库的连接、认证和基本操作管理
 // 
-// ʵ���߼���
-//   1. ���ӵ�����Redis���������˿�6380��
-//   2. ����������֤������: 123456��
-//   3. ִ�л���������SET��GET��STRLEN����
-//   4. �ͷ�������Դ
+// 实现逻辑：
+//   1. 连接到本地Redis服务器，端口6380
+//   2. 使用密码进行认证，密码: 123456
+//   3. 执行基本命令如SET、GET、STRLEN等
+//   4. 释放连接资源
 // 
-// ע�⣺
-//   ��Ҫ����Redis���������ܽ�������
-//   RedisĬ�϶˿�Ϊ6379������ʹ�õ���6380
+// 注意：
+//   需要确保Redis服务器已启动才能进行测试
+//   Redis默认端口为6379，此处使用的是6380
 void TestRedis() {
-    // ����Redis��������Ĭ�϶˿ڿ��ܲ�ͬ����Ҫ������ã�
-    // RedisĬ�ϼ����˿�Ϊ6387�������������ļ����޸�
+    // 连接Redis服务器，默认端口可能不同，需要根据情况修改
+    // Redis默认监听端口为6387，请根据配置文件进行修改
     redisContext* c = redisConnect("127.0.0.1", 6380);
     if (c->err)
     {
@@ -42,23 +42,23 @@ void TestRedis() {
     }
     printf("Connect to redisServer Success\n");
 
-    // ����Redis������֤
+    // 进行Redis服务器认证
     std::string redis_password = "123456";
     redisReply* r = (redisReply*)redisCommand(c, "AUTH %s", redis_password.c_str());
     if (r->type == REDIS_REPLY_ERROR) {
-        printf("Redis��֤ʧ�ܣ�\n");
+        printf("Redis认证失败\n");
     }
     else {
-        printf("Redis��֤�ɹ���\n");
+        printf("Redis认证成功\n");
     }
 
-    // ����SET���ΪRedis����key-value
+    // 发送SET命令：为Redis设置key-value
     const char* command1 = "set stest1 value1";
 
-    // ִ��redis������
+    // 执行redis命令并获取结果
     r = (redisReply*)redisCommand(c, command1);
 
-    // �������NULL��˵��ִ��ʧ��
+    // 如果结果为NULL，说明执行失败
     if (NULL == r)
     {
         printf("Execut command1 failure\n");
@@ -66,7 +66,7 @@ void TestRedis() {
         return;
     }
 
-    // ���ִ��ʧ�����ͷ�����
+    // 如果执行失败，释放连接并返回
     if (!(r->type == REDIS_REPLY_STATUS && (strcmp(r->str, "OK") == 0 || strcmp(r->str, "ok") == 0)))
     {
         printf("Failed to execute command[%s]\n", command1);
@@ -75,15 +75,15 @@ void TestRedis() {
         return;
     }
 
-    // ִ�гɹ����ͷ�redisCommandִ�к󷵻ص�redisReply��ռ�õ��ڴ�
+    // 执行成功后，释放redisCommand执行后返回的redisReply所占用的内存
     freeReplyObject(r);
     printf("Succeed to execute command[%s]\n", command1);
 
-    // ����STRLEN�����ȡ�ַ�������
+    // 发送STRLEN命令：获取字符串长度
     const char* command2 = "strlen stest1";
     r = (redisReply*)redisCommand(c, command2);
 
-    // ����������Ͳ����������ͷ�����
+    // 如果返回类型不是整数类型，释放资源并返回
     if (r->type != REDIS_REPLY_INTEGER)
     {
         printf("Failed to execute command[%s]\n", command2);
@@ -92,13 +92,13 @@ void TestRedis() {
         return;
     }
 
-    // ��ȡ�ַ�������
+    // 获取字符串长度
     int length = r->integer;
     freeReplyObject(r);
     printf("The length of 'stest1' is %d.\n", length);
     printf("Succeed to execute command[%s]\n", command2);
 
-    // ����GET�����ȡredis��ֵ����Ϣ
+    // 发送GET命令：获取redis的值信息
     const char* command3 = "get stest1";
     r = (redisReply*)redisCommand(c, command3);
     if (r->type != REDIS_REPLY_STRING)
@@ -112,7 +112,7 @@ void TestRedis() {
     freeReplyObject(r);
     printf("Succeed to execute command[%s]\n", command3);
 
-    // ���Ի�ȡ�����ڵ�key
+    // 测试获取不存在的key
     const char* command4 = "get stest2";
     r = (redisReply*)redisCommand(c, command4);
     if (r->type != REDIS_REPLY_NIL)
@@ -125,26 +125,26 @@ void TestRedis() {
     freeReplyObject(r);
     printf("Succeed to execute command[%s]\n", command4);
 
-    // �ͷ�������Դ
+    // 释放连接资源
     redisFree(c);
 
 }
 
-// ����Redis����������
+// 测试Redis管理器功能
 // 
-// ���ã�
-//   ����RedisMgr��װ�ĸ߲�Redis�����ӿ�
+// 功能：
+//   测试RedisMgr封装的高级Redis操作接口
 // 
-// ʵ���߼���
-//   �������¹��ܣ�
-//   1. Set/Get - �򵥵�key-value����
-//   2. HSet/HGet - Hash������
-//   3. ExistsKey - ���key�Ƿ����
-//   4. Del - ɾ��key
-//   5. LPush/RPop/LPop - �б����������У�
+// 实现逻辑：
+//   测试以下功能：
+//   1. Set/Get - 简单的key-value操作
+//   2. HSet/HGet - Hash表操作
+//   3. ExistsKey - 检查key是否存在
+//   4. Del - 删除key
+//   5. LPush/RPop/LPop - 列表操作（右出队）
 // 
-// ע�⣺
-//   ʹ�ö���ȷ��ÿ���������ɹ�ִ��
+// 注意：
+//   使用断言确保每个操作都成功执行
 void TestRedisMgr() {
 
     assert(RedisMgr::GetInstance()->Set("blogwebsite", "llfc.club"));
@@ -167,32 +167,32 @@ void TestRedisMgr() {
 
 }
 
-// ���������������
+// 网关服务器主函数
 // 
-// ���ã�
-//   1. ��ʼ��MySQL���ӳ�
-//   2. ����HTTP��������GateServer��
+// 功能：
+//   1. 初始化MySQL连接池
+//   2. 启动HTTP监听服务器(GateServer)
 // 
-// ʵ���߼���
-//   1. �������ļ���ȡMySQL������Ϣ
-//   2. ��ʼ��MySQL���ӳأ�10�����ӣ�
-//   3. �������ļ���ȡGateServer�˿�
-//   4. ����io_context���źŴ�����������SIGINT��SIGTERM��
-//   5. ����HTTP������������
-//   6. �����¼�ѭ��
+// 实现逻辑：
+//   1. 从配置文件读取MySQL连接信息
+//   2. 初始化MySQL连接池（10个连接）
+//   3. 从配置文件读取GateServer端口
+//   4. 创建io_context和信号处理器（处理SIGINT、SIGTERM）
+//   5. 创建HTTP监听服务器
+//   6. 进入事件循环
 // 
-// ִ�����̣�
-//   main() -> ��ȡ���� -> ��ʼ��MySQL�� -> ����HTTP������ -> �����¼�ѭ��
+// 执行流程：
+//   main() -> 读取配置 -> 初始化MySQL池 -> 启动HTTP服务器 -> 进入事件循环
 int main()
 {
-    // ���Ժ�������ע�ͣ�����Ҫ����ȡ��ע�ͽ��в��ԣ�
+    // 测试函数暂时注释，需要时取消注释进行测试
     //TestRedis();
     //TestRedisMgr();
 
-    // ��ȡ���ù���������
+    // 获取配置管理器实例
     auto& gCfgMgr = ConfigMgr::Inst();
 
-    // �������ļ���ȡMySQL������Ϣ
+    // 从配置文件读取MySQL连接信息
     std::string host = gCfgMgr["Mysql"]["Host"];
     std::string port = gCfgMgr["Mysql"]["Port"];
     std::string user = gCfgMgr["Mysql"]["User"];
@@ -202,13 +202,13 @@ int main()
     std::cout << "[main] MySQL config host=" << host << " port=" << port
         << " user=" << user << " schema=" << schema << std::endl;
 
-    // ����MySQL����URL
+    // 构建MySQL连接URL
     std::string url = "tcp://" + host + ":" + port;
 
-    // ��ȡMySQL���ӳص�������ʼ��
+    // 获取MySQL连接池的实例并初始化
     auto pool = MySqlPoolSingleton::GetInstance();
     try {
-        // ��ʼ�����ӳأ�������URL, �û���, ����, ���ݿ���, ������
+        // 初始化连接池，传入连接URL, 用户名, 密码, 数据库名, 连接数
         pool->Init(url, user, passwd, schema, 10);
     }
     catch (const sql::SQLException& e) {
@@ -226,34 +226,34 @@ int main()
         return -1;
     }
 
-    // �������ļ���ȡGateServer�˿�
+    // 从配置文件读取GateServer端口
     std::string gate_port_str = gCfgMgr["GateServer"]["Port"];
     unsigned short gate_port = atoi(gate_port_str.c_str());
 
     try {
-        // ����HTTP�������˿ڣ�8080��
+        // 创建HTTP监听服务器，端口（8080）
         unsigned short port = static_cast<unsigned short>(gate_port);
 
-        // ����IO�����ģ�1���̣߳�
+        // 创建IO上下文（1个线程）
         net::io_context ioc{ 1 };
 
-        // �����źż�������������SIGINT��Ctrl+C����SIGTERM�ź�
+        // 创建信号处理器，监听SIGINT（Ctrl+C）和SIGTERM信号
         boost::asio::signal_set signals(ioc, SIGINT, SIGTERM);
 
-        // �첽�ȴ��źţ����յ��ź�ʱֹͣIO������
+        // 异步等待信号，收到信号时停止IO上下文
         signals.async_wait([&ioc](const boost::system::error_code& error, int signal_number) {
             if (error) {
                 return;
             }
-            // ֹͣ�¼�ѭ�������ŵعرշ�����
+            // 停止事件循环，让服务器关闭
             ioc.stop();
             });
 
-        // ����HTTP������������
-        // CServer���Զ���ʼ���ܿͻ�������
+        // 创建HTTP监听服务器实例
+        // CServer会自动开始接受客户端连接
         std::make_shared<CServer>(ioc, port)->Start();
 
-        // �����¼�ѭ��������ֱ������ioc.stop()��
+        // 进入事件循环，会一直运行直到调用ioc.stop()
         ioc.run();
     }
     catch (std::exception& e) {
@@ -261,5 +261,3 @@ int main()
         return EXIT_FAILURE;
     }
 }
-
-

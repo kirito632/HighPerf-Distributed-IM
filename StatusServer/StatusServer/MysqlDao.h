@@ -14,7 +14,6 @@
 #include <cppconn/statement.h>
 #include <cppconn/exception.h>
 #include <string>
-/*���ݿ���ʲ㣨DAO  data access object��*/
 
 
 // ------------------ MySqlPool ------------------
@@ -22,7 +21,6 @@ class MySqlPool {
 public:
     MySqlPool() : poolSize_(0), b_stop_(false) {}
 
-    // Init ���� url������ "tcp://127.0.0.1:3306"
     void Init(const std::string& url,
         const std::string& user,
         const std::string& pass,
@@ -57,7 +55,6 @@ public:
             throw;
         }
 
-        // �ȵ��γ������ӣ����ڶ�λ��
         try {
             std::cout << "[MySqlPool] Trying single test connection..." << std::endl;
             std::unique_ptr<sql::Connection> testCon(driver->connect(url_, user_, pass_));
@@ -82,7 +79,6 @@ public:
             throw;
         }
 
-        // ��� test ͨ����������أ�ÿ�ζ��� try/catch��
         for (int i = 0; i < poolSize_; ++i) {
             try {
                 std::unique_ptr<sql::Connection> con(driver->connect(url_, user_, pass_));
@@ -93,7 +89,6 @@ public:
             catch (sql::SQLException& e) {
                 std::cerr << "[MySqlPool] connect #" << i << " failed: " << e.what()
                     << " (err:" << e.getErrorCode() << ", state:" << e.getSQLState() << ")" << std::endl;
-                // ����ѡ�񣺼�������ʣ�µģ���ֱ���׳���Ϊ���Ƚ��������������ӡ����
             }
             catch (const std::exception& e) {
                 std::cerr << "[MySqlPool] connect #" << i << " std::exception: " << e.what() << std::endl;
@@ -106,7 +101,6 @@ public:
         std::cout << "[MySqlPool] Init done, actual pool size = " << pool_.size() << std::endl;
     }
 
-    // �ӳ�����ȡһ�����ӣ����û�У��������ȴ���
     std::unique_ptr<sql::Connection> getConnection() {
         std::unique_lock<std::mutex> lock(mutex_);
         cond_.wait(lock, [this] { return b_stop_ || !pool_.empty(); });
@@ -117,7 +111,6 @@ public:
         return con;
     }
 
-    // ��������ӷŻس���
     void returnConnection(std::unique_ptr<sql::Connection> con) {
         if (!con) return;
         std::unique_lock<std::mutex> lock(mutex_);

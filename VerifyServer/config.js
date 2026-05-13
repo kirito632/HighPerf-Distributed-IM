@@ -35,9 +35,10 @@ let mysql_host = config.mysql.host;    // MySQL主机地址（当前：远程服
 let mysql_port = config.mysql.port;    // MySQL端口号
 
 // 提取Redis配置
-let redis_host = config.redis.host;    // Redis主机地址（当前：远程服务器）
-let redis_port = config.redis.port;    // Redis端口号
-let redis_passwd = config.redis.passwd; // Redis密码
+// 优先读环境变量（Docker/K8s注入），fallback到config.json
+let redis_host = process.env.REDIS_HOST || config.redis.host;
+let redis_port = process.env.REDIS_PORT || config.redis.port;
+let redis_passwd = process.env.REDIS_PASS || config.redis.passwd;
 
 // 验证码Redis键前缀（与const.js保持一致）
 let code_prefix = "code_";

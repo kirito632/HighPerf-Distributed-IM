@@ -6,56 +6,56 @@
 #include <stdexcept>
 #include <vector>
 
-// hiredisͷ�ļ�������ʵ����Ŀ��include·����
+// hiredis头文件需要在项目中包含include路径
 #include <hiredis/hiredis.h>
 
 namespace {
-    // ������������ȫ�ؽ�redisReply->strת��Ϊstd::string����ֹreply==nullptr
+    // 工具函数：安全地将redisReply->str转换为std::string，防止reply==nullptr
     static std::string replyToString(redisReply* reply) {
         if (!reply || reply->type != REDIS_REPLY_STRING) return {};
         return std::string(reply->str, reply->len);
     }
 } // namespace
 
-// RedisConnectionGuard��RAII����ȷ����ȡ�������ӻ������������ʱ�黹
+// RedisConnectionGuard的RAII类确保获取的连接在作用域结束时归还
 // 
-// ���ã�
-//   �Զ�����Redis���ӵ��������ڣ�ȷ��������ʹ�����黹�����ӳ�
+// 说明：
+//   Redis连接的生命周期管理
 // 
-// ʹ�÷�ʽ��
+// 使用方法：
 //   auto guard = RedisConnectionGuard(pool, connection);
 //   redisContext* ctx = guard.get();
 class RedisConnectionGuard {
 public:
     RedisConnectionGuard(RedisConPool* pool, redisContext* ctx) : pool_(pool), ctx_(ctx) {}
 
-    // �����������Զ��黹���ӵ����ӳ�
+    // 析构函数自动归还连接到连接池
     ~RedisConnectionGuard() {
         if (pool_ && ctx_) {
             pool_->returnConnection(ctx_);
-            // ��ctx_����Ϊnullptr����Ϊ�����ѹ黹
+            // 不将ctx_重置为nullptr，因为连接已归还
         }
     }
 
-    // ��ȡ���ӵ�ԭʼָ��
+    // 获取连接指针
     redisContext* get() const { return ctx_; }
 
-    // ��ֹ�������ƶ����壩
+    // 禁止复制和赋值
     RedisConnectionGuard(const RedisConnectionGuard&) = delete;
     RedisConnectionGuard& operator=(const RedisConnectionGuard&) = delete;
 private:
-    RedisConPool* pool_;      // ���ӳ�ָ��
-    redisContext* ctx_;       // Redis����ָ��
+    RedisConPool* pool_;      // 连接池指针
+    redisContext* ctx_;       // Redis连接指针
 };
 
-// ���캯������ʼ��Redis������
+// RedisMgr类的构造函数
 // 
-// ���ã�
-//   �������ļ��ж�ȡRedis������Ϣ���������ӳ�
+// 说明：
+//   初始化Redis连接池
 // 
-// ʵ���߼���
-//   1. �����ù�������ȡRedis������Ϣ���������˿ڡ����룩
-//   2. ����Redis���ӳأ�Ĭ��5�����ӣ�
+// 实现逻辑：
+//   1. 从配置文件中读取Redis服务器信息（地址、端口、密码）
+//   2. 根据CPU核心数动态设置连接池大小
 RedisMgr::RedisMgr()
 {
     auto& gCfgMgr = ConfigMgr::Inst();
@@ -69,27 +69,37 @@ RedisMgr::RedisMgr()
     con_pool_.reset(new RedisConPool(pool_size, host.c_str(), atoi(port.c_str()), pwd.c_str()));
 }
 
-// ����������������Դ
+// RedisMgr类的析构函数
+// 
+// 说明：
+//   关闭Redis连接池
+// 
+// 实现逻辑：
+//   1. 调用连接池的Close方法
 RedisMgr::~RedisMgr()
 {
     Close();
 }
 
-// ��ȡ��ֵ��GET���
+// GET命令
 // 
-// ������
-//   - key: ����
-//   - value: �����������ֵ
+// 说明：
+//   获取键值
 // 
-// ����ֵ��
-//   �ɹ�����true�����򷵻�false
+// 参数：
+//   - key：键名
+//   - value：键值
 // 
-// ʵ���߼���
-//   1. �����ӳػ�ȡ����
-//   2. ʹ��RAII�����Զ���������
-//   3. ִ��GET����
-//   4. �������ؽ����NIL��ʾ�������ڣ�
-//   5. �����д��value
+// 返回值：
+//   - true：成功
+//   - false：失败
+// 
+// 实现逻辑：
+//   1. 获取连接
+//   2. 使用RAII类自动管理连接
+//   3. 执行GET命令
+//   4. 检查返回结果（NIL表示键不存在）
+//   5. 获取键值
 bool RedisMgr::Get(const std::string& key, std::string& value)
 {
     auto connect = con_pool_->getConnection();
@@ -97,7 +107,6 @@ bool RedisMgr::Get(const std::string& key, std::string& value)
         std::cout << "[RedisMgr::Get] getConnection returned nullptr for key=" << key << std::endl;
         return false;
     }
-    // ʹ��RAII�Զ��黹����
     RedisConnectionGuard guard(con_pool_.get(), connect);
 
     redisReply* reply = (redisReply*)redisCommand(connect, "GET %s", key.c_str());
@@ -106,9 +115,9 @@ bool RedisMgr::Get(const std::string& key, std::string& value)
         return false;
     }
 
-    // ��鷵������
+    // 检查返回结果
     if (reply->type == REDIS_REPLY_NIL) {
-        // key������
+        // 键不存在
         freeReplyObject(reply);
         std::cout << "[RedisMgr::Get] GET " << key << " -> (nil)\n";
         return false;
@@ -120,26 +129,30 @@ bool RedisMgr::Get(const std::string& key, std::string& value)
         return false;
     }
 
-    // �����ַ���ֵ
+    // 获取键值
     value.assign(reply->str, reply->len);
     freeReplyObject(reply);
     std::cout << "Succeed to execute command [ GET " << key << " ]\n";
     return true;
 }
 
-// ���ü�ֵ��SET���
+// SET命令
 // 
-// ������
-//   - key: ����
-//   - value: ��ֵ
+// 说明：
+//   设置键值
 // 
-// ����ֵ��
-//   �ɹ�����true�����򷵻�false
+// 参数：
+//   - key：键名
+//   - value：键值
 // 
-// ʵ���߼���
-//   1. �����ӳػ�ȡ����
-//   2. ִ��SET����
-//   3. ��鷵��ֵ�Ƿ�Ϊ"OK"
+// 返回值：
+//   - true：成功
+//   - false：失败
+// 
+// 实现逻辑：
+//   1. 获取连接
+//   2. 执行SET命令
+//   3. 检查返回值是否为"OK"
 bool RedisMgr::Set(const std::string& key, const std::string& value) {
     auto connect = con_pool_->getConnection();
     if (connect == nullptr) {
@@ -154,7 +167,7 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
         return false;
     }
 
-    // ��鷵��״̬
+    // 检查返回值
     bool ok = false;
     if (reply->type == REDIS_REPLY_STATUS) {
         // "OK" or "ok"
@@ -172,7 +185,22 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
     return false;
 }
 
-// ������Ϣ��Ƶ����PUBLISH channel message��
+// PUBLISH命令
+// 
+// 说明：
+//   发布消息到频道
+// 
+// 参数：
+//   - channel：频道名
+//   - message：消息内容
+// 
+// 返回值：
+//   - true：成功
+//   - false：失败
+// 
+// 实现逻辑：
+//   1. 获取连接
+//   2. 执行PUBLISH命令
 bool RedisMgr::Publish(const std::string& channel, const std::string& message)
 {
     auto connect = con_pool_->getConnection();
@@ -197,13 +225,21 @@ bool RedisMgr::Publish(const std::string& channel, const std::string& message)
     return ok;
 }
 
-// ������֤��AUTH���
+// AUTH命令
 // 
-// ������
-//   - password: Redis����
+// 说明：
+//   认证
 // 
-// ����ֵ��
-//   ��֤�ɹ�����true�����򷵻�false
+// 参数：
+//   - password：密码
+// 
+// 返回值：
+//   - true：成功
+//   - false：失败
+// 
+// 实现逻辑：
+//   1. 获取连接
+//   2. 执行AUTH命令
 bool RedisMgr::Auth(const std::string& password)
 {
     auto connect = con_pool_->getConnection();
@@ -225,22 +261,27 @@ bool RedisMgr::Auth(const std::string& password)
     }
     freeReplyObject(reply);
 
-    if (ok) std::cout << "��֤�ɹ�" << std::endl;
-    else std::cout << "��֤ʧ��" << std::endl;
+    if (ok) std::cout << "认证成功" << std::endl;
+    else std::cout << "认证失败" << std::endl;
     return ok;
 }
 
-// ���������Ԫ�أ�LPUSH���
+// LPUSH命令
 // 
-// ������
-//   - key: �б�����
-//   - value: Ҫ�����ֵ
+// 说明：
+//   列表左端添加元素
 // 
-// ����ֵ��
-//   �ɹ�����true�����򷵻�false
+// 参数：
+//   - key：列表键名
+//   - value：要添加的值
 // 
-// ˵����
-//   LPUSH���ڶ��г��������б���ˣ�ͷ��������Ԫ��
+// 返回值：
+//   - true：成功
+//   - false：失败
+// 
+// 实现逻辑：
+//   1. 获取连接
+//   2. 执行LPUSH命令
 bool RedisMgr::LPush(const std::string& key, const std::string& value)
 {
     auto connect = con_pool_->getConnection();
@@ -256,7 +297,7 @@ bool RedisMgr::LPush(const std::string& key, const std::string& value)
         return false;
     }
 
-    // LPUSH������������ʾ��������б�����
+    // LPUSH返回整数表示更新后的列表长度
     bool ok = (reply->type == REDIS_REPLY_INTEGER && reply->integer >= 0);
     freeReplyObject(reply);
 
@@ -268,17 +309,22 @@ bool RedisMgr::LPush(const std::string& key, const std::string& value)
     return false;
 }
 
-// ����˵���Ԫ�أ�LPOP���
+// LPOP命令
 // 
-// ������
-//   - key: �б�����
-//   - value: ���������������ֵ
+// 说明：
+//   弹出列表左端元素
 // 
-// ����ֵ��
-//   �ɹ�����true�����򷵻�false
+// 参数：
+//   - key：列表键名
+//   - value：弹出的值
 // 
-// ˵����
-//   LPOP���ڶ��г��������б���ˣ�ͷ��������Ԫ��
+// 返回值：
+//   - true：成功
+//   - false：失败
+// 
+// 实现逻辑：
+//   1. 获取连接
+//   2. 执行LPOP命令
 bool RedisMgr::LPop(const std::string& key, std::string& value) {
     auto connect = con_pool_->getConnection();
     if (connect == nullptr) {
@@ -293,7 +339,7 @@ bool RedisMgr::LPop(const std::string& key, std::string& value) {
         return false;
     }
 
-    // ��鷵������
+    // 检查返回结果
     if (reply->type == REDIS_REPLY_NIL) {
         freeReplyObject(reply);
         std::cout << "Execut command [ LPOP " << key << " ] -> (nil)\n";
@@ -305,24 +351,29 @@ bool RedisMgr::LPop(const std::string& key, std::string& value) {
         return false;
     }
 
-    // �����ַ���ֵ
+    // 获取弹出的值
     value.assign(reply->str, reply->len);
     freeReplyObject(reply);
     std::cout << "Execut command [ LPOP " << key << " ] success ! " << std::endl;
     return true;
 }
 
-// ���Ҷ�����Ԫ�أ�RPUSH���
+// RPUSH命令
 // 
-// ������
-//   - key: �б�����
-//   - value: Ҫ�����ֵ
+// 说明：
+//   列表右端添加元素
 // 
-// ����ֵ��
-//   �ɹ�����true�����򷵻�false
+// 参数：
+//   - key：列表键名
+//   - value：要添加的值
 // 
-// ˵����
-//   RPUSH����ջ���������б��Ҷˣ�β��������Ԫ��
+// 返回值：
+//   - true：成功
+//   - false：失败
+// 
+// 实现逻辑：
+//   1. 获取连接
+//   2. 执行RPUSH命令
 bool RedisMgr::RPush(const std::string& key, const std::string& value) {
     auto connect = con_pool_->getConnection();
     if (connect == nullptr) {
@@ -337,7 +388,7 @@ bool RedisMgr::RPush(const std::string& key, const std::string& value) {
         return false;
     }
 
-    // RPUSH������������ʾ��������б�����
+    // RPUSH返回整数表示更新后的列表长度
     bool ok = (reply->type == REDIS_REPLY_INTEGER && reply->integer >= 0);
     freeReplyObject(reply);
 
@@ -349,17 +400,22 @@ bool RedisMgr::RPush(const std::string& key, const std::string& value) {
     return false;
 }
 
-// ���Ҷ˵���Ԫ�أ�RPOP���
+// RPOP命令
 // 
-// ������
-//   - key: �б�����
-//   - value: ���������������ֵ
+// 说明：
+//   弹出列表右端元素
 // 
-// ����ֵ��
-//   �ɹ�����true�����򷵻�false
+// 参数：
+//   - key：列表键名
+//   - value：弹出的值
 // 
-// ˵����
-//   RPOP����ջ���������б��Ҷˣ�β��������Ԫ��
+// 返回值：
+//   - true：成功
+//   - false：失败
+// 
+// 实现逻辑：
+//   1. 获取连接
+//   2. 执行RPOP命令
 bool RedisMgr::RPop(const std::string& key, std::string& value) {
     auto connect = con_pool_->getConnection();
     if (connect == nullptr) {
@@ -374,7 +430,7 @@ bool RedisMgr::RPop(const std::string& key, std::string& value) {
         return false;
     }
 
-    // ��鷵������
+    // 检查返回结果
     if (reply->type == REDIS_REPLY_NIL) {
         freeReplyObject(reply);
         std::cout << "Execut command [ RPOP " << key << " ] -> (nil)\n";
@@ -386,25 +442,30 @@ bool RedisMgr::RPop(const std::string& key, std::string& value) {
         return false;
     }
 
-    // �����ַ���ֵ
+    // 获取弹出的值
     value.assign(reply->str, reply->len);
     freeReplyObject(reply);
     std::cout << "Execut command [ RPOP " << key << " ] success ! " << std::endl;
     return true;
 }
 
-// ���ù�ϣ�ֶ�ֵ��HSET���� - �ַ����汾��
+// HSET命令
 // 
-// ������
-//   - key: ��ϣ����
-//   - hkey: �ֶ���
-//   - value: �ֶ�ֵ
+// 说明：
+//   设置哈希字段值
 // 
-// ����ֵ��
-//   �ɹ�����true�����򷵻�false
+// 参数：
+//   - key：哈希键名
+//   - hkey：字段名
+//   - value：字段值
 // 
-// ˵����
-//   HSET�������ù�ϣ�е��ֶ�ֵ
+// 返回值：
+//   - true：成功
+//   - false：失败
+// 
+// 实现逻辑：
+//   1. 获取连接
+//   2. 执行HSET命令
 bool RedisMgr::HSet(const std::string& key, const std::string& hkey, const std::string& value) {
     auto connect = con_pool_->getConnection();
     if (connect == nullptr) {
@@ -419,7 +480,7 @@ bool RedisMgr::HSet(const std::string& key, const std::string& hkey, const std::
         return false;
     }
 
-    // HSET�����������������ֶ�����
+    // 获取键值
     bool ok = (reply->type == REDIS_REPLY_INTEGER);
     freeReplyObject(reply);
 
@@ -431,20 +492,24 @@ bool RedisMgr::HSet(const std::string& key, const std::string& hkey, const std::
     return false;
 }
 
-// ���ù�ϣ�ֶ�ֵ��HSET���� - �����ư汾��
+// HSET命令（二进制数据）
 // 
-// ������
-//   - key: ��ϣ����
-//   - hkey: �ֶ���
-//   - hvalue: �ֶ�ֵ�����������ݣ�
-//   - hvaluelen: ���ݳ���
+// 说明：
+//   设置哈希字段值（二进制数据）
 // 
-// ����ֵ��
-//   �ɹ�����true�����򷵻�false
+// 参数：
+//   - key：哈希键名
+//   - hkey：字段名
+//   - hvalue：字段值（二进制数据）
+//   - hvaluelen：数据长度
 // 
-// ˵����
-//   ʹ��redisCommandArgv֧�ֶ���������
-//   �����ڴ洢���ı����ݣ���ͼƬ����Ƶ�ȣ�
+// 返回值：
+//   - true：成功
+//   - false：失败
+// 
+// 实现逻辑：
+//   1. 获取连接
+//   2. 执行HSET命令（二进制数据）
 bool RedisMgr::HSet(const char* key, const char* hkey, const char* hvalue, size_t hvaluelen)
 {
     auto connect = con_pool_->getConnection();
@@ -454,7 +519,7 @@ bool RedisMgr::HSet(const char* key, const char* hkey, const char* hvalue, size_
     }
     RedisConnectionGuard guard(con_pool_.get(), connect);
 
-    // ׼��redisCommandArgv�Ĳ���
+    // 准备redisCommandArgv的参数
     const char* argv[4];
     size_t argvlen[4];
     argv[0] = "HSET";
@@ -483,19 +548,22 @@ bool RedisMgr::HSet(const char* key, const char* hkey, const char* hvalue, size_
     return false;
 }
 
-// ɾ����ϣ�ֶΣ�HDEL���
+// HDEL命令
 // 
-// ������
-//   - key: ��ϣ����
-//   - field: �ֶ���
+// 说明：
+//   删除哈希字段
 // 
-// ����ֵ��
-//   �ɹ�ɾ������true�����򷵻�false
+// 参数：
+//   - key：哈希键名
+//   - field：字段名
 // 
-// ʵ���߼���
-//   1. ִ��HDEL����
-//   2. ��鷵��ֵ��������������ʾɾ�����ֶ�����
-//   3. �������ֵ>0����ʾ�ֶδ����ұ�ɾ��
+// 返回值：
+//   - true：成功
+//   - false：失败
+// 
+// 实现逻辑：
+//   1. 获取连接
+//   2. 执行HDEL命令
 bool RedisMgr::HDel(const std::string& key, const std::string& field)
 {
     auto connect = con_pool_->getConnection();
@@ -503,24 +571,24 @@ bool RedisMgr::HDel(const std::string& key, const std::string& field)
         std::cout << "[RedisMgr::HDel] getConnection returned nullptr for key=" << key << " field=" << field << std::endl;
         return false;
     }
-    // RAII: ȷ�����ӻᱻ�黹�����ӳ�
+    // 使用RAII自动归还连接
     RedisConnectionGuard guard(con_pool_.get(), connect);
 
-    // ִ�� HDEL ����
+    // 删除哈希字段
     redisReply* reply = (redisReply*)redisCommand(connect, "HDEL %s %s", key.c_str(), field.c_str());
     if (reply == nullptr) {
         std::cout << "Execut command [ HDEL " << key << " " << field << " ] failure (reply==NULL)!\n";
         return false;
     }
 
-    // HDEL ��������������ֵ��ʾ��ɾ�����ֶ�����
+    // HDEL返回整数，返回值的含义是删除的字段数量
     bool ok = false;
     if (reply->type == REDIS_REPLY_INTEGER) {
         if (reply->integer > 0) {
-            ok = true; // �ֶα�ɾ��
+            ok = true; // 删除成功
         }
         else {
-            ok = false; // �ֶβ����ڻ�δɾ��
+            ok = false; // 删除失败
         }
     }
     else {
@@ -539,20 +607,21 @@ bool RedisMgr::HDel(const std::string& key, const std::string& field)
     }
 }
 
-
-// ��ȡ��ϣ�ֶ�ֵ��HGET���
+// HGET命令
 // 
-// ������
-//   - key: ��ϣ����
-//   - hkey: �ֶ���
+// 说明：
+//   获取哈希字段值
 // 
-// ����ֵ��
-//   �ֶ�ֵ�������ڷ��ؿ��ַ���
+// 参数：
+//   - key：哈希键名
+//   - hkey：字段名
 // 
-// ʵ���߼���
-//   1. ʹ��redisCommandArgvִ��HGET����
-//   2. ��鷵������
-//   3. �����ֶ�ֵ
+// 返回值：
+//   - 字段值
+// 
+// 实现逻辑：
+//   1. 获取连接
+//   2. 执行HGET命令
 std::string RedisMgr::HGet(const std::string& key, const std::string& hkey)
 {
     auto connect = con_pool_->getConnection();
@@ -562,7 +631,7 @@ std::string RedisMgr::HGet(const std::string& key, const std::string& hkey)
     }
     RedisConnectionGuard guard(con_pool_.get(), connect);
 
-    // ׼��redisCommandArgv�Ĳ���
+    // 准备redisCommandArgv的参数
     const char* argv[3];
     size_t argvlen[3];
     argv[0] = "HGET";
@@ -578,7 +647,7 @@ std::string RedisMgr::HGet(const std::string& key, const std::string& hkey)
         return "";
     }
 
-    // ��鷵������
+    // 检查返回结果
     if (reply->type == REDIS_REPLY_NIL) {
         freeReplyObject(reply);
         std::cout << "Execut command [ HGet " << key << " " << hkey << " ] -> (nil)\n";
@@ -591,22 +660,28 @@ std::string RedisMgr::HGet(const std::string& key, const std::string& hkey)
         return "";
     }
 
+    // 获取字段值
     std::string value(reply->str, reply->len);
     freeReplyObject(reply);
     std::cout << "Execut command [ HGet " << key << " " << hkey << " ] success ! " << std::endl;
     return value;
 }
 
-// ɾ������DEL���
+// DEL命令
 // 
-// ������
-//   - key: ����
+// 说明：
+//   删除键
 // 
-// ����ֵ��
-//   �ɹ�����true�����򷵻�false
+// 参数：
+//   - key：键名
 // 
-// ˵����
-//   ɾ��ָ���ļ����������ֵ
+// 返回值：
+//   - true：成功
+//   - false：失败
+// 
+// 实现逻辑：
+//   1. 获取连接
+//   2. 执行DEL命令
 bool RedisMgr::Del(const std::string& key)
 {
     auto connect = con_pool_->getConnection();
@@ -622,7 +697,7 @@ bool RedisMgr::Del(const std::string& key)
         return false;
     }
 
-    // DEL������������ʾɾ���ļ���
+    // DEL返回整数表示删除的键数量
     bool ok = (reply->type == REDIS_REPLY_INTEGER);
     freeReplyObject(reply);
 
@@ -634,17 +709,21 @@ bool RedisMgr::Del(const std::string& key)
     return false;
 }
 
-// �����Ƿ���ڣ�EXISTS���
+// EXISTS命令
 // 
-// ������
-//   - key: ����
+// 说明：
+//   检查键是否存在
 // 
-// ����ֵ��
-//   ���ڷ���true�����򷵻�false
+// 参数：
+//   - key：键名
 // 
-// ʵ���߼���
-//   1. ִ��EXISTS����
-//   2. ��鷵��ֵ������������>0��ʾ���ڣ�
+// 返回值：
+//   - true：存在
+//   - false：不存在
+// 
+// 实现逻辑：
+//   1. 获取连接
+//   2. 执行EXISTS命令
 bool RedisMgr::ExistsKey(const std::string& key)
 {
     auto connect = con_pool_->getConnection();
@@ -660,7 +739,7 @@ bool RedisMgr::ExistsKey(const std::string& key)
         return false;
     }
 
-    // EXISTS����������>0��ʾ������
+    // 检查键是否存在
     bool ok = (reply->type == REDIS_REPLY_INTEGER && reply->integer > 0);
     freeReplyObject(reply);
 
@@ -672,24 +751,17 @@ bool RedisMgr::ExistsKey(const std::string& key)
     return false;
 }
 
-// �ر����ӳ�
+// 关闭Redis连接池
 // 
-// ���ã�
-//   �ر�Redis���ӳأ��ͷ���������
+// 说明：
+//   关闭Redis连接池
 // 
-// ʵ���߼���
-//   1. �������ӳص�Close����
-//   2. �������ӳ�ָ��
-// 
-// ע�⣺
-//   RedisConPool::Close() Ӧ���ͷ����� redisContext��redisFree����
-//   �����û�� RedisConPool ��ʵ�֣�Ӧ���� RedisConPool::Close/���������ͷ� ctx
+// 实现逻辑：
+//   1. 调用连接池的Close方法
 void RedisMgr::Close()
 {
     if (con_pool_) {
         con_pool_->Close();
-        // ע�⣺RedisConPool::Close() Ӧ���ͷ����� redisContext��redisFree����
-        // �����û�� RedisConPool ��ʵ�֣�Ӧ���� RedisConPool::Close/���������ͷ� ctx
         con_pool_.reset();
     }
 }
