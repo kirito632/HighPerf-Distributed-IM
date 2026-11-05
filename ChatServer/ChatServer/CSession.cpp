@@ -47,6 +47,11 @@ std::shared_ptr<CSession>CSession::SharedSelf() {
 }
 
 void CSession::Send(std::string msg, short msgid) {
+	if (msg.size() > MAX_LENGTH) {
+		std::cerr << "[TCP][Send] body too large len=" << msg.size()
+		          << " max=" << MAX_LENGTH << std::endl;
+		return;
+	}
 	std::lock_guard<std::mutex> lock(_send_lock);
 	int send_que_size = _send_que.size();
 	
@@ -77,9 +82,9 @@ void CSession::Send(std::string msg, short msgid) {
 	short out_msgid = 0;
 	::memcpy(&out_msgid, msgnode->_data, HEAD_ID_LEN);
 	out_msgid = boost::asio::detail::socket_ops::network_to_host_short(out_msgid);
-	short out_len = 0;
-	::memcpy(&out_len, msgnode->_data + HEAD_ID_LEN, HEAD_DATA_LEN);
-	out_len = boost::asio::detail::socket_ops::network_to_host_short(out_len);
+	uint32_t out_len = 0;
+	::memcpy(&out_len, msgnode->_data + HEAD_ID_LEN + HEAD_FLAGS_LEN, HEAD_DATA_LEN);
+	out_len = boost::asio::detail::socket_ops::network_to_host_long(out_len);
 	int uid = _user_uid;
 	auto self = SharedSelf();
 	boost::asio::async_write(
@@ -101,7 +106,12 @@ void CSession::Send(std::string msg, short msgid) {
 	);
 }
 
-void CSession::Send(char* msg, short max_length, short msgid) {
+void CSession::Send(char* msg, int max_length, short msgid) {
+	if (max_length < 0 || max_length > MAX_LENGTH) {
+		std::cerr << "[TCP][Send] body too large len=" << max_length
+		          << " max=" << MAX_LENGTH << std::endl;
+		return;
+	}
 	std::lock_guard<std::mutex> lock(_send_lock);
 	int send_que_size = _send_que.size();
 	
@@ -128,9 +138,9 @@ void CSession::Send(char* msg, short max_length, short msgid) {
 	short out_msgid = 0;
 	::memcpy(&out_msgid, msgnode->_data, HEAD_ID_LEN);
 	out_msgid = boost::asio::detail::socket_ops::network_to_host_short(out_msgid);
-	short out_len = 0;
-	::memcpy(&out_len, msgnode->_data + HEAD_ID_LEN, HEAD_DATA_LEN);
-	out_len = boost::asio::detail::socket_ops::network_to_host_short(out_len);
+	uint32_t out_len = 0;
+	::memcpy(&out_len, msgnode->_data + HEAD_ID_LEN + HEAD_FLAGS_LEN, HEAD_DATA_LEN);
+	out_len = boost::asio::detail::socket_ops::network_to_host_long(out_len);
 	int uid = _user_uid;
 	auto self = SharedSelf();
 	boost::asio::async_write(
@@ -182,47 +192,29 @@ void CSession::AsyncReadHead(int total_len)
 			msg_id = boost::asio::detail::socket_ops::network_to_host_short(msg_id);
 			std::cout << "msg_id is " << msg_id << std::endl;
 			
-			//  修复：严格的消息ID验证
-			// 检查消息ID是否在合法范围内（避免负数和过大值）
-			if (msg_id < 0 || msg_id > MAX_LENGTH) {
-				std::cout << "invalid msg_id is " << msg_id << " (must be 0-" << MAX_LENGTH << ")" << std::endl;
+			//  严格的消息ID验证：msgid 为 2B 有符号，拒绝负数
+			if (msg_id < 0) {
+				std::cout << "invalid msg_id is " << msg_id << std::endl;
 				Close();
 				_server->ClearSession(_session_id);
 				return;
 			}
 			
-			short msg_len = 0;
-			memcpy(&msg_len, _recv_head_node->_data + HEAD_ID_LEN, HEAD_DATA_LEN);
-			//网络字节序转化为本地字节序
-			msg_len = boost::asio::detail::socket_ops::network_to_host_short(msg_len);
+			uint32_t msg_len = 0;
+			memcpy(&msg_len, _recv_head_node->_data + HEAD_ID_LEN + HEAD_FLAGS_LEN, HEAD_DATA_LEN);
+			msg_len = boost::asio::detail::socket_ops::network_to_host_long(msg_len);
 			std::cout << "msg_len is " << msg_len << std::endl;
 
-			//  修复：严格的消息长度验证
-			// 1. 检查负数（防止整数溢出攻击）
-			// 2. 检查最大长度（防止内存耗尽攻击）
-			// 3. 添加合理的最大包体限制（10MB）
-			const int MAX_PACKAGE_SIZE = 10 * 1024 * 1024;  // 10MB
-			if (msg_len < 0) {
-				std::cout << "invalid negative msg_len: " << msg_len << std::endl;
-				Close();
-				_server->ClearSession(_session_id);
-				return;
-			}
 			if (msg_len > MAX_LENGTH) {
-				std::cout << "msg_len too large: " << msg_len << " (max: " << MAX_LENGTH << ")" << std::endl;
-				Close();
-				_server->ClearSession(_session_id);
-				return;
-			}
-			if (msg_len > MAX_PACKAGE_SIZE) {
-				std::cout << "potential DoS attack: msg_len=" << msg_len << " exceeds " << MAX_PACKAGE_SIZE << " bytes" << std::endl;
+				std::cout << "msg_len too large: " << msg_len
+					<< " (max: " << MAX_LENGTH << ")" << std::endl;
 				Close();
 				_server->ClearSession(_session_id);
 				return;
 			}
 
-			_recv_msg_node = std::make_shared<RecvNode>(msg_len, msg_id);
-			AsyncReadBody(msg_len);
+			_recv_msg_node = std::make_shared<RecvNode>(static_cast<int>(msg_len), msg_id);
+			AsyncReadBody(static_cast<int>(msg_len));
 		}
 		catch (boost::system::error_code& e) {
 			std::cout << "Exception code is " << e.what() << std::endl;
@@ -309,9 +301,9 @@ void CSession::HandleWrite(const boost::system::error_code& error, std::shared_p
 				short out_msgid = 0;
 				::memcpy(&out_msgid, msgnode->_data, HEAD_ID_LEN);
 				out_msgid = boost::asio::detail::socket_ops::network_to_host_short(out_msgid);
-				short out_len = 0;
-				::memcpy(&out_len, msgnode->_data + HEAD_ID_LEN, HEAD_DATA_LEN);
-				out_len = boost::asio::detail::socket_ops::network_to_host_short(out_len);
+				uint32_t out_len = 0;
+				::memcpy(&out_len, msgnode->_data + HEAD_ID_LEN + HEAD_FLAGS_LEN, HEAD_DATA_LEN);
+				out_len = boost::asio::detail::socket_ops::network_to_host_long(out_len);
 				int uid = _user_uid;
 				std::cout << "[TCP][Write] next uid=" << uid << " msgid=" << out_msgid
 					<< " body_len=" << out_len << std::endl;

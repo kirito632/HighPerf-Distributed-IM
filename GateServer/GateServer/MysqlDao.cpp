@@ -165,7 +165,18 @@ bool MysqlDao::UpdatePwdByEmail(const std::string& email, const std::string& new
         pstmt->setString(2, email);
         int updateCount = pstmt->executeUpdate();
         std::cout << "[MysqlDao] UpdatePwdByEmail updated rows: " << updateCount << std::endl;
-        return updateCount > 0;
+        if (updateCount > 0) return true;
+        // MySQL executeUpdate 返回实际被修改的行数，不是匹配到的行数。
+        // 如果新旧密码相同返回 0，不代表 email 不存在，需要 SELECT 确认。
+        {
+            std::unique_ptr<sql::PreparedStatement> checkStmt(
+                con->prepareStatement("SELECT 1 FROM user WHERE email = ?"));
+            checkStmt->setString(1, email);
+            std::unique_ptr<sql::ResultSet> rs(checkStmt->executeQuery());
+            bool exists = rs->next();
+            std::cout << "[MysqlDao] UpdatePwdByEmail: updateCount=0, email_exists=" << exists << std::endl;
+            return exists;
+        }
     }
     catch (sql::SQLException& e) {
         std::cerr << "[MysqlDao] SQLException in UpdatePwdByEmail: " << e.what() << std::endl;

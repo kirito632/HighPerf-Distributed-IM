@@ -416,38 +416,301 @@ bool MysqlDao::IsFriend(int uid1, int uid2) {
     }
 }
 
-bool MysqlDao::SaveChatMessage(int fromUid, int toUid, const std::string& payload)
+bool MysqlDao::SaveChatMessage(int fromUid, int toUid,
+                               const std::string& clientMsgId,
+                               const std::string& conversationId,
+                               const std::string& initialPayload,
+                               bool writeOutbox,
+                               const std::function<std::string(long long)>& finalPayload,
+                               long long& serverMsgId)
 {
+    serverMsgId = 0;
+    if (clientMsgId.empty()) {
+        return false;
+    }
     ConnectionGuard guard(pool_);
     if (!guard) {
         std::cerr << "[MysqlDao] Failed to get connection from pool." << std::endl;
         return false;
     }
 
+    sql::Connection* con = guard.get();
     try {
-        sql::Connection* con = guard.get();
+        con->setAutoCommit(false);
         std::unique_ptr<sql::PreparedStatement> pstmt(
-            con->prepareStatement("INSERT INTO messages (from_uid, to_uid, payload, status, create_time) VALUES (?, ?, ?, 0, NOW())")
+            con->prepareStatement(
+                "INSERT INTO messages "
+                "(from_uid, to_uid, payload, client_msg_id, conversation_id, status, create_time) "
+                "VALUES (?, ?, ?, ?, ?, 0, NOW()) "
+                "ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)")
         );
         pstmt->setInt(1, fromUid);
         pstmt->setInt(2, toUid);
-        pstmt->setString(3, payload);
-        pstmt->execute();
+        pstmt->setString(3, initialPayload);
+        pstmt->setString(4, clientMsgId);
+        pstmt->setString(5, conversationId);
+        pstmt->executeUpdate();
 
+        {
+            std::unique_ptr<sql::PreparedStatement> lookup(
+                con->prepareStatement(
+                    "SELECT id FROM messages WHERE from_uid=? AND client_msg_id=? LIMIT 1"));
+            lookup->setInt(1, fromUid);
+            lookup->setString(2, clientMsgId);
+            std::unique_ptr<sql::ResultSet> res(lookup->executeQuery());
+            if (res->next()) {
+                serverMsgId = res->getInt64(1);
+            }
+        }
+        if (serverMsgId <= 0) {
+            con->rollback();
+            con->setAutoCommit(true);
+            return false;
+        }
+
+        const std::string final_payload =
+            finalPayload ? finalPayload(serverMsgId) : initialPayload;
+        {
+            std::unique_ptr<sql::PreparedStatement> update(
+                con->prepareStatement("UPDATE messages SET payload=? WHERE id=?"));
+            update->setString(1, final_payload);
+            update->setInt64(2, serverMsgId);
+            update->executeUpdate();
+        }
+
+        if (writeOutbox) {
+            const std::string event_id =
+                "message:" + std::to_string(serverMsgId) + ":created";
+            std::unique_ptr<sql::PreparedStatement> outbox(
+                con->prepareStatement(
+                    "INSERT INTO outbox "
+                    "(event_id, aggregate_type, aggregate_id, event_type, payload, status, available_at, created_at) "
+                    "VALUES (?, 'message', ?, 'MessageCreated', ?, 0, NOW(), NOW()) "
+                    "ON DUPLICATE KEY UPDATE payload=VALUES(payload), available_at=NOW()"));
+            outbox->setString(1, event_id);
+            outbox->setString(2, std::to_string(serverMsgId));
+            outbox->setString(3, final_payload);
+            outbox->executeUpdate();
+        }
+
+        con->commit();
+        con->setAutoCommit(true);
+
+        std::cout << "[MysqlDao] SaveChatMessage from=" << fromUid
+                  << " to=" << toUid << " client_msg_id=" << clientMsgId
+                  << " server_msg_id=" << serverMsgId
+                  << " outbox=" << (writeOutbox ? 1 : 0) << std::endl;
         return true;
     }
     catch (sql::SQLException& e) {
+        try {
+            con->rollback();
+            con->setAutoCommit(true);
+        }
+        catch (...) {
+        }
         guard.markBad();
         std::cerr << "[MysqlDao] SQLException in SaveChatMessage: " << e.what() << std::endl;
         return false;
     }
 }
 
-bool MysqlDao::GetUnreadChatMessagesWithIds(int uid, std::vector<long long>& ids, std::vector<std::string>& payloads)
+bool MysqlDao::UpdateChatMessagePayload(long long serverMsgId, const std::string& payload)
+{
+    ConnectionGuard guard(pool_);
+    if (!guard) {
+        return false;
+    }
+    try {
+        sql::Connection* con = guard.get();
+        std::unique_ptr<sql::PreparedStatement> pstmt(
+            con->prepareStatement("UPDATE messages SET payload=? WHERE id=?"));
+        pstmt->setString(1, payload);
+        pstmt->setInt64(2, serverMsgId);
+        pstmt->executeUpdate();
+        return true;
+    }
+    catch (sql::SQLException& e) {
+        guard.markBad();
+        std::cerr << "[MysqlDao] SQLException in UpdateChatMessagePayload: "
+                  << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool MysqlDao::GetPendingOutbox(int limit, std::vector<OutboxRow>& rows)
+{
+    rows.clear();
+    if (limit <= 0) {
+        limit = 100;
+    }
+    ConnectionGuard guard(pool_);
+    if (!guard) {
+        return false;
+    }
+    try {
+        sql::Connection* con = guard.get();
+        std::unique_ptr<sql::PreparedStatement> pstmt(
+            con->prepareStatement(
+                "SELECT id, event_id, event_type, payload FROM outbox "
+                "WHERE status=0 AND available_at<=NOW() ORDER BY id LIMIT ?"));
+        pstmt->setInt(1, limit);
+        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+        while (res->next()) {
+            OutboxRow row;
+            row.id = res->getInt64("id");
+            row.event_id = res->getString("event_id");
+            row.event_type = res->getString("event_type");
+            row.payload = res->getString("payload");
+            rows.push_back(std::move(row));
+        }
+        return true;
+    }
+    catch (sql::SQLException& e) {
+        guard.markBad();
+        std::cerr << "[MysqlDao] SQLException in GetPendingOutbox: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool MysqlDao::MarkOutboxPublished(const std::vector<long long>& ids)
+{
+    if (ids.empty()) {
+        return true;
+    }
+    ConnectionGuard guard(pool_);
+    if (!guard) {
+        return false;
+    }
+    try {
+        sql::Connection* con = guard.get();
+        std::ostringstream sql;
+        sql << "UPDATE outbox SET status=1, published_at=NOW(), last_error=NULL WHERE id IN (";
+        for (size_t i = 0; i < ids.size(); ++i) {
+            if (i) sql << ",";
+            sql << "?";
+        }
+        sql << ")";
+        std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement(sql.str()));
+        for (size_t i = 0; i < ids.size(); ++i) {
+            pstmt->setInt64(static_cast<unsigned int>(i + 1), ids[i]);
+        }
+        pstmt->executeUpdate();
+        return true;
+    }
+    catch (sql::SQLException& e) {
+        guard.markBad();
+        std::cerr << "[MysqlDao] SQLException in MarkOutboxPublished: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool MysqlDao::MarkOutboxFailed(long long id, const std::string& error)
+{
+    ConnectionGuard guard(pool_);
+    if (!guard) {
+        return false;
+    }
+    try {
+        sql::Connection* con = guard.get();
+        std::unique_ptr<sql::PreparedStatement> pstmt(
+            con->prepareStatement(
+                "UPDATE outbox SET attempts=attempts+1, last_error=?, "
+                "status=IF(attempts+1>=5, 2, 0), "
+                "available_at=DATE_ADD(NOW(), INTERVAL 5 SECOND) WHERE id=?"));
+        pstmt->setString(1, error.substr(0, 500));
+        pstmt->setInt64(2, id);
+        pstmt->executeUpdate();
+        return true;
+    }
+    catch (sql::SQLException& e) {
+        guard.markBad();
+        std::cerr << "[MysqlDao] SQLException in MarkOutboxFailed: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool MysqlDao::IsEventProcessed(const std::string& event_id)
+{
+    ConnectionGuard guard(pool_);
+    if (!guard) {
+        return false;
+    }
+    try {
+        sql::Connection* con = guard.get();
+        std::unique_ptr<sql::PreparedStatement> pstmt(
+            con->prepareStatement("SELECT 1 FROM processed_events WHERE event_id=? LIMIT 1"));
+        pstmt->setString(1, event_id);
+        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+        return res->next();
+    }
+    catch (sql::SQLException& e) {
+        guard.markBad();
+        std::cerr << "[MysqlDao] SQLException in IsEventProcessed: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool MysqlDao::MarkEventProcessed(const std::string& event_id,
+                                  const std::string& event_type,
+                                  const std::string& consumer)
+{
+    ConnectionGuard guard(pool_);
+    if (!guard) {
+        return false;
+    }
+    try {
+        sql::Connection* con = guard.get();
+        std::unique_ptr<sql::PreparedStatement> pstmt(
+            con->prepareStatement(
+                "INSERT INTO processed_events(event_id, event_type, consumer) "
+                "VALUES(?, ?, ?) ON DUPLICATE KEY UPDATE processed_at=NOW()"));
+        pstmt->setString(1, event_id);
+        pstmt->setString(2, event_type);
+        pstmt->setString(3, consumer);
+        pstmt->executeUpdate();
+        return true;
+    }
+    catch (sql::SQLException& e) {
+        guard.markBad();
+        std::cerr << "[MysqlDao] SQLException in MarkEventProcessed: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool MysqlDao::IsMessageUnread(int to_uid, long long server_msg_id)
+{
+    ConnectionGuard guard(pool_);
+    if (!guard) {
+        return false;
+    }
+    try {
+        sql::Connection* con = guard.get();
+        std::unique_ptr<sql::PreparedStatement> pstmt(
+            con->prepareStatement(
+                "SELECT 1 FROM messages WHERE id=? AND to_uid=? AND status=0 LIMIT 1"));
+        pstmt->setInt64(1, server_msg_id);
+        pstmt->setInt(2, to_uid);
+        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+        return res->next();
+    }
+    catch (sql::SQLException& e) {
+        guard.markBad();
+        std::cerr << "[MysqlDao] SQLException in IsMessageUnread: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool MysqlDao::GetUnreadChatMessagesWithIds(int uid, long long cursor, int limit,
+                                            std::vector<long long>& ids,
+                                            std::vector<std::string>& payloads)
 {
     ids.clear();
     payloads.clear();
-    
+    if (limit <= 0) {
+        limit = 100;
+    }
+
     // 使用 RAII ConnectionGuard，自动归还连接
     ConnectionGuard guard(pool_);
     if (!guard) {
@@ -459,9 +722,14 @@ bool MysqlDao::GetUnreadChatMessagesWithIds(int uid, std::vector<long long>& ids
         sql::Connection* con = guard.get();
         
         std::unique_ptr<sql::PreparedStatement> pstmt(
-            con->prepareStatement("SELECT id, payload FROM messages WHERE to_uid = ? AND status = 0 ORDER BY id ASC")
+            con->prepareStatement(
+                "SELECT id, payload FROM messages "
+                "WHERE to_uid = ? AND status = 0 AND id > ? "
+                "ORDER BY id ASC LIMIT ?")
         );
         pstmt->setInt(1, uid);
+        pstmt->setInt64(2, cursor);
+        pstmt->setInt(3, limit);
         std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 
         while (res->next()) {
@@ -469,7 +737,6 @@ bool MysqlDao::GetUnreadChatMessagesWithIds(int uid, std::vector<long long>& ids
             payloads.push_back(res->getString("payload"));
         }
 
-        // 不需要手动 returnConnection，Guard 析构时自动执行
         return true;
     }
     catch (sql::SQLException& e) {
@@ -493,7 +760,7 @@ bool MysqlDao::DeleteChatMessagesByIds(const std::vector<long long>& ids)
     try {
         sql::Connection* con = guard.get();
         std::ostringstream oss;
-        oss << "UPDATE messages SET status=1 WHERE id IN (";
+        oss << "UPDATE messages SET status=1, delivered_at=NOW() WHERE id IN (";
         for (size_t i = 0; i < ids.size(); ++i) {
             if (i) oss << ",";
             oss << "?";
@@ -515,8 +782,11 @@ bool MysqlDao::DeleteChatMessagesByIds(const std::vector<long long>& ids)
     }
 }
 
-bool MysqlDao::AckOfflineMessages(int uid, long long max_msg_id)
+bool MysqlDao::AckOfflineMessages(int uid, const std::vector<long long>& ids)
 {
+    if (ids.empty()) {
+        return true;
+    }
     ConnectionGuard guard(pool_);
     if (!guard) {
         std::cerr << "[MysqlDao] Failed to get connection from pool." << std::endl;
@@ -525,16 +795,24 @@ bool MysqlDao::AckOfflineMessages(int uid, long long max_msg_id)
 
     try {
         sql::Connection* con = guard.get();
-        // 只更新status=0的消息
-        std::unique_ptr<sql::PreparedStatement> pstmt(
-            con->prepareStatement("UPDATE messages SET status=1 WHERE to_uid = ? AND id <= ? AND status = 0")
-        );
+        std::ostringstream oss;
+        oss << "UPDATE messages SET status=1, delivered_at=NOW() "
+               "WHERE to_uid=? AND status=0 AND id IN (";
+        for (size_t i = 0; i < ids.size(); ++i) {
+            if (i) oss << ",";
+            oss << "?";
+        }
+        oss << ")";
+
+        std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement(oss.str()));
         pstmt->setInt(1, uid);
-        pstmt->setInt64(2, max_msg_id);
+        for (size_t i = 0; i < ids.size(); ++i) {
+            pstmt->setInt64(static_cast<unsigned int>(i + 2), ids[i]);
+        }
         int affected_rows = pstmt->executeUpdate();
         
-        std::cout << "[AckOfflineMessages] uid=" << uid 
-                  << " max_msg_id=" << max_msg_id 
+        std::cout << "[AckOfflineMessages] uid=" << uid
+                  << " ids=" << ids.size()
                   << " affected_rows=" << affected_rows << std::endl;
 
         return true;

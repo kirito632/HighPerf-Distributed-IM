@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 project(FullStackProject LANGUAGES CXX)
 
+option(BUILD_TESTING "Build the unit-test tree" OFF)
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -72,6 +75,71 @@ if(NOT MYSQLCPP_TARGET)
       break()
     endif()
   endforeach()
+endif()
+
+# JWT/JWKS/refresh-token core is needed by GateServer at runtime, not only
+# by tests, so it is built unconditionally.
+include(FetchContent)
+set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
+
+FetchContent_Declare(
+  jwtcpp
+  URL https://codeload.github.com/Thalhammer/jwt-cpp/tar.gz/refs/tags/v0.7.0
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(jwtcpp)
+
+add_library(im_auth STATIC
+  common/auth/JwtKeys.cpp
+  common/auth/JwtSigner.cpp
+  common/auth/JwtVerifier.cpp
+  common/auth/Jwks.cpp
+  common/auth/TokenService.cpp
+)
+target_include_directories(im_auth PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/common/auth
+)
+target_link_libraries(im_auth PUBLIC
+  OpenSSL::Crypto
+  jwt-cpp::jwt-cpp
+)
+
+# Lightweight Prometheus text exporter (no external dependency).
+add_library(im_metrics STATIC
+  common/metrics/Metrics.cpp
+  common/metrics/MetricsServer.cpp
+)
+target_include_directories(im_metrics PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/common/metrics
+)
+target_link_libraries(im_metrics PUBLIC
+  Boost::system
+  Threads::Threads
+)
+
+# Kafka wrapper (librdkafka via pkg-config); optional so Kafka can stay off.
+add_subdirectory(common/mq)
+
+# Kafka smoke tool: produce/consume one message against the test broker.
+if(TARGET im_mq)
+  add_executable(mq_smoke tools/mq_smoke.cpp)
+  target_link_libraries(mq_smoke PRIVATE im_mq)
+endif()
+
+# Unit tests. GoogleTest is fetched only when BUILD_TESTING is enabled so
+# production builds do not pay the googleTest download/compile cost.
+if(BUILD_TESTING)
+  FetchContent_Declare(
+    googletest
+    URL https://codeload.github.com/google/googletest/tar.gz/refs/tags/v1.14.0
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  )
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+  set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(googletest)
+
+  add_subdirectory(tests)
 endif()
 
 add_subdirectory(ChatServer)

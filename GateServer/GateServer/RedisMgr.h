@@ -171,6 +171,18 @@ public:
     //   成功返回true，否则返回false
     bool Set(const std::string& key, const std::string& value);
 
+    // 设置键值并带 TTL（秒）
+    bool SetEx(const std::string& key, const std::string& value, int seconds);
+
+    // 原子 GETDEL（Redis 6.2+）
+    bool GetDel(const std::string& key, std::string& value);
+
+    // 原子自增；返回 false 表示 Redis 错误
+    bool Incr(const std::string& key, long long& value);
+
+    // 设置过期时间（秒）
+    bool Expire(const std::string& key, int seconds);
+
     // 发布消息到频道（PUBLISH）
     // 返回：true 表示命令执行成功（不代表有订阅者接收），false 表示执行失败
     bool Publish(const std::string& channel, const std::string& message);

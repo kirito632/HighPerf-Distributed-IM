@@ -18,6 +18,12 @@
 #include "const.h"
 #include <filesystem>
 #include "MysqlDao.h"
+#include "Metrics.h"
+#include "MetricsServer.h"
+#ifdef IM_WITH_KAFKA
+#include "OutboxPublisher.h"
+#include "DeliveryConsumer.h"
+#endif
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -28,16 +34,16 @@ std::condition_variable cond_quit;
 std::mutex mutex_quit;
 
 //  修复：RAII Redis连接管理类，防止内存泄漏
-class RedisConnectionGuard {
+class SubscriberRedisGuard {
 private:
     redisContext* ctx_;
     
 public:
-    RedisConnectionGuard(const char* host, int port) : ctx_(nullptr) {
+    SubscriberRedisGuard(const char* host, int port) : ctx_(nullptr) {
         ctx_ = redisConnect(host, port);
     }
     
-    ~RedisConnectionGuard() {
+    ~SubscriberRedisGuard() {
         if (ctx_) {
             redisFree(ctx_);
             ctx_ = nullptr;
@@ -45,15 +51,15 @@ public:
     }
     
     // 禁止拷贝
-    RedisConnectionGuard(const RedisConnectionGuard&) = delete;
-    RedisConnectionGuard& operator=(const RedisConnectionGuard&) = delete;
+    SubscriberRedisGuard(const SubscriberRedisGuard&) = delete;
+    SubscriberRedisGuard& operator=(const SubscriberRedisGuard&) = delete;
     
     // 允许移动
-    RedisConnectionGuard(RedisConnectionGuard&& other) noexcept : ctx_(other.ctx_) {
+    SubscriberRedisGuard(SubscriberRedisGuard&& other) noexcept : ctx_(other.ctx_) {
         other.ctx_ = nullptr;
     }
     
-    RedisConnectionGuard& operator=(RedisConnectionGuard&& other) noexcept {
+    SubscriberRedisGuard& operator=(SubscriberRedisGuard&& other) noexcept {
         if (this != &other) {
             if (ctx_) redisFree(ctx_);
             ctx_ = other.ctx_;
@@ -125,6 +131,13 @@ int main()
     auto server_name = cfg["SelfServer"]["Name"];
     std::transform(server_name.begin(), server_name.end(), server_name.begin(), ::tolower);
 
+    std::unique_ptr<MetricsServer> metrics_server;
+
+#ifdef IM_WITH_KAFKA
+    std::unique_ptr<OutboxPublisher> outbox_publisher;
+    std::unique_ptr<DeliveryConsumer> delivery_consumer;
+#endif
+
     try {
         // 初始化 MySQL 连接池
         std::string mysql_host = cfg["Mysql"]["Host"];
@@ -139,6 +152,18 @@ int main()
         size_t mysql_pool_size = std::max(16u, std::thread::hardware_concurrency() * 2);
         std::cout << "[ChatServer] MySQL pool size: " << mysql_pool_size << std::endl;
         mysqlPool->Init(mysql_url, mysql_user, mysql_passwd, mysql_schema, mysql_pool_size);
+
+        auto metrics_cfg = cfg["Metrics"];
+        if (metrics_cfg["Enabled"] == "true") {
+            const int metrics_port = std::stoi(metrics_cfg["Port"]);
+            metrics_server = std::make_unique<MetricsServer>();
+            std::string metrics_error;
+            if (!metrics_server->Start(static_cast<std::uint16_t>(metrics_port),
+                                       metrics_error)) {
+                std::cerr << "[Metrics] start failed: " << metrics_error << std::endl;
+                metrics_server.reset();
+            }
+        }
 
         // 获取IO服务池单例
         auto pool = AsioIOServicePool::GetInstance();
@@ -164,6 +189,36 @@ int main()
             grpc_server->Wait(); // 阻塞等待 gRPC 服务器关闭
             });
 
+#ifdef IM_WITH_KAFKA
+        auto feature_cfg = cfg["Feature"];
+        if (feature_cfg["OutboxEnabled"] == "true") {
+            im::mq::KafkaOptions kafka_options;
+            kafka_options.bootstrap_servers = cfg["Kafka"]["Brokers"];
+            kafka_options.client_id = cfg["Kafka"]["ClientId"];
+            kafka_options.group_id = cfg["Kafka"]["GroupId"];
+            outbox_publisher = std::make_unique<OutboxPublisher>();
+            std::string outbox_error;
+            if (!outbox_publisher->Start(kafka_options, outbox_error)) {
+                std::cerr << "[Outbox] start failed: " << outbox_error << std::endl;
+                outbox_publisher.reset();
+            }
+        }
+
+        if (feature_cfg["DeliveryMode"] == "kafka") {
+            im::mq::KafkaOptions kafka_options;
+            kafka_options.bootstrap_servers = cfg["Kafka"]["Brokers"];
+            kafka_options.client_id = cfg["Kafka"]["ClientId"];
+            kafka_options.group_id = cfg["Kafka"]["GroupId"];
+            delivery_consumer = std::make_unique<DeliveryConsumer>();
+            std::string delivery_error;
+            if (!delivery_consumer->Start(kafka_options, server_name,
+                                          delivery_error)) {
+                std::cerr << "[Delivery] start failed: " << delivery_error << std::endl;
+                delivery_consumer.reset();
+            }
+        }
+#endif
+
         // 在独立线程中订阅 Redis 事件，并下发 TCP 通知
         std::thread redis_sub_thread([]() {
             auto& cfg = ConfigMgr::Inst();
@@ -176,7 +231,7 @@ int main()
 
             while (!bstop.load()) {
                 //  修复：使用RAII管理Redis连接，防止异常时内存泄漏
-                RedisConnectionGuard redis_guard(host.c_str(), port);
+                SubscriberRedisGuard redis_guard(host.c_str(), port);
                 if (!redis_guard) {
                     std::cout << "[FriendNotify][Chat][Redis] connect failed host=" << host << ":" << port << std::endl;
                     std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -331,7 +386,7 @@ int main()
                     }
                 }
 
-                //  修复：移除手动redisFree，由RAII自动管理（RedisConnectionGuard析构时自动释放）
+                //  修复：移除手动redisFree，由RAII自动管理（SubscriberRedisGuard析构时自动释放）
                 if (!bstop.load()) {
                     std::this_thread::sleep_for(std::chrono::seconds(2));
                 }
@@ -348,12 +403,10 @@ int main()
         signals.async_wait([&](const boost::system::error_code& ec, int signo) {
             if (!ec) {
                 std::cout << "signal " << signo << " received, stopping..." << std::endl;
-                // 停止 pool，同时 stop io_context 并 join 线程
-                pool->Stop();
-
-                // 通知主线程退出
+                // 信号回调运行在 IO 线程上，绝不能在这里 join IO 线程。
+                // 只置标志并唤醒主线程，由主线程完成 acceptor/IO 池的停止。
                 bstop.store(true);
-                grpc_server->Shutdown(); // 关闭 gRPC 服务器
+                grpc_server->Shutdown();
                 cond_quit.notify_one();
             }
             else {
@@ -389,6 +442,24 @@ int main()
         std::unique_lock<std::mutex> lk(mutex_quit);
         std::cout << "About to wait on cond_quit\n";
         cond_quit.wait(lk, [&] { return bstop.load(); });
+
+        // 主线程先停止 acceptor，再停止 IO 池；Stop() 幂等，析构时再次调用安全。
+        s.Stop();
+        pool->Stop();
+
+        if (metrics_server) {
+            metrics_server->Stop();
+        }
+
+        // 停止 outbox publisher，确保不再访问 MySQL/Kafka
+#ifdef IM_WITH_KAFKA
+        if (delivery_consumer) {
+            delivery_consumer->Stop();
+        }
+        if (outbox_publisher) {
+            outbox_publisher->Stop();
+        }
+#endif
 
         // 清理资源
         RedisMgr::GetInstance()->HDel(LOGIN_COUNT, server_name);

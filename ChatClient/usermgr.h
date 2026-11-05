@@ -44,6 +44,10 @@ public:
     // 设置认证令牌
     void SetToken(const QString &token);
 
+    // 设置/获取 refresh token（用于 HTTP 401 自动续期）
+    void SetRefreshToken(const QString &token);
+    QString GetRefreshToken() const;
+
     // ========== 获取用户信息（线程安全）==========
     
     // 获取用户名
@@ -67,6 +71,7 @@ private:
     mutable QReadWriteLock _lock;  // 读写锁（保证线程安全）
     QString _name;                 // 用户名
     QString _token;                // 认证令牌
+    QString _refreshToken;         // refresh token
     int _uid = 0;                  // 用户ID
 };
 

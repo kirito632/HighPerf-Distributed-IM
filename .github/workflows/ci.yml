@@ -1,0 +1,35 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-unit-test:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config \
+            libboost-all-dev libssl-dev libhiredis-dev libjsoncpp-dev \
+            libprotobuf-dev protobuf-compiler protobuf-compiler-grpc \
+            libgrpc++-dev
+
+      - name: Configure
+        run: |
+          cmake -S . -B build_ci -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DBUILD_TESTING=ON
+
+      - name: Build unit tests
+        run: cmake --build build_ci --target im_unit_tests -j2
+
+      - name: Run unit tests
+        run: ctest --test-dir build_ci --output-on-failure

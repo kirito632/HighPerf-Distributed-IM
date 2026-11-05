@@ -3,10 +3,6 @@
 #include "const.h"
 #include "RedisMgr.h"
 
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
-
 #include <algorithm>
 #include <climits>
 #include <sstream>
@@ -21,33 +17,21 @@ static inline std::string trim(const std::string& s) {
     return s.substr(l, r - l);
 }
 
-// 生成唯一的UUID字符串
-// 
-// 返回值：
-//   返回一个UUID字符串（例如："12345678-1234-1234-1234-123456789abc"）
-// 
-// 用途：
-//   用作用户登录token，保证唯一性
-std::string generate_unique_string() {
-    boost::uuids::uuid uuid = boost::uuids::random_generator()();
-    return to_string(uuid);
-}
-
-// 插入用户token到Redis
-// 
-// 参数：
-//   - uid: 用户ID
-//   - token: 认证令牌
-// 
-// 实现逻辑：
-//   1. 构造Redis键：USERTOKENPREFIX + uid
-//   2. 将token存储到Redis中
-void StatusServiceImpl::insertToken(int uid, std::string token)
-{
-    std::string uid_str = std::to_string(uid);
-    std::string token_key = USERTOKENPREFIX + uid_str;
-    RedisMgr::GetInstance()->Set(token_key, token);
-    std::cout << "[insertToken] uid=" << uid << " key=" << token_key << " token=" << token << std::endl;
+bool StatusServiceImpl::checkInternal(ServerContext* context) {
+    auto& cfg = ConfigMgr::Inst();
+    auto internal_cfg = cfg["Internal"];
+    const std::string expected = internal_cfg["Token"];
+    if (expected.empty()) {
+        std::cerr << "[InternalAuth] Internal.Token is not configured\n";
+        return false;
+    }
+    const auto& metadata = context->client_metadata();
+    const auto it = metadata.find("x-internal-token");
+    if (it == metadata.end()) {
+        return false;
+    }
+    const std::string supplied(it->second.data(), it->second.size());
+    return supplied == expected;
 }
 
 // 获取可用的ChatServer（负载均衡算法）
@@ -126,6 +110,9 @@ ChatServer StatusServiceImpl::getChatServer()
 //   5. 返回ChatServer的host、port和token
 Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatServerReq* request, GetChatServerRsp* reply)
 {
+    if (!checkInternal(context)) {
+        return Status(grpc::StatusCode::UNAUTHENTICATED, "missing internal token");
+    }
     std::cout << "[GetChatServer] called with uid=" << request->uid() << std::endl;
 
     // 选择一个负载最轻的ChatServer
@@ -143,62 +130,26 @@ Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatSer
         return Status::OK;
     }
 
-    // 设置返回信息
+    // 设置返回信息；认证由 Gate 签发 JWT，Status 不再生成 token
     reply->set_host(server.host);
     reply->set_port(server.port);
     reply->set_error(ErrorCodes::Success);
 
-    // 生成唯一的token并存储到Redis
-    std::string token = generate_unique_string();
-    reply->set_token(token);
-    insertToken(request->uid(), token);
-
-    std::cout << "[GetChatServer] reply set host=" << server.host << " port=" << server.port << " token=" << token << "\n";
+    std::cout << "[GetChatServer] reply set host=" << server.host << " port=" << server.port << std::endl;
     return Status::OK;
 }
 
 // 用户登录验证（gRPC方法实现）
 // 
 // 功能：
-//   验证用户的token是否有效
-// 
-// 实现逻辑：
-//   1. 从Redis读取用户对应的token（key = USERTOKENPREFIX + uid）
-//   2. 比较请求中的token和Redis中的token
-//   3. 如果匹配，返回成功；否则返回失败
-// 
-// 使用场景：
-//   ChatServer在用户连接时调用此接口验证token
+//   旧 UUID token 校验接口；现在认证由 ChatServer 本地 JWT 完成。
+//   该接口保留只为 proto 兼容，始终返回 TokenInvalid。
 Status StatusServiceImpl::Login(ServerContext* context, const message::LoginReq* request, message::LoginRsp* reply)
 {
-    auto uid = request->uid();
-    auto token = request->token();
-
-    // 构造Redis键
-    std::string uid_str = std::to_string(uid);
-    std::string token_key = USERTOKENPREFIX + uid_str;
-    std::string token_value;
-
-    // 从Redis读取token
-    bool got = RedisMgr::GetInstance()->Get(token_key, token_value);
-    if (!got) {
-        std::cerr << "[Login] token not found in redis for uid=" << uid << " key=" << token_key << std::endl;
-        reply->set_error(ErrorCodes::TokenInvalid);
-        return Status::OK;
+    if (!checkInternal(context)) {
+        return Status(grpc::StatusCode::UNAUTHENTICATED, "missing internal token");
     }
-
-    // 比较token
-    if (token_value != token) {
-        std::cerr << "[Login] token mismatch for uid=" << uid << " expected=" << token_value << " got=" << token << std::endl;
-        reply->set_error(ErrorCodes::TokenInvalid);
-        return Status::OK;
-    }
-
-    // 验证成功
-    reply->set_error(ErrorCodes::Success);
-    reply->set_uid(uid);
-    reply->set_token(token);
-    std::cout << "[Login] success for uid=" << uid << std::endl;
+    reply->set_error(ErrorCodes::TokenInvalid);
     return Status::OK;
 }
 

@@ -1,0 +1,28 @@
+groups:
+  - name: im-delivery
+    rules:
+      - alert: ImOutboxPublishFailures
+        expr: increase(im_outbox_failed_total[5m]) > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "IM outbox publish failures are elevated"
+          description: "More than 5 outbox publish failures in 5 minutes."
+
+      - alert: ImDeliveryDlqEvents
+        expr: increase(im_delivery_dlq_total[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Malformed IM events reached the DLQ"
+          description: "At least one event was routed to im.message.dlq."
+
+      - alert: ImServiceDown
+        expr: up{job="im-services"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "IM metrics target is down"
+          description: "Prometheus cannot scrape an IM service."

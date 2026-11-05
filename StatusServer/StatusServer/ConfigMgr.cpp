@@ -28,7 +28,9 @@ ConfigMgr::ConfigMgr()
 			SectionInfo section_config = section_entry.second;
 			std::cout << "[" << section_name << "]" << std::endl;
 			for (const auto& key_value_pair : section_config._section_datas) {
-				std::cout << key_value_pair.first << "=" << key_value_pair.second << std::endl;
+				const std::string& cfg_key = key_value_pair.first;
+bool cfg_sensitive = cfg_key == "Passwd" || cfg_key == "Pass" || cfg_key == "Password" || cfg_key == "Token" || cfg_key == "Secret";
+std::cout << cfg_key << "=" << (cfg_sensitive ? "***" : key_value_pair.second) << std::endl;
 			}
 		}
 	}

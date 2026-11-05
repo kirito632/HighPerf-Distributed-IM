@@ -100,7 +100,7 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
 
     redisReply* reply = (redisReply*)redisCommand(connect, "SET %s %s", key.c_str(), value.c_str());
     if (reply == nullptr) {
-        std::cout << "[RedisMgr::Set] Execut command [ SET " << key << "  " << value << " ] failure (reply==NULL)!\n";
+        std::cout << "[RedisMgr::Set] SET failure key=" << key << " value_len=" << value.size() << std::endl;
         return false;
     }
 
@@ -114,10 +114,10 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
     freeReplyObject(reply);
 
     if (ok) {
-        std::cout << "Execut command [ SET " << key << "  " << value << " ] success ! " << std::endl;
+        std::cout << "Execut command [ SET " << key << " ] success, value_len=" << value.size() << std::endl;
         return true;
     }
-    std::cout << "Execut command [ SET " << key << "  " << value << " ] failure ! " << std::endl;
+    std::cout << "Execut command [ SET " << key << " ] failure" << std::endl;
     return false;
 }
 

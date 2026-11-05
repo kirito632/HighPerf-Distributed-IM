@@ -1,4 +1,6 @@
 #include <vector>
+#include <atomic>
+#include <thread>
 #include <boost/asio.hpp>
 #include "Singleton.h"
 class AsioIOServicePool :public Singleton<AsioIOServicePool>
@@ -20,5 +22,6 @@ private:
     std::vector<WorkPtr> _works;
     std::vector<std::thread> _threads;
     std::size_t _nextIOService;
+    std::atomic<bool> _stopped{false};
 };
 

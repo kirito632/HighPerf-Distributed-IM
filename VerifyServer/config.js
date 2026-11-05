@@ -43,5 +43,9 @@ let redis_passwd = process.env.REDIS_PASS || config.redis.passwd;
 // 验证码Redis键前缀（与const.js保持一致）
 let code_prefix = "code_";
 
+// 内部 gRPC 服务令牌；生产环境优先使用 INTERNAL_TOKEN 环境变量
+let internal_token = process.env.INTERNAL_TOKEN ||
+    (config.internal && config.internal.token) || "";
+
 // 导出所有配置项
-module.exports = { email_pass, email_user, mysql_host, mysql_port, redis_host, redis_port, redis_passwd, code_prefix }
+module.exports = { email_pass, email_user, mysql_host, mysql_port, redis_host, redis_port, redis_passwd, code_prefix, internal_token }

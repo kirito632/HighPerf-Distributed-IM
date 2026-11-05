@@ -61,6 +61,12 @@ void UserMgr::SetToken(const QString &token)
     _token = token;
 }
 
+void UserMgr::SetRefreshToken(const QString &token)
+{
+    QWriteLocker locker(&_lock);
+    _refreshToken = token;
+}
+
 // 获取用户名（线程安全）
 // 
 // 返回值：
@@ -98,6 +104,12 @@ QString UserMgr::GetToken() const
 {
     QReadLocker locker(&_lock);
     return _token;
+}
+
+QString UserMgr::GetRefreshToken() const
+{
+    QReadLocker locker(&_lock);
+    return _refreshToken;
 }
 
 // 打印当前用户状态（线程安全）

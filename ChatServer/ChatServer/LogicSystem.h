@@ -14,6 +14,9 @@
 // 前向声明
 class CSession;
 class LogicNode;
+namespace im::auth {
+class JwtVerifier;
+}
 
 // 消息节点类型定义：用于处理消息的回调函数
 // 参数：
@@ -89,6 +92,9 @@ private:
     std::thread _worker_thread;                       // 工作线程
     bool _b_stop;                                     // 停止标志
     std::map<short, FunCallBack> _fun_callbacks;     // 回调函数映射表（消息ID -> 处理函数）
+
+    // JWT 本地验签；JwtEnabled=false 时为空，退回 Redis token
+    std::unique_ptr<im::auth::JwtVerifier> _jwt_verifier;
 };
 
 

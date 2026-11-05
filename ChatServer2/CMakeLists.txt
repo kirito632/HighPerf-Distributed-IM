@@ -8,6 +8,11 @@ file(GLOB CHAT2_SRCS
     ${CHATSERVER2_SRC_DIR}/*.cxx
 )
 
+list(REMOVE_ITEM CHAT2_SRCS ${CHATSERVER2_SRC_DIR}/OutboxPublisher.cpp ${CHATSERVER2_SRC_DIR}/DeliveryConsumer.cpp)
+if(TARGET im_mq)
+    list(APPEND CHAT2_SRCS ${CHATSERVER2_SRC_DIR}/OutboxPublisher.cpp ${CHATSERVER2_SRC_DIR}/DeliveryConsumer.cpp)
+endif()
+
 # 可执行文件
 add_executable(chat_server2 ${CHAT2_SRCS})
 
@@ -19,7 +24,14 @@ target_link_libraries(chat_server2 PRIVATE
     OpenSSL::Crypto
     Threads::Threads
     Boost::system Boost::filesystem
+    im_auth
+    im_metrics
 )
+
+if(TARGET im_mq)
+    target_link_libraries(chat_server2 PRIVATE im_mq)
+    target_compile_definitions(chat_server2 PRIVATE IM_WITH_KAFKA=1)
+endif()
 
 if(HIREDIS_TARGET)
     target_link_libraries(chat_server2 PRIVATE ${HIREDIS_TARGET})
@@ -41,3 +53,4 @@ endif()
 if(WIN32)
     target_link_libraries(chat_server2 PRIVATE ws2_32)
 endif()
+

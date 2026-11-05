@@ -1,4 +1,5 @@
 #include "friendmanager.h"
+#include "usermgr.h"
 #include <QNetworkRequest>
 #include <QJsonDocument>
 #include <QDebug>
@@ -153,7 +154,7 @@ void FriendManager::replyFriendRequest(int fromUid, bool agree)
 //   4. 如果失败，发送 errorOccurred 信号
 void FriendManager::onSearchReplyFinished()
 {
-    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    QNetworkReply *reply = m_activeReply;
     if (!reply) {
         qDebug() << "[FriendManager] 搜索响应错误: reply为空";
         return;
@@ -216,7 +217,7 @@ void FriendManager::onSearchReplyFinished()
 //   4. 如果失败，发送 errorOccurred 信号
 void FriendManager::onFriendRequestsReplyFinished()
 {
-    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    QNetworkReply *reply = m_activeReply;
     if (!reply) return;
     
     if (reply->error() == QNetworkReply::NoError) {
@@ -247,7 +248,7 @@ void FriendManager::onFriendRequestsReplyFinished()
 //   4. 如果失败，发送 errorOccurred 信号
 void FriendManager::onMyFriendsReplyFinished()
 {
-    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    QNetworkReply *reply = m_activeReply;
     if (!reply) return;
     
     if (reply->error() == QNetworkReply::NoError) {
@@ -278,7 +279,7 @@ void FriendManager::onMyFriendsReplyFinished()
 //   4. 如果有错误，发送 errorOccurred 信号
 void FriendManager::onSendRequestReplyFinished()
 {
-    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    QNetworkReply *reply = m_activeReply;
     if (!reply) return;
     
     if (reply->error() == QNetworkReply::NoError) {
@@ -309,7 +310,7 @@ void FriendManager::onSendRequestReplyFinished()
 //   4. 如果有错误，发送 errorOccurred 信号
 void FriendManager::onReplyRequestReplyFinished()
 {
-    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    QNetworkReply *reply = m_activeReply;
     if (!reply) return;
     
     if (reply->error() == QNetworkReply::NoError) {
@@ -436,34 +437,126 @@ FriendRequest FriendManager::parseRequestFromJson(const QJsonObject &requestObj)
 // 实现细节：
 //   - 使用QNetworkAccessManager发送HTTP请求
 //   - 响应处理在对应的槽函数中进行
-void FriendManager::sendPostRequest(const QString &endpoint, const QJsonObject &data, 
-                                  const char *finishedSlot)
+void FriendManager::sendPostRequest(const QString &endpoint, const QJsonObject &data,
+                                  const char *finishedSlot, bool allowRefresh)
 {
     // 构建完整的URL
     QUrl url(m_serverUrl + endpoint);
     QNetworkRequest request(url);
-    
+
     // 设置请求头
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    
+    const QString token = UserMgr::GetInstance()->GetToken();
+    if (!token.isEmpty()) {
+        request.setRawHeader("Authorization", "Bearer " + token.toUtf8());
+    }
+
     // 将JSON对象转换为字节数组
     QJsonDocument doc(data);
     QByteArray jsonData = doc.toJson();
-    
+
     qDebug() << "[FriendManager] 发送POST请求";
     qDebug() << "[FriendManager] URL:" << url.toString();
     qDebug() << "[FriendManager] 请求数据:" << QString::fromUtf8(jsonData);
     qDebug() << "[FriendManager] 当前用户ID:" << m_currentUid;
-    
+
     // 发送POST请求
     QNetworkReply *reply = m_networkManager->post(request, jsonData);
-    
-    // 连接完成信号到指定的槽函数
-    connect(reply, SIGNAL(finished()), this, finishedSlot);
-    
+
+    const QByteArray slotName(finishedSlot);
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, endpoint, data, slotName, allowRefresh]() {
+                handleReplyFinished(reply, endpoint, data, slotName, allowRefresh);
+            });
+
     // 连接错误信号以便调试
     connect(reply, QOverload<QNetworkReply::NetworkError>::of(&QNetworkReply::error),
             [this, endpoint](QNetworkReply::NetworkError error) {
                 qDebug() << "[FriendManager] 请求" << endpoint << "发生网络错误:" << error;
             });
 }
+
+void FriendManager::handleReplyFinished(QNetworkReply *reply,
+                                        const QString &endpoint,
+                                        const QJsonObject &data,
+                                        const QByteArray &finishedSlot,
+                                        bool allowRefresh)
+{
+    const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    if (status == 401 && allowRefresh) {
+        m_pendingRequests.append({endpoint, data, finishedSlot});
+        reply->deleteLater();
+        refreshAccessToken();
+        return;
+    }
+
+    // Existing handlers use sender() to obtain the reply; provide the active
+    // reply explicitly while invoking them.
+    m_activeReply = reply;
+    QMetaObject::invokeMethod(this, finishedSlot.constData(), Qt::DirectConnection);
+    m_activeReply = nullptr;
+    reply->deleteLater();
+}
+
+void FriendManager::refreshAccessToken()
+{
+    if (m_refreshing) {
+        return;
+    }
+    const QString refreshToken = UserMgr::GetInstance()->GetRefreshToken();
+    if (refreshToken.isEmpty()) {
+        emit errorOccurred("登录已过期，请重新登录");
+        m_pendingRequests.clear();
+        return;
+    }
+
+    m_refreshing = true;
+    QNetworkRequest request(QUrl(m_serverUrl + "/oauth/token"));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    QJsonObject body;
+    body["grant_type"] = "refresh_token";
+    body["refresh_token"] = refreshToken;
+    QNetworkReply *reply = m_networkManager->post(
+        request, QJsonDocument(body).toJson(QJsonDocument::Compact));
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        m_refreshing = false;
+        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const QByteArray payload = reply->readAll();
+        reply->deleteLater();
+
+        QJsonParseError parseError{};
+        const QJsonDocument doc = QJsonDocument::fromJson(payload, &parseError);
+        if (status != 200 || parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+            qDebug() << "[FriendManager] refresh token failed, status=" << status
+                     << " body=" << payload;
+            emit errorOccurred("登录已过期，请重新登录");
+            m_pendingRequests.clear();
+            return;
+        }
+
+        const QJsonObject obj = doc.object();
+        const QString accessToken = obj.value("access_token").toString();
+        if (accessToken.isEmpty()) {
+            emit errorOccurred("刷新登录状态失败");
+            m_pendingRequests.clear();
+            return;
+        }
+        UserMgr::GetInstance()->SetToken(accessToken);
+        const QString newRefresh = obj.value("refresh_token").toString();
+        if (!newRefresh.isEmpty()) {
+            UserMgr::GetInstance()->SetRefreshToken(newRefresh);
+        }
+        replayPendingRequests();
+    });
+}
+
+void FriendManager::replayPendingRequests()
+{
+    const auto pending = m_pendingRequests;
+    m_pendingRequests.clear();
+    for (const auto &item : pending) {
+        sendPostRequest(item.endpoint, item.data, item.finishedSlot.constData(), false);
+    }
+}
+

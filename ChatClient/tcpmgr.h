@@ -11,7 +11,7 @@
 
 // 调整：取消对 AddFriendApply 的依赖（不再需要前向声明）
 
-constexpr int MAX_LENGTH = 4096; // 4KB：单条消息最大长度
+constexpr int MAX_LENGTH = 64 * 1024; // 64KB：单条消息最大长度
 
 class TcpMgr : public QObject, public QObjectSingleton<TcpMgr>, public std::enable_shared_from_this<TcpMgr>
 {
@@ -42,7 +42,7 @@ private:
     quint16 _message_id;
     // 当前正在处理的消息 ID（用来区分消息类型，比如登录回应/聊天消息）
 
-    quint16 _message_len;
+    quint32 _message_len;
     // 当前消息的数据长度，用于判断一条完整消息是否已经接收完毕
 
     QMap<ReqId, std::function<void(ReqId id, int len, QByteArray data)>> _handlers;
@@ -87,7 +87,7 @@ signals:
 
     // 文本聊天下行（1019）通知：fromuid -> touid 的一条文本（仅传首条内容，列表由上层自行遍历需要的话）
     // 增加 msgId 参数，用于去重和ACK
-    void sig_text_notify(int fromUid, int toUid, const QString &msgId, const QString &content);
+    void sig_text_notify(int fromUid, int toUid, qint64 serverMsgId, const QString &msgId, const QString &content);
 };
 
 #endif // TCPMGR_H

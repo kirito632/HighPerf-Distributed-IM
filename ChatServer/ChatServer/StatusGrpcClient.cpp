@@ -34,7 +34,7 @@ GetChatServerRsp StatusGrpcClient::GetChatServer(int uid)
     // 输出关键日志，打印 server 返回的 host/port/token
     std::cout << "StatusGrpcClient::GetChatServer reply: error=" << reply.error()
         << " host='" << reply.host() << "' port='" << reply.port()
-        << "' token='" << reply.token() << "'\n";
+        << "\n";
 
     return reply;
 }
@@ -87,7 +87,7 @@ LoginRsp StatusGrpcClient::Login(int uid, std::string token)
 
     // 7. 输出响应
     std::cout << "StatusGrpcClient::Login reply: error=" << reply.error()
-        << " uid='" << reply.uid() << "' token='" << reply.token() << "'\n";
+        << " uid='" << reply.uid() << "'\n";
 
     return reply;
 }

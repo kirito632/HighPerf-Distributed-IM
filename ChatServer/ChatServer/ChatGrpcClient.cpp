@@ -20,6 +20,7 @@
 //   4. 使用server的Name作为key，存储在unordered_map中
 ChatGrpcClient::ChatGrpcClient() {
   auto &cfg = ConfigMgr::Inst();
+  _internal_token = cfg["Internal"]["Token"];
   auto server_list = cfg["PeerServer"]["Servers"];
 
   std::vector<std::string> words;
@@ -95,6 +96,9 @@ AddFriendRsp ChatGrpcClient::NotifyAddFriend(std::string server_ip,
 
   auto &pool = find_iter->second;
   ClientContext context;
+  if (!_internal_token.empty()) {
+    context.AddMetadata("x-internal-token", _internal_token);
+  }
   auto stub = pool->getConnection();
   Status status = stub->NotifyAddFriend(&context, req, &rsp);
   Defer defercon(
@@ -154,6 +158,9 @@ TextChatMsgRsp ChatGrpcClient::NotifyTextChatMsg(std::string server_ip,
 
   auto &pool = find_iter->second;
   ClientContext context;
+  if (!_internal_token.empty()) {
+    context.AddMetadata("x-internal-token", _internal_token);
+  }
   auto stub = pool->getConnection();
   if (!stub) {
     rsp.set_error(ErrorCodes::RPCFailed);

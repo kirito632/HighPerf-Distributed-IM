@@ -2,6 +2,7 @@
 #include <grpcpp/grpcpp.h>
 #include "message.grpc.pb.h"
 #include "const.h"
+#include "ConfigMgr.h"
 #include "Singleton.h"
 #include <atomic>
 #include <queue>
@@ -103,6 +104,10 @@ public:
 
         GetVerifyRsp reply;
         ClientContext context;
+        const std::string internal_token = ConfigMgr::Inst()["Internal"]["Token"];
+        if (!internal_token.empty()) {
+            context.AddMetadata("x-internal-token", internal_token);
+        }
         GetVerifyReq request;
         request.set_email(email);
 

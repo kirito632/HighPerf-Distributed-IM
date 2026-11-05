@@ -158,6 +158,7 @@ private:
 
     // 存储多个ChatServer的连接池（server_name -> connection_pool）
     std::unordered_map<std::string, std::unique_ptr<ChatConPool> > _pools;
+    std::string _internal_token;
 };
 
 

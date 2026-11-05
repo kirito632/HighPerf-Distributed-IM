@@ -1,0 +1,66 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 0,
+  "panels": [
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "targets": [
+        {"expr": "rate(im_messages_received_total[1m])", "legendFormat": "messages/s", "refId": "A"}
+      ],
+      "title": "Messages persisted",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "targets": [
+        {"expr": "rate(im_outbox_published_total[1m])", "legendFormat": "published/s", "refId": "A"},
+        {"expr": "increase(im_outbox_failed_total[5m])", "legendFormat": "failed/5m", "refId": "B"}
+      ],
+      "title": "Outbox",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 3,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "targets": [
+        {"expr": "rate(im_delivery_processed_total[1m])", "legendFormat": "processed/s", "refId": "A"},
+        {"expr": "increase(im_delivery_duplicate_total[5m])", "legendFormat": "duplicates/5m", "refId": "B"},
+        {"expr": "increase(im_delivery_dlq_total[5m])", "legendFormat": "dlq/5m", "refId": "C"}
+      ],
+      "title": "Kafka delivery",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 4,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "targets": [
+        {"expr": "up{job=\"im-services\"}", "legendFormat": "{{instance}}", "refId": "A"}
+      ],
+      "title": "Scrape targets",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["im", "kafka"],
+  "templating": {"list": []},
+  "time": {"from": "now-15m", "to": "now"},
+  "timezone": "browser",
+  "title": "IM Overview",
+  "uid": "im-overview",
+  "version": 1
+}

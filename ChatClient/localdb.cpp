@@ -1,6 +1,7 @@
 #include "localdb.h"
 #include <QDir>
 #include <QStandardPaths>
+#include <algorithm>
 
 LocalDb::LocalDb() : _uid(0) {
 
@@ -97,11 +98,11 @@ std::vector<MessageInfo> LocalDb::GetHistory(int friendUid, int offset, int limi
     if (!_db.isOpen()) return result;
 
     QSqlQuery query;
-    // 直接按 msg_id 升序查询，保证消息顺序正确
+    // 先取最近的 limit 条，再反转为升序显示；避免只显示最旧的 50 条。
     query.prepare("SELECT msg_id, from_uid, to_uid, content, create_time, status, type "
                   "FROM message "
                   "WHERE (from_uid = ? AND to_uid = ?) OR (from_uid = ? AND to_uid = ?) "
-                  "ORDER BY msg_id ASC LIMIT ? OFFSET ?");
+                  "ORDER BY msg_id DESC LIMIT ? OFFSET ?");
     
     query.addBindValue(_uid);
     query.addBindValue(friendUid);
@@ -126,5 +127,6 @@ std::vector<MessageInfo> LocalDb::GetHistory(int friendUid, int offset, int limi
         qDebug() << "[LocalDb] GetHistory failed:" << query.lastError();
     }
     
+    std::reverse(result.begin(), result.end());
     return result;
 }

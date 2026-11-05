@@ -1,15 +1,128 @@
 #include "LogicSystem.h"
 #include "HttpConnection.h"
 #include "MysqlMgr.h"
+#include "MysqlDao.h"
+#include "MySqlRefreshTokenStore.h"
 #include "RedisMgr.h"
 #include "StatusGrpcClient.h"
 #include "VerifyGrpcClient.h"
+#include "TokenService.h"
+#include "JwtVerifier.h"
+#include "Jwks.h"
+#include "JwtKeys.h"
+#include "ConfigMgr.h"
+#include "Singleton.h"
 #include "const.h"
 #include "crypto_utils.h"
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <iomanip>
+#include <map>
+#include <memory>
 #include <sstream>
+#include <ctime>
+#include <chrono>
+
+using im::auth::JwtConfig;
+using im::auth::MySqlRefreshTokenStore;
+using im::auth::TokenResult;
+using im::auth::TokenService;
+
+namespace {
+
+std::string UrlDecodeForm(const std::string& value) {
+    std::string out;
+    out.reserve(value.size());
+    auto hex = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        return -1;
+    };
+
+    for (size_t i = 0; i < value.size(); ++i) {
+        if (value[i] == '+') {
+            out.push_back(' ');
+        } else if (value[i] == '%' && i + 2 < value.size()) {
+            const int high = hex(value[i + 1]);
+            const int low = hex(value[i + 2]);
+            if (high >= 0 && low >= 0) {
+                out.push_back(static_cast<char>((high << 4) | low));
+                i += 2;
+            } else {
+                out.push_back(value[i]);
+            }
+        } else {
+            out.push_back(value[i]);
+        }
+    }
+    return out;
+}
+
+// OAuth2 token endpoint accepts application/x-www-form-urlencoded, while the
+// existing desktop client sends JSON. Support both during the migration.
+std::map<std::string, std::string> ParseTokenRequest(const std::string& body) {
+    std::map<std::string, std::string> params;
+    if (body.empty()) {
+        return params;
+    }
+
+    const auto first = body.find_first_not_of(" \t\r\n");
+    if (first != std::string::npos && body[first] == '{') {
+        Json::Reader reader;
+        Json::Value root;
+        if (!reader.parse(body, root) || !root.isObject()) {
+            return params;
+        }
+        for (const auto& key : root.getMemberNames()) {
+            params[key] = root[key].asString();
+        }
+        return params;
+    }
+
+    size_t pos = 0;
+    while (pos <= body.size()) {
+        const size_t amp = body.find('&', pos);
+        const std::string pair = body.substr(pos, amp == std::string::npos ? std::string::npos : amp - pos);
+        const size_t eq = pair.find('=');
+        if (eq != std::string::npos) {
+            params[UrlDecodeForm(pair.substr(0, eq))] = UrlDecodeForm(pair.substr(eq + 1));
+        }
+        if (amp == std::string::npos) {
+            break;
+        }
+        pos = amp + 1;
+    }
+    return params;
+}
+
+Json::Value OAuthError(const std::string& code, const std::string& description) {
+    Json::Value root;
+    root["error"] = code;
+    root["error_description"] = description;
+    return root;
+}
+
+}  // namespace
+
+std::string LogicSystem::ReadBody(const std::shared_ptr<HttpConnection>& con) {
+    if (!con) {
+        return "";
+    }
+    return boost::beast::buffers_to_string(con->_request.body().data());
+}
+
+void LogicSystem::SendJson(const std::shared_ptr<HttpConnection>& con,
+                           const Json::Value& root,
+                           http::status status) {
+    con->_response.result(status);
+    con->_response.set(http::field::content_type, "application/json");
+    beast::ostream(con->_response.body()) << root.toStyledString();
+    con->WriteResponse();
+}
+
+LogicSystem::~LogicSystem() = default;
 
 // 注册POST请求处理器
 // 参数：
@@ -17,6 +130,19 @@
 //   - handler: 处理函数
 void LogicSystem::RegPost(std::string url, HttpHandler handler) {
   _post_handlers.emplace(make_pair(url, handler));
+}
+
+void LogicSystem::RegProtectedPost(std::string url, HttpHandler handler,
+                                   std::string required_scope) {
+  auto wrapped = [this, handler = std::move(handler),
+                  required_scope = std::move(required_scope)](
+                     std::shared_ptr<HttpConnection> connection) {
+    if (!RequireAuth(connection, required_scope)) {
+      return;
+    }
+    handler(std::move(connection));
+  };
+  _post_handlers.emplace(std::move(url), std::move(wrapped));
 }
 
 // 注册GET请求处理器
@@ -43,6 +169,48 @@ void LogicSystem::RegGet(std::string url, HttpHandler handler) {
 //   - /send_friend_request: 发送好友申请
 //   - /reply_friend_request: 回复好友申请
 LogicSystem::LogicSystem() {
+  // Optional JWT/OAuth2-style token service. Disabled by default so existing
+  // deployments keep the legacy login flow until keys/config are provisioned.
+  try {
+    auto& cfg = ConfigMgr::Inst();
+    auto feature_cfg = cfg["Feature"];
+    auto jwt_cfg = cfg["Jwt"];
+    if (feature_cfg["JwtEnabled"] == "true") {
+      JwtConfig jwt;
+      jwt.issuer = jwt_cfg["Issuer"];
+      jwt.audience = jwt_cfg["Audience"];
+      jwt.key_id = jwt_cfg["KeyId"];
+      jwt.private_key_pem = im::auth::ReadPemFile(jwt_cfg["PrivateKeyPath"]);
+      jwt.public_key_pem = im::auth::ReadPemFile(jwt_cfg["PublicKeyPath"]);
+
+      const std::string access_ttl = jwt_cfg["AccessTtlSeconds"];
+      if (!access_ttl.empty()) {
+        jwt.access_ttl_seconds = std::stoi(access_ttl);
+      }
+      const std::string skew = jwt_cfg["ClockSkewSeconds"];
+      if (!skew.empty()) {
+        jwt.clock_skew_seconds = std::stoi(skew);
+      }
+      const std::string refresh_ttl = jwt_cfg["RefreshTtlSeconds"];
+      const int refresh_ttl_seconds = refresh_ttl.empty() ? 604800 : std::stoi(refresh_ttl);
+
+      auto store = std::make_shared<MySqlRefreshTokenStore>(
+          Singleton<MySqlPool>::GetInstance());
+      _token_service = std::make_unique<TokenService>(
+          jwt, refresh_ttl_seconds, "im.friend im.message", store);
+      _jwt_verifier = std::make_unique<im::auth::JwtVerifier>(jwt);
+      _jwt_public_pem = jwt.public_key_pem;
+      _jwt_key_id = jwt.key_id;
+      std::cout << "[Auth] JWT enabled, issuer=" << jwt.issuer
+                << " audience=" << jwt.audience
+                << " kid=" << jwt.key_id << std::endl;
+    }
+  } catch (const std::exception& e) {
+    std::cerr << "[Auth] JWT initialization failed, endpoints disabled: "
+              << e.what() << std::endl;
+    _token_service.reset();
+  }
+
   // 注册获取验证码API
   // 功能：通过gRPC调用VerifyServer获取验证码，并存储到Redis
   // 请求参数：{"email": "xxx@example.com"}
@@ -50,7 +218,7 @@ LogicSystem::LogicSystem() {
   RegPost("/get_verifycode", [](std::shared_ptr<HttpConnection> connection) {
     auto body_str =
         boost::beast::buffers_to_string(connection->_request.body().data());
-    std::cout << "receive body is " << body_str << std::endl;
+    std::cout << "[request] body_len=" << body_str.size() << std::endl;
 
     Json::Value root;
     Json::Reader reader;
@@ -82,6 +250,14 @@ LogicSystem::LogicSystem() {
     }
 
     auto email = src_root["email"].asString();
+    const std::string client_ip = connection->GetClientIp();
+    if (!CheckRateLimit("rl_code_send_email_" + email, 1, 60) ||
+        !CheckRateLimit("rl_code_send_ip_" + client_ip, 10, 60)) {
+      root["error"] = ErrorCodes::RateLimited;
+      SendJson(connection, root, http::status::too_many_requests);
+      return true;
+    }
+
     GetVerifyRsp rsp = VerifyGrpcClient::GetInstance()->GetVerifyCode(email);
     std::cout << "email is " << email << " , rsp.error = " << rsp.error()
               << std::endl;
@@ -100,7 +276,7 @@ LogicSystem::LogicSystem() {
   RegPost("/user_register", [](std::shared_ptr<HttpConnection> connection) {
     auto body_str =
         boost::beast::buffers_to_string(connection->_request.body().data());
-    std::cout << "receive body is " << body_str << std::endl;
+    std::cout << "[request] body_len=" << body_str.size() << std::endl;
 
     Json::Value root;
     Json::Reader reader;
@@ -133,6 +309,12 @@ LogicSystem::LogicSystem() {
       return true;
     }
 
+    if (!CheckRateLimit("rl_code_try_" + email, 5, 600)) {
+      root["error"] = ErrorCodes::RateLimited;
+      SendJson(connection, root, http::status::too_many_requests);
+      return true;
+    }
+
     // 从Redis获取该email对应的验证码
     std::string verify_code;
     bool b_get_verify =
@@ -158,6 +340,15 @@ LogicSystem::LogicSystem() {
       // 设置响应内容类型
       connection->_response.set(http::field::content_type, "application/json");
       connection->WriteResponse();
+      return true;
+    }
+
+    // 原子消费验证码：并发请求只有一个能成功。
+    std::string consumed_code;
+    if (!RedisMgr::GetInstance()->GetDel(CODEPREFIX + email, consumed_code) ||
+        consumed_code != verify_code) {
+      root["error"] = ErrorCodes::VerifyExpired;
+      SendJson(connection, root, http::status::bad_request);
       return true;
     }
 
@@ -195,7 +386,7 @@ LogicSystem::LogicSystem() {
   RegPost("/reset_password", [](std::shared_ptr<HttpConnection> connection) {
     auto body_str =
         boost::beast::buffers_to_string(connection->_request.body().data());
-    std::cout << "receive body is " << body_str << std::endl;
+    std::cout << "[request] body_len=" << body_str.size() << std::endl;
     connection->_response.set(http::field::content_type, "application/json");
 
     Json::Value root;
@@ -222,6 +413,12 @@ LogicSystem::LogicSystem() {
       return true;
     }
 
+    if (!CheckRateLimit("rl_code_try_" + email, 5, 600)) {
+      root["error"] = ErrorCodes::RateLimited;
+      SendJson(connection, root, http::status::too_many_requests);
+      return true;
+    }
+
     // 从Redis获取存储的验证码
     std::string verify_code;
     bool b_get_verify =
@@ -236,6 +433,15 @@ LogicSystem::LogicSystem() {
       root["error"] = ErrorCodes::VerifyCodeErr;
       beast::ostream(connection->_response.body()) << root.toStyledString();
       connection->WriteResponse();
+      return true;
+    }
+
+    // 原子消费验证码，防止重放。
+    std::string consumed_code;
+    if (!RedisMgr::GetInstance()->GetDel(CODEPREFIX + email, consumed_code) ||
+        consumed_code != verify_code) {
+      root["error"] = ErrorCodes::VerifyExpired;
+      SendJson(connection, root, http::status::bad_request);
       return true;
     }
 
@@ -259,10 +465,10 @@ LogicSystem::LogicSystem() {
     return true;
   });
 
-  RegPost("/user_login", [](std::shared_ptr<HttpConnection> connection) {
+  RegPost("/user_login", [this](std::shared_ptr<HttpConnection> connection) {
     auto body_str =
         boost::beast::buffers_to_string(connection->_request.body().data());
-    std::cout << "receive body is " << body_str << std::endl;
+    std::cout << "[request] body_len=" << body_str.size() << std::endl;
     connection->_response.set(http::field::content_type, "application/json");
 
     Json::Value root;
@@ -280,42 +486,16 @@ LogicSystem::LogicSystem() {
     std::string identifier = src_root.get("user", "").asString();
     std::string pwd_plain = src_root.get("passwd", "").asString();
 
-    // 临时调试日志：打印密码长度与十六进制（不打印明文）
-    auto rtrim_copy = [](std::string s) {
-      while (!s.empty() &&
-             (s.back() == ' ' || s.back() == '\r' || s.back() == '\n' ||
-              s.back() == '\t' || s.back() == '\0')) {
-        s.pop_back();
-      }
-      return s;
-    };
-    auto is_hex_64 = [](const std::string &s) {
-      if (s.size() != 64)
-        return false;
-      for (unsigned char c : s) {
-        if (!std::isxdigit(c))
-          return false;
-      }
-      return true;
-    };
-    std::ostringstream pwd_hex;
-    pwd_hex << std::hex << std::setfill('0');
-    size_t dump_len = std::min<size_t>(pwd_plain.size(), 64);
-    for (size_t i = 0; i < dump_len; ++i) {
-      pwd_hex << std::setw(2)
-              << static_cast<int>(static_cast<unsigned char>(pwd_plain[i]));
-    }
-    bool has_trailing_ws = pwd_plain.size() != rtrim_copy(pwd_plain).size();
-    bool looks_hex64 = is_hex_64(pwd_plain);
-    std::cout << "[login] passwd_len=" << pwd_plain.size()
-              << ", first_hex=" << pwd_hex.str()
-              << ", looks_hex64=" << (looks_hex64 ? 1 : 0)
-              << ", has_trailing_ws=" << (has_trailing_ws ? 1 : 0) << std::endl;
-
     if (identifier.empty() || pwd_plain.empty()) {
       root["error"] = ErrorCodes::PasswdInvalid;
       beast::ostream(connection->_response.body()) << root.toStyledString();
       connection->WriteResponse();
+      return true;
+    }
+
+    if (!CheckRateLimit("rl_login_ip_" + connection->GetClientIp(), 60, 60)) {
+      root["error"] = ErrorCodes::RateLimited;
+      SendJson(connection, root, http::status::too_many_requests);
       return true;
     }
 
@@ -347,6 +527,22 @@ LogicSystem::LogicSystem() {
     std::cout << "succeed to load userinfo uid is " << userInfo.uid
               << std::endl;
 
+    // JWT is mandatory: never return a legacy UUID token.
+    if (!_token_service) {
+      root["error"] = ErrorCodes::RPCFailed;
+      SendJson(connection, root, http::status::service_unavailable);
+      return true;
+    }
+    TokenResult jwt_result =
+        _token_service->Issue(userInfo.uid, "im.friend im.message");
+    if (!jwt_result.ok) {
+      std::cerr << "[Auth] user_login issue token failed: "
+                << jwt_result.error << std::endl;
+      root["error"] = ErrorCodes::RPCFailed;
+      SendJson(connection, root, http::status::service_unavailable);
+      return true;
+    }
+
     // 写入用户基础信息到 Redis，供 ChatServer 读取
     // key: USER_BASE_INFO + uid
     try {
@@ -369,16 +565,25 @@ LogicSystem::LogicSystem() {
     root["error"] = 0;
     root["user"] = userInfo.name.empty() ? identifier : userInfo.name;
     root["uid"] = userInfo.uid;
-    root["token"] = reply.token();
+    // Backward-compatible field name; it is now the JWT access token.
+    root["token"] = jwt_result.tokens.access_token;
     root["host"] = reply.host();
     root["port"] = reply.port();
+    root["access_token"] = jwt_result.tokens.access_token;
+    root["refresh_token"] = jwt_result.tokens.refresh_token;
+    root["expires_in"] = jwt_result.tokens.expires_in;
+    root["refresh_expires_in"] = jwt_result.tokens.refresh_expires_in;
+    root["scope"] = jwt_result.tokens.scope;
     beast::ostream(connection->_response.body()) << root.toStyledString();
     connection->WriteResponse();
     return true;
   });
 
   // 搜索好友API
-  RegPost("/search_friends", [](std::shared_ptr<HttpConnection> connection) {
+  RegPost("/search_friends", [this](std::shared_ptr<HttpConnection> connection) {
+    if (!RequireAuth(connection, "im.friend")) {
+      return;
+    }
     auto body_str =
         boost::beast::buffers_to_string(connection->_request.body().data());
     std::cout << "receive search_friends body is " << body_str << std::endl;
@@ -391,17 +596,18 @@ LogicSystem::LogicSystem() {
       root["error"] = ErrorCodes::Error_Json;
       beast::ostream(connection->_response.body()) << root.toStyledString();
       connection->WriteResponse();
-      return true;
+      return;
     }
 
-    int uid = src_root.get("uid", 0).asInt();
+    const int auth_uid = connection->GetAuthUid();
+    int uid = auth_uid > 0 ? auth_uid : src_root.get("uid", 0).asInt();
     std::string keyword = src_root.get("keyword", "").asString();
 
     if (uid <= 0 || keyword.empty()) {
       root["error"] = ErrorCodes::Error_Json;
       beast::ostream(connection->_response.body()) << root.toStyledString();
       connection->WriteResponse();
-      return true;
+      return;
     }
 
     // 调用数据库搜索用户
@@ -434,12 +640,15 @@ LogicSystem::LogicSystem() {
 
     beast::ostream(connection->_response.body()) << root.toStyledString();
     connection->WriteResponse();
-    return true;
+    return;
   });
 
   // 获取好友申请列表API
   RegPost(
-      "/get_friend_requests", [](std::shared_ptr<HttpConnection> connection) {
+      "/get_friend_requests", [this](std::shared_ptr<HttpConnection> connection) {
+        if (!RequireAuth(connection, "im.friend")) {
+          return;
+        }
         auto body_str =
             boost::beast::buffers_to_string(connection->_request.body().data());
         std::cout << "receive get_friend_requests body is " << body_str
@@ -454,15 +663,16 @@ LogicSystem::LogicSystem() {
           root["error"] = ErrorCodes::Error_Json;
           beast::ostream(connection->_response.body()) << root.toStyledString();
           connection->WriteResponse();
-          return true;
+          return;
         }
 
-        int uid = src_root.get("uid", 0).asInt();
+        const int auth_uid = connection->GetAuthUid();
+        int uid = auth_uid > 0 ? auth_uid : src_root.get("uid", 0).asInt();
         if (uid <= 0) {
           root["error"] = ErrorCodes::Error_Json;
           beast::ostream(connection->_response.body()) << root.toStyledString();
           connection->WriteResponse();
-          return true;
+          return;
         }
 
         // 获取好友申请列表
@@ -485,11 +695,14 @@ LogicSystem::LogicSystem() {
 
         beast::ostream(connection->_response.body()) << root.toStyledString();
         connection->WriteResponse();
-        return true;
+        return;
       });
 
   // 获取我的好友列表API
-  RegPost("/get_my_friends", [](std::shared_ptr<HttpConnection> connection) {
+  RegPost("/get_my_friends", [this](std::shared_ptr<HttpConnection> connection) {
+    if (!RequireAuth(connection, "im.friend")) {
+      return;
+    }
     auto body_str =
         boost::beast::buffers_to_string(connection->_request.body().data());
     std::cout << "receive get_my_friends body is " << body_str << std::endl;
@@ -502,15 +715,16 @@ LogicSystem::LogicSystem() {
       root["error"] = ErrorCodes::Error_Json;
       beast::ostream(connection->_response.body()) << root.toStyledString();
       connection->WriteResponse();
-      return true;
+      return;
     }
 
-    int uid = src_root.get("uid", 0).asInt();
+    const int auth_uid = connection->GetAuthUid();
+    int uid = auth_uid > 0 ? auth_uid : src_root.get("uid", 0).asInt();
     if (uid <= 0) {
       root["error"] = ErrorCodes::Error_Json;
       beast::ostream(connection->_response.body()) << root.toStyledString();
       connection->WriteResponse();
-      return true;
+      return;
     }
 
     // 获取我的好友列表
@@ -533,12 +747,15 @@ LogicSystem::LogicSystem() {
 
     beast::ostream(connection->_response.body()) << root.toStyledString();
     connection->WriteResponse();
-    return true;
+    return;
   });
 
   // 发送好友申请API
-  RegPost("/send_friend_request", [](std::shared_ptr<HttpConnection>
+  RegPost("/send_friend_request", [this](std::shared_ptr<HttpConnection>
                                          connection) {
+    if (!RequireAuth(connection, "im.friend")) {
+      return;
+    }
     auto body_str =
         boost::beast::buffers_to_string(connection->_request.body().data());
     std::cout << "receive send_friend_request body is " << body_str
@@ -552,10 +769,11 @@ LogicSystem::LogicSystem() {
       root["error"] = ErrorCodes::Error_Json;
       beast::ostream(connection->_response.body()) << root.toStyledString();
       connection->WriteResponse();
-      return true;
+      return;
     }
 
-    int fromUid = src_root.get("from_uid", 0).asInt();
+    const int auth_uid = connection->GetAuthUid();
+    int fromUid = auth_uid > 0 ? auth_uid : src_root.get("from_uid", 0).asInt();
     int toUid = src_root.get("to_uid", 0).asInt();
     std::string desc = src_root.get("desc", "").asString();
     // [FriendNotify]
@@ -567,7 +785,7 @@ LogicSystem::LogicSystem() {
       root["error"] = ErrorCodes::Error_Json;
       beast::ostream(connection->_response.body()) << root.toStyledString();
       connection->WriteResponse();
-      return true;
+      return;
     }
 
     // 检查是否已经是好友
@@ -575,7 +793,7 @@ LogicSystem::LogicSystem() {
       root["error"] = ErrorCodes::UserExist; // 已经是好友
       beast::ostream(connection->_response.body()) << root.toStyledString();
       connection->WriteResponse();
-      return true;
+      return;
     }
 
     // 发送好友申请
@@ -606,12 +824,15 @@ LogicSystem::LogicSystem() {
 
     beast::ostream(connection->_response.body()) << root.toStyledString();
     connection->WriteResponse();
-    return true;
+    return;
   });
 
   // 回复好友申请API
-  RegPost("/reply_friend_request", [](std::shared_ptr<HttpConnection>
+  RegPost("/reply_friend_request", [this](std::shared_ptr<HttpConnection>
                                           connection) {
+    if (!RequireAuth(connection, "im.friend")) {
+      return;
+    }
     auto body_str =
         boost::beast::buffers_to_string(connection->_request.body().data());
     std::cout << "receive reply_friend_request body is " << body_str
@@ -625,11 +846,19 @@ LogicSystem::LogicSystem() {
       root["error"] = ErrorCodes::Error_Json;
       beast::ostream(connection->_response.body()) << root.toStyledString();
       connection->WriteResponse();
-      return true;
+      return;
     }
 
+    const int auth_uid = connection->GetAuthUid();
     int fromUid = src_root.get("from_uid", 0).asInt();
-    int toUid = src_root.get("to_uid", 0).asInt();
+    const int body_to_uid = src_root.get("to_uid", 0).asInt();
+    if (auth_uid > 0 && body_to_uid > 0 && body_to_uid != auth_uid) {
+      Json::Value denied;
+      denied["error"] = ErrorCodes::TokenInvalid;
+      SendJson(connection, denied, http::status::forbidden);
+      return;
+    }
+    int toUid = auth_uid > 0 ? auth_uid : body_to_uid;
     bool agree = src_root.get("agree", false).asBool();
     // [FriendNotify]
     std::cout << "[FriendNotify][Gate] /reply_friend_request parsed from_uid="
@@ -640,7 +869,7 @@ LogicSystem::LogicSystem() {
       root["error"] = ErrorCodes::Error_Json;
       beast::ostream(connection->_response.body()) << root.toStyledString();
       connection->WriteResponse();
-      return true;
+      return;
     }
 
     // 回复好友申请
@@ -670,8 +899,246 @@ LogicSystem::LogicSystem() {
 
     beast::ostream(connection->_response.body()) << root.toStyledString();
     connection->WriteResponse();
-    return true;
+    return;
   });
+
+  // OAuth2-style token service (JWT access + rotating refresh token).
+  RegPost("/oauth/token", [this](std::shared_ptr<HttpConnection> connection) {
+    HandleOAuthToken(connection);
+  });
+  RegPost("/oauth/revoke", [this](std::shared_ptr<HttpConnection> connection) {
+    HandleOAuthRevoke(connection);
+  });
+  RegGet("/.well-known/jwks.json", [this](std::shared_ptr<HttpConnection> connection) {
+    HandleJwks(connection);
+  });
+}
+
+bool LogicSystem::HasScope(const std::string& scopes, const std::string& required) {
+  if (required.empty()) {
+    return true;
+  }
+  size_t pos = 0;
+  while (pos < scopes.size()) {
+    const size_t space = scopes.find(' ', pos);
+    const std::string token = scopes.substr(
+        pos, space == std::string::npos ? std::string::npos : space - pos);
+    if (token == required) {
+      return true;
+    }
+    if (space == std::string::npos) {
+      break;
+    }
+    pos = space + 1;
+  }
+  return false;
+}
+
+bool LogicSystem::CheckRateLimit(const std::string& key, int limit, int window_seconds) {
+  long long count = 0;
+  if (!RedisMgr::GetInstance()->Incr(key, count)) {
+    return false;
+  }
+  if (count == 1) {
+    RedisMgr::GetInstance()->Expire(key, window_seconds);
+  }
+  return count <= limit;
+}
+
+bool LogicSystem::RequireAuth(const std::shared_ptr<HttpConnection>& con,
+                              const std::string& required_scope) {
+  if (!_jwt_verifier) {
+    // JWT not enabled: keep the legacy body-uid flow for compatibility.
+    con->SetAuthUid(0);
+    return true;
+  }
+
+  const auto authorization = con->_request[http::field::authorization];
+  const std::string header(authorization.data(), authorization.size());
+  constexpr const char* kPrefix = "Bearer ";
+  if (header.rfind(kPrefix, 0) != 0) {
+    SendJson(con, OAuthError("invalid_token", "missing Bearer token"),
+             http::status::unauthorized);
+    return false;
+  }
+
+  const std::string token = header.substr(std::strlen(kPrefix));
+  im::auth::VerifiedJwt verified;
+  std::string error;
+  if (!_jwt_verifier->Verify(token, verified, error)) {
+    SendJson(con, OAuthError("invalid_token", error),
+             http::status::unauthorized);
+    return false;
+  }
+  if (!HasScope(verified.claims.scope, required_scope)) {
+    SendJson(con, OAuthError("insufficient_scope", "missing scope: " + required_scope),
+             http::status::forbidden);
+    return false;
+  }
+  if (!verified.claims.jti.empty() &&
+      RedisMgr::GetInstance()->ExistsKey("jwt:blacklist:" + verified.claims.jti)) {
+    SendJson(con, OAuthError("invalid_token", "token revoked"),
+             http::status::unauthorized);
+    return false;
+  }
+
+  con->SetAuthUid(verified.claims.uid);
+  return true;
+}
+
+void LogicSystem::HandleOAuthToken(const std::shared_ptr<HttpConnection>& con) {
+  if (!_token_service) {
+    SendJson(con, OAuthError("temporarily_unavailable", "JWT service is disabled"),
+             http::status::service_unavailable);
+    return;
+  }
+
+  const auto params = ParseTokenRequest(ReadBody(con));
+  const auto grant_it = params.find("grant_type");
+  const std::string grant_type = grant_it == params.end() ? "" : grant_it->second;
+
+  if (grant_type == "password") {
+    const std::string username = params.count("username") ? params.at("username") : "";
+    const std::string password = params.count("password") ? params.at("password") : "";
+    if (username.empty() || password.empty()) {
+      SendJson(con, OAuthError("invalid_request", "username and password are required"),
+               http::status::bad_request);
+      return;
+    }
+
+    UserInfo user;
+    if (!MysqlMgr::GetInstance()->CheckPwd(username, password, user)) {
+      SendJson(con, OAuthError("invalid_grant", "invalid username or password"),
+               http::status::bad_request);
+      return;
+    }
+
+    const std::string scope = params.count("scope") ? params.at("scope") : "";
+    const TokenResult result = _token_service->Issue(user.uid, scope);
+    if (!result.ok) {
+      std::cerr << "[Auth] issue token failed: " << result.error << std::endl;
+      SendJson(con, OAuthError("server_error", "failed to issue token"),
+               http::status::internal_server_error);
+      return;
+    }
+
+    Json::Value out;
+    out["access_token"] = result.tokens.access_token;
+    out["token_type"] = "Bearer";
+    out["expires_in"] = result.tokens.expires_in;
+    out["refresh_token"] = result.tokens.refresh_token;
+    out["refresh_expires_in"] = result.tokens.refresh_expires_in;
+    out["scope"] = result.tokens.scope;
+    out["uid"] = result.tokens.uid;
+    SendJson(con, out);
+    return;
+  }
+
+  if (grant_type == "refresh_token") {
+    const std::string refresh_token =
+        params.count("refresh_token") ? params.at("refresh_token") : "";
+    if (refresh_token.empty()) {
+      SendJson(con, OAuthError("invalid_request", "refresh_token is required"),
+               http::status::bad_request);
+      return;
+    }
+
+    const TokenResult result = _token_service->Refresh(refresh_token);
+    if (!result.ok) {
+      SendJson(con, OAuthError("invalid_grant", result.error),
+               http::status::bad_request);
+      return;
+    }
+
+    Json::Value out;
+    out["access_token"] = result.tokens.access_token;
+    out["token_type"] = "Bearer";
+    out["expires_in"] = result.tokens.expires_in;
+    out["refresh_token"] = result.tokens.refresh_token;
+    out["refresh_expires_in"] = result.tokens.refresh_expires_in;
+    out["scope"] = result.tokens.scope;
+    out["uid"] = result.tokens.uid;
+    SendJson(con, out);
+    return;
+  }
+
+  SendJson(con, OAuthError("unsupported_grant_type", "supported: password, refresh_token"),
+           http::status::bad_request);
+}
+
+void LogicSystem::HandleOAuthRevoke(const std::shared_ptr<HttpConnection>& con) {
+  if (!_token_service) {
+    SendJson(con, OAuthError("temporarily_unavailable", "JWT service is disabled"),
+             http::status::service_unavailable);
+    return;
+  }
+
+  const auto params = ParseTokenRequest(ReadBody(con));
+  std::string token;
+  if (params.count("token")) {
+    token = params.at("token");
+  } else if (params.count("refresh_token")) {
+    token = params.at("refresh_token");
+  }
+  if (token.empty()) {
+    SendJson(con, OAuthError("invalid_request", "token is required"),
+             http::status::bad_request);
+    return;
+  }
+
+  // If this is a valid access token, blacklist its jti until expiry.
+  if (_jwt_verifier) {
+    im::auth::VerifiedJwt verified;
+    std::string verify_error;
+    if (_jwt_verifier->Verify(token, verified, verify_error) &&
+        !verified.claims.jti.empty()) {
+      const auto now = std::chrono::system_clock::now();
+      auto ttl = std::chrono::duration_cast<std::chrono::seconds>(
+                     verified.claims.expires_at - now)
+                     .count();
+      if (ttl < 1) {
+        ttl = 1;
+      }
+      RedisMgr::GetInstance()->SetEx(
+          "jwt:blacklist:" + verified.claims.jti, "1", static_cast<int>(ttl));
+      SendJson(con, Json::Value(Json::objectValue));
+      return;
+    }
+  }
+
+  std::string error;
+  if (!_token_service->Revoke(token, error)) {
+    std::cerr << "[Auth] revoke failed: " << error << std::endl;
+    SendJson(con, OAuthError("server_error", "failed to revoke token"),
+             http::status::internal_server_error);
+    return;
+  }
+
+  SendJson(con, Json::Value(Json::objectValue));
+}
+
+void LogicSystem::HandleJwks(const std::shared_ptr<HttpConnection>& con) {
+  if (_jwt_public_pem.empty() || _jwt_key_id.empty()) {
+    SendJson(con, OAuthError("temporarily_unavailable", "JWKS is not configured"),
+             http::status::service_unavailable);
+    return;
+  }
+
+  try {
+    const std::string jwks = im::auth::BuildJwksJson(_jwt_public_pem, _jwt_key_id);
+    Json::Reader reader;
+    Json::Value root;
+    if (!reader.parse(jwks, root)) {
+      SendJson(con, OAuthError("server_error", "failed to build JWKS"),
+               http::status::internal_server_error);
+      return;
+    }
+    SendJson(con, root);
+  } catch (const std::exception& e) {
+    std::cerr << "[Auth] JWKS generation failed: " << e.what() << std::endl;
+    SendJson(con, OAuthError("server_error", "failed to build JWKS"),
+             http::status::internal_server_error);
+  }
 }
 
 bool LogicSystem::HandleGet(std::string path,
@@ -695,3 +1162,5 @@ bool LogicSystem::HandlePost(std::string path,
   _post_handlers[path](con);
   return true;
 }
+
+

@@ -47,6 +47,9 @@ GetChatServerRsp StatusGrpcClient::GetChatServer(int uid)
     grpc::ClientContext context;
     auto rpc_deadline = std::chrono::system_clock::now() + std::chrono::seconds(10);
     context.set_deadline(rpc_deadline);
+    if (!_internal_token.empty()) {
+        context.AddMetadata("x-internal-token", _internal_token);
+    }
 
     std::cout << "[StatusGrpcClient] calling GetChatServer uid=" << uid << "\n";
     // 调用StatusServer的GetChatServer方法
@@ -67,7 +70,7 @@ GetChatServerRsp StatusGrpcClient::GetChatServer(int uid)
     // 打印成功的信息
     std::cout << "[StatusGrpcClient] GetChatServer reply: error=" << reply.error()
         << " host='" << reply.host() << "' port='" << reply.port()
-        << "' token='" << reply.token() << "'\n";
+        << "\n";
 
     return reply;
 }
@@ -82,6 +85,7 @@ StatusGrpcClient::StatusGrpcClient()
     auto& gCfgMgr = ConfigMgr::Inst();
     std::string host = gCfgMgr["StatusServer"]["Host"];
     std::string port = gCfgMgr["StatusServer"]["Port"];
+    _internal_token = gCfgMgr["Internal"]["Token"];
     std::cout << "[StatusGrpcClient] Initializing with host=" << host << ", port=" << port << std::endl;
     pool_.reset(new StatusConPool(5, host, port));
 }

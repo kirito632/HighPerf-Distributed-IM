@@ -36,6 +36,10 @@ boost::asio::io_context& AsioIOServicePool::GetIOService() {
 }
 
 void AsioIOServicePool::Stop() {
+    // 幂等：析构函数和主线程都可能调用 Stop。
+    if (_stopped.exchange(true)) {
+        return;
+    }
     // 因为如果不调用work.reset，那么iocontext的run方法就会一直阻塞
     // 但是iocontext已经运行了，需要显式调用stop来停止iocontext
     std::cout << "AsioIOServicePool::Stop() called\n";
@@ -51,7 +55,9 @@ void AsioIOServicePool::Stop() {
     }
 
     for (auto& t : _threads) {
-        t.join();
+        if (t.joinable() && t.get_id() != std::this_thread::get_id()) {
+            t.join();
+        }
     }
     std::cout << "AsioIOServicePool::Stop() finished\n";
 }

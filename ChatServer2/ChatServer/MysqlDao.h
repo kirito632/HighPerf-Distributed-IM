@@ -14,6 +14,7 @@
 #include <cppconn/statement.h>
 #include <cppconn/exception.h>
 #include <string>
+#include <functional>
 #include "data.h"
 /*数据库访问层（DAO  data access object）*/
 
@@ -382,10 +383,36 @@ public:
     bool ReplyFriendRequest(int fromUid, int toUid, bool agree);
     std::vector<UserInfo> GetMyFriends(int uid);
     bool IsFriend(int uid1, int uid2);
-    bool SaveChatMessage(int fromUid, int toUid, const std::string& payload);
-    bool GetUnreadChatMessagesWithIds(int uid, std::vector<long long>& ids, std::vector<std::string>& payloads);
+    bool SaveChatMessage(int fromUid, int toUid,
+                         const std::string& clientMsgId,
+                         const std::string& conversationId,
+                         const std::string& initialPayload,
+                         bool writeOutbox,
+                         const std::function<std::string(long long)>& finalPayload,
+                         long long& serverMsgId);
+    bool UpdateChatMessagePayload(long long serverMsgId, const std::string& payload);
+
+    struct OutboxRow {
+        long long id = 0;
+        std::string event_id;
+        std::string event_type;
+        std::string payload;
+    };
+    bool GetPendingOutbox(int limit, std::vector<OutboxRow>& rows);
+    bool MarkOutboxPublished(const std::vector<long long>& ids);
+    bool MarkOutboxFailed(long long id, const std::string& error);
+
+    bool IsEventProcessed(const std::string& event_id);
+    bool MarkEventProcessed(const std::string& event_id,
+                            const std::string& event_type,
+                            const std::string& consumer);
+    bool IsMessageUnread(int to_uid, long long server_msg_id);
+
+    bool GetUnreadChatMessagesWithIds(int uid, long long cursor, int limit,
+                                      std::vector<long long>& ids,
+                                      std::vector<std::string>& payloads);
     bool DeleteChatMessagesByIds(const std::vector<long long>& ids);
-    bool AckOfflineMessages(int uid, long long max_msg_id);
+    bool AckOfflineMessages(int uid, const std::vector<long long>& ids);
 private:
     std::shared_ptr<MySqlPool> pool_;
 };

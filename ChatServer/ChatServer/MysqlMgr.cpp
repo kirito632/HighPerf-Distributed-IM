@@ -65,14 +65,61 @@ bool MysqlMgr::IsFriend(int uid1, int uid2)
     return _dao.IsFriend(uid1, uid2);
 }
 
-bool MysqlMgr::SaveChatMessage(int fromUid, int toUid, const std::string& payload)
+bool MysqlMgr::SaveChatMessage(int fromUid, int toUid,
+                               const std::string& clientMsgId,
+                               const std::string& conversationId,
+                               const std::string& initialPayload,
+                               bool writeOutbox,
+                               const std::function<std::string(long long)>& finalPayload,
+                               long long& serverMsgId)
 {
-    return _dao.SaveChatMessage(fromUid, toUid, payload);
+    return _dao.SaveChatMessage(fromUid, toUid, clientMsgId, conversationId,
+                                initialPayload, writeOutbox, finalPayload,
+                                serverMsgId);
 }
 
-bool MysqlMgr::GetUnreadChatMessages(int uid, std::vector<long long>& ids, std::vector<std::string>& payloads)
+bool MysqlMgr::UpdateChatMessagePayload(long long serverMsgId, const std::string& payload)
 {
-    return _dao.GetUnreadChatMessagesWithIds(uid, ids, payloads);
+    return _dao.UpdateChatMessagePayload(serverMsgId, payload);
+}
+
+bool MysqlMgr::GetPendingOutbox(int limit, std::vector<MysqlDao::OutboxRow>& rows)
+{
+    return _dao.GetPendingOutbox(limit, rows);
+}
+
+bool MysqlMgr::MarkOutboxPublished(const std::vector<long long>& ids)
+{
+    return _dao.MarkOutboxPublished(ids);
+}
+
+bool MysqlMgr::MarkOutboxFailed(long long id, const std::string& error)
+{
+    return _dao.MarkOutboxFailed(id, error);
+}
+
+bool MysqlMgr::IsEventProcessed(const std::string& event_id)
+{
+    return _dao.IsEventProcessed(event_id);
+}
+
+bool MysqlMgr::MarkEventProcessed(const std::string& event_id,
+                                  const std::string& event_type,
+                                  const std::string& consumer)
+{
+    return _dao.MarkEventProcessed(event_id, event_type, consumer);
+}
+
+bool MysqlMgr::IsMessageUnread(int to_uid, long long server_msg_id)
+{
+    return _dao.IsMessageUnread(to_uid, server_msg_id);
+}
+
+bool MysqlMgr::GetUnreadChatMessages(int uid, long long cursor, int limit,
+                                     std::vector<long long>& ids,
+                                     std::vector<std::string>& payloads)
+{
+    return _dao.GetUnreadChatMessagesWithIds(uid, cursor, limit, ids, payloads);
 }
 
 bool MysqlMgr::DeleteChatMessagesByIds(const std::vector<long long>& ids)
@@ -80,7 +127,7 @@ bool MysqlMgr::DeleteChatMessagesByIds(const std::vector<long long>& ids)
     return _dao.DeleteChatMessagesByIds(ids);
 }
 
-bool MysqlMgr::AckOfflineMessages(int uid, long long max_msg_id)
+bool MysqlMgr::AckOfflineMessages(int uid, const std::vector<long long>& ids)
 {
-    return _dao.AckOfflineMessages(uid, max_msg_id);
+    return _dao.AckOfflineMessages(uid, ids);
 }

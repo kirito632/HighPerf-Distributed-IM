@@ -8,13 +8,6 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include "const.h"
-#define MAX_LENGTH 1024 * 2
-
-#define HEAD_TOTAL_LEN 4
-
-#define HEAD_ID_LEN 2
-
-#define HEAD_DATA_LEN  2
 #define MAX_RECVQUE 10000
 #define MAX_SENDQUE 1000
 
@@ -26,7 +19,7 @@ public:
 	CSession(boost::asio::io_context& io_context, CServer* server);
 	void Start();
 	void Close();
-	void Send(char* msg, short max_length, short msgid);
+	void Send(char* msg, int max_length, short msgid);
 	void Send(std::string msg, short msgid);
 	void AsyncReadHead(int total_len);
 	void asyncReadFull(std::size_t maxLength,
@@ -59,7 +52,7 @@ private:
 	std::shared_ptr<MsgNode> _recv_head_node;
 	std::function<void()> func_;
 
-	int _user_uid;
+	int _user_uid = 0;
 
 	boost::asio::strand<boost::asio::io_context::executor_type> _strand;
 };

@@ -29,6 +29,15 @@ public:
         return _socket;
     }
 
+    int GetAuthUid() const { return _auth_uid; }
+    void SetAuthUid(int uid) { _auth_uid = uid; }
+
+    std::string GetClientIp() const {
+        boost::system::error_code ec;
+        const auto endpoint = _socket.remote_endpoint(ec);
+        return ec ? std::string("unknown") : endpoint.address().to_string();
+    }
+
 private:
     // 检查连接超时（60秒超时）
     void CheckDeadline();
@@ -64,6 +73,9 @@ private:
 
     // GET请求的查询参数映射表
     std::unordered_map<std::string, std::string> _get_params;
+
+    // 鉴权中间件写入的当前登录 uid；0 表示未鉴权/兼容模式
+    int _auth_uid = 0;
 };
 
 

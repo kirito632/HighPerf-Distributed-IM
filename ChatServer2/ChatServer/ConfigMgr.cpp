@@ -15,7 +15,7 @@ std::string ConfigMgr::GetValue(const std::string& section, const std::string& k
 ConfigMgr::ConfigMgr()
 {
 	boost::filesystem::path current_path = boost::filesystem::current_path();
-	boost::filesystem::path config_path = current_path / "config_chat1.ini";
+	boost::filesystem::path config_path = current_path / "config_chat2.ini";
 	std::cout << "Config path: " << config_path << std::endl;
 
 	// 使用property_tree读取INI配置文件
@@ -47,7 +47,9 @@ ConfigMgr::ConfigMgr()
 		SectionInfo section_config = section_entry.second;
 		std::cout << "[" << section_name << "]" << std::endl;
 		for (const auto& key_value_pair : section_config._section_datas) {
-			std::cout << key_value_pair.first << "=" << key_value_pair.second << std::endl;
+			const std::string& cfg_key = key_value_pair.first;
+			bool cfg_sensitive = cfg_key == "Passwd" || cfg_key == "Pass" || cfg_key == "Password" || cfg_key == "Token" || cfg_key == "Secret";
+			std::cout << cfg_key << "=" << (cfg_sensitive ? "***" : key_value_pair.second) << std::endl;
 		}
 	}
 

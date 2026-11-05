@@ -49,6 +49,15 @@ CServer::~CServer()
 {
 }
 
+void CServer::Stop()
+{
+    boost::system::error_code ec;
+    _acceptor.close(ec);
+    if (ec) {
+        std::cerr << "[CServer] acceptor close: " << ec.message() << std::endl;
+    }
+}
+
 // 清除会话
 // 
 // 参数：
@@ -65,8 +74,14 @@ void CServer::ClearSession(std::string session_id)
     
     auto it = _sessions.find(session_id);
     if (it != _sessions.end()) {
-        // 移除用户的 session 映射
-        UserMgr::GetInstance()->RmvUserSession(it->second->GetUserId());
+        const int uid = it->second->GetUserId();
+        // 只删除仍指向本 session 的映射，避免旧连接误删新登录会话
+        if (uid > 0) {
+            auto current = UserMgr::GetInstance()->GetSession(uid);
+            if (current == it->second) {
+                UserMgr::GetInstance()->RmvUserSession(uid);
+            }
+        }
         // 直接用迭代器删除更高效，避免二次查找
         _sessions.erase(it);
     }
@@ -79,11 +94,12 @@ void CServer::ClearSession(std::string session_id)
 //   2. 异步接受客户端连接
 //   3. 当有连接时，调用HandleAccept处理
 void CServer::StartAccept() {
-    // 使用传递过来的_io_context，例如AsioIOServicePool::GetInstance()
-    std::cout << "CServer StartAccept using io_context at " << &(_io_context) << "\n";
+    // round-robin 获取 io_context，将新连接分发到不同线程
+    auto& io_context = AsioIOServicePool::GetInstance()->GetIOService();
+    std::cout << "CServer StartAccept using io_context at " << &io_context << "\n";
 
     // 创建新的会话对象
-    std::shared_ptr<CSession> new_session = std::make_shared<CSession>(_io_context, this);
+    std::shared_ptr<CSession> new_session = std::make_shared<CSession>(io_context, this);
 
     // 异步接受连接
     _acceptor.async_accept(new_session->GetSocket(),

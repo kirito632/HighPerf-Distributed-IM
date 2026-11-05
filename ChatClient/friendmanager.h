@@ -8,6 +8,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QTimer>
+#include <QVector>
 
 // 结构体：好友用户信息
 // 
@@ -220,8 +221,27 @@ private:
     //   2. 设置请求头
     //   3. 发送POST请求
     //   4. 连接完成信号到指定的槽函数
-    void sendPostRequest(const QString &endpoint, const QJsonObject &data, 
-                        const char *finishedSlot);
+    void sendPostRequest(const QString &endpoint, const QJsonObject &data,
+                        const char *finishedSlot, bool allowRefresh = true);
+
+    void handleReplyFinished(QNetworkReply *reply,
+                             const QString &endpoint,
+                             const QJsonObject &data,
+                             const QByteArray &finishedSlot,
+                             bool allowRefresh);
+
+    void refreshAccessToken();
+    void replayPendingRequests();
+
+    struct PendingRequest {
+        QString endpoint;
+        QJsonObject data;
+        QByteArray finishedSlot;
+    };
+
+    QNetworkReply *m_activeReply = nullptr;
+    bool m_refreshing = false;
+    QVector<PendingRequest> m_pendingRequests;
 };
 
 #endif // FRIENDMANAGER_H

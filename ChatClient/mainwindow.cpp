@@ -352,7 +352,7 @@ void MainWindow::setupUi()
 
     // 文本聊天下行（1019）：展示到 ChatDialog
     connect(TcpMgr::GetInstance(), &TcpMgr::sig_text_notify,
-            this, [this](int fromUid, int toUid, const QString &msgId, const QString &content) {
+            this, [this](int fromUid, int toUid, qint64 serverMsgId, const QString &msgId, const QString &content) {
                 qDebug() << "[MainWindow] sig_text_notify received from=" << fromUid << " to=" << toUid 
                          << " msgId=" << msgId << " myUid=" << UserMgr::GetInstance()->GetUid() << " content=" << content;
                 
@@ -364,7 +364,7 @@ void MainWindow::setupUi()
 
                 // 存入本地 DB (去重)
                 MessageInfo msg;
-                msg.msg_id = msgId.toLongLong();
+                msg.msg_id = serverMsgId > 0 ? serverMsgId : msgId.toLongLong();
                 msg.from_uid = fromUid;
                 msg.to_uid = toUid;
                 msg.content = content;
@@ -377,11 +377,14 @@ void MainWindow::setupUi()
                     qDebug() << "[MainWindow] Duplicate message ignored: " << msgId;
                 }
 
-                // 无论是否重复，都更新 cursor 并发送 ACK
-                // 这里简单实现：立即发送 ACK
+                // Precise ACK: acknowledge only the server id of this notification.
                 QJsonObject ackRoot;
                 ackRoot["uid"] = UserMgr::GetInstance()->GetUid();
-                ackRoot["max_msg_id"] = LocalDb::GetInstance()->GetMaxMsgId();
+                QJsonArray ackIds;
+                if (serverMsgId > 0) {
+                    ackIds.append(serverMsgId);
+                }
+                ackRoot["ids"] = ackIds;
                 
                 QString ackJson = QString::fromUtf8(QJsonDocument(ackRoot).toJson(QJsonDocument::Compact));
                 emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_NOTIFY_TEXT_CHAT_MSG_RSP, ackJson);

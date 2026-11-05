@@ -158,6 +158,7 @@ private:
 
     // StatusServer的连接池指针
     std::unique_ptr<StatusConPool> pool_;
+    std::string _internal_token;
 
 };
 

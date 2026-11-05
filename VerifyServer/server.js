@@ -19,6 +19,7 @@ const message_proto = require('./proto')
 const const_module = require('./const')
 const emailModule = require('./email');
 const redis_module = require('./redis')
+const config = require('./config')
 
 // 生成 n 位数字验证码（固定长度）
 // 
@@ -54,6 +55,15 @@ function generateVerifyCode(length = 6) {
 //     - 参数1: 错误对象（null表示成功）
 //     - 参数2: 响应对象（包含email、verifycode、error字段）
 async function GetVerifyCode(call, callback) {
+    const supplied = call.metadata.get('x-internal-token');
+    if (!config.internal_token || supplied.length === 0 ||
+        supplied[0] !== config.internal_token) {
+        callback({
+            code: grpc.status.UNAUTHENTICATED,
+            details: 'missing or invalid internal token'
+        });
+        return;
+    }
     console.log("email is ", call.request.email)
     try {
         // 从Redis查询是否已有验证码
@@ -81,8 +91,7 @@ async function GetVerifyCode(call, callback) {
             }
         }
 
-        console.log("verifyCode is ", verifyCode);
-
+        
         // 发送邮件
         let mailOptions = {
             from: '2668348774@qq.com',

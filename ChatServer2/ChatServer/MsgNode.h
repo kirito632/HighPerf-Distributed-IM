@@ -4,17 +4,20 @@
 #include <iostream>
 #include <boost/asio.hpp>
 
-// 定义最大消息长度
-#define MAX_LENGTH 1024 * 2
+// 定义最大消息长度（64KB body）
+#define MAX_LENGTH (64 * 1024)
 
-// 定义消息头部总长度（4字节）
-#define HEAD_TOTAL_LEN 4
+// 消息头：2B msgid + 2B flags + 4B body length = 8B
+#define HEAD_TOTAL_LEN 8
 
 // 定义消息ID长度（2字节）
 #define HEAD_ID_LEN 2
 
-// 定义消息数据长度字段长度（2字节）
-#define HEAD_DATA_LEN 2
+// flags/version 长度（2字节）
+#define HEAD_FLAGS_LEN 2
+
+// 定义消息数据长度字段长度（4字节）
+#define HEAD_DATA_LEN 4
 
 // 定义最大接收队列大小
 #define MAX_RECVQUE 10000
@@ -49,7 +52,7 @@ public:
     // 构造函数：创建消息节点
     // 参数：
     //   - max_len: 消息最大长度
-    MsgNode(short max_len) :_total_len(max_len), _cur_len(0) {
+    MsgNode(int max_len) :_total_len(max_len), _cur_len(0) {
         // 分配内存并初始化为0（末尾添加\0确保安全性）
         _data = new char[_total_len + 1]();
         _data[_total_len] = '\0';
@@ -67,8 +70,8 @@ public:
         _cur_len = 0;
     }
 
-    short _cur_len;      // 当前使用的长度
-    short _total_len;    // 总长度
+    int _cur_len;      // 当前使用的长度
+    int _total_len;    // 总长度
     char* _data;         // 消息数据指针
 };
 
@@ -87,7 +90,7 @@ public:
     // 参数：
     //   - max_len: 消息最大长度
     //   - msg_id: 消息ID
-    RecvNode(short max_len, short msg_id);
+    RecvNode(int max_len, short msg_id);
 private:
     short _msg_id;       // 消息ID
 };
@@ -107,7 +110,7 @@ public:
     //   - msg: 消息数据指针
     //   - max_len: 消息数据长度
     //   - msg_id: 消息ID
-    SendNode(const char* msg, short max_len, short msg_id);
+    SendNode(const char* msg, int max_len, short msg_id);
 private:
     short _msg_id;       // 消息ID
 };

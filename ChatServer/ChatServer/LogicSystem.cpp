@@ -3,6 +3,12 @@
 #include "MysqlMgr.h"
 #include "UserMgr.h"
 #include "AsyncDBPool.h"
+#include "ConfigMgr.h"
+#include "JwtKeys.h"
+#include "JwtVerifier.h"
+#include "Metrics.h"
+#include <chrono>
+#include <algorithm>
 
 #include "ChatGrpcClient.h"
 
@@ -45,6 +51,31 @@ void LogicSystem::PostMsgToQue(std::shared_ptr<LogicNode> msg)
 //   1. 注册回调函数
 //   2. 启动工作线程
 LogicSystem::LogicSystem() :_b_stop(false) {
+	try {
+		auto& cfg = ConfigMgr::Inst();
+		auto feature_cfg = cfg["Feature"];
+		auto jwt_cfg = cfg["Jwt"];
+		if (feature_cfg["JwtEnabled"] == "true") {
+			im::auth::JwtConfig jwt;
+			jwt.issuer = jwt_cfg["Issuer"];
+			jwt.audience = jwt_cfg["Audience"];
+			jwt.key_id = jwt_cfg["KeyId"];
+			jwt.public_key_pem = im::auth::ReadPemFile(jwt_cfg["PublicKeyPath"]);
+			const std::string skew = jwt_cfg["ClockSkewSeconds"];
+			if (!skew.empty()) {
+				jwt.clock_skew_seconds = std::stoi(skew);
+			}
+			_jwt_verifier = std::make_unique<im::auth::JwtVerifier>(jwt);
+			std::cout << "[Auth] ChatServer JWT enabled, issuer=" << jwt.issuer
+				<< " audience=" << jwt.audience << " kid=" << jwt.key_id << std::endl;
+		}
+	}
+	catch (const std::exception& e) {
+		std::cerr << "[Auth] ChatServer JWT init failed, fallback to Redis token: "
+			<< e.what() << std::endl;
+		_jwt_verifier.reset();
+	}
+
 	RegisterCallBacks();
 	_worker_thread = std::thread(&LogicSystem::DealMsg, this);
 	AsyncDBPool::GetInstance()->Init();
@@ -88,29 +119,31 @@ void LogicSystem::LoginHandler(std::shared_ptr<CSession> session, const short& m
 	Json::Value root;
 	reader.parse(msg_data, root);
 	int uid = root["uid"].asInt();
-	std::string token = root["token"].asString();
-	std::cout << "[LoginHandler] recv uid=" << uid << " token=" << token << std::endl;
+	std::cout << "[LoginHandler] recv uid=" << uid << std::endl;
 
 	Json::Value rtvalue;
-	// 校验 token 是否存在于 redis
-	std::string uid_str = std::to_string(uid);
-	std::string token_key = USERTOKENPREFIX + uid_str;
-	std::string token_value;
-	bool success = RedisMgr::GetInstance()->Get(token_key, token_value);
-	if (!success) {
-		rtvalue["error"] = ErrorCodes::UidInvalid;
-		std::string return_str = rtvalue.toStyledString();
-		std::cout << "[LoginHandler TEST] send before return, body=" << return_str
-			<< " msgid=" << MSG_CHAT_LOGIN_RSP << std::endl;
-		session->Send(return_str, MSG_CHAT_LOGIN_RSP);
-		return;
+	// JWT is mandatory; the legacy Redis utoken path is removed.
+	bool token_ok = false;
+	if (_jwt_verifier) {
+		const std::string access_token = root["access_token"].asString();
+		im::auth::VerifiedJwt verified;
+		std::string error;
+		if (_jwt_verifier->Verify(access_token, verified, error) &&
+			verified.claims.uid == uid &&
+			verified.claims.scope.find("im.message") != std::string::npos) {
+			token_ok = true;
+		}
+		else {
+			std::cout << "[LoginHandler] JWT verify failed: " << error << std::endl;
+		}
 	}
-	// 验证token是否匹配
-	if (token_value != token) {
+	else {
+		std::cerr << "[LoginHandler] JWT verifier is not configured" << std::endl;
+	}
+
+	if (!token_ok) {
 		rtvalue["error"] = ErrorCodes::TokenInvalid;
 		std::string return_str = rtvalue.toStyledString();
-		std::cout << "[LoginHandler TEST] send before return, body=" << return_str
-			<< " msgid=" << MSG_CHAT_LOGIN_RSP << std::endl;
 		session->Send(return_str, MSG_CHAT_LOGIN_RSP);
 		return;
 	}
@@ -118,6 +151,7 @@ void LogicSystem::LoginHandler(std::shared_ptr<CSession> session, const short& m
 	// token 验证成功，获取用户信息
 	rtvalue["error"] = ErrorCodes::Success;
 
+	std::string uid_str = std::to_string(uid);
 	std::string base_key = USER_BASE_INFO + uid_str;
 	auto user_info = std::make_shared<UserInfo>();
 	bool b_base = GetBaseInfo(base_key, uid, user_info);
@@ -132,8 +166,7 @@ void LogicSystem::LoginHandler(std::shared_ptr<CSession> session, const short& m
 
 	// 设置返回的用户信息
 	rtvalue["uid"] = uid;
-	rtvalue["pwd"] = user_info->pwd;
-	rtvalue["name"] = user_info->name;
+		rtvalue["name"] = user_info->name;
 	rtvalue["email"] = user_info->email;
 	rtvalue["nick"] = user_info->nick;
 	rtvalue["desc"] = user_info->desc;
@@ -177,30 +210,99 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 	Json::Value root;
 	reader.parse(msg_data, root);
 
-	int uid = root["fromuid"].asInt();
-	int touid = root["touid"].asInt();
-	const Json::Value arrays = root["text_array"];
-
 	Json::Value rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
-	rtvalue["text_array"] = arrays;
+	auto send_response = [&rtvalue, &session]() {
+		session->Send(rtvalue.toStyledString(), ID_TEXT_CHAT_MSG_RSP);
+	};
+
+	// Session binding: never trust uid/fromuid from the request body.
+	const int uid = session->GetUserId();
+	if (uid <= 0) {
+		rtvalue["error"] = ErrorCodes::TokenInvalid;
+		send_response();
+		return;
+	}
+	if (root.isMember("fromuid") && root["fromuid"].asInt() != uid) {
+		std::cout << "[TextChat] reject spoofed fromuid=" << root["fromuid"].asInt()
+			<< " auth_uid=" << uid << std::endl;
+		rtvalue["error"] = ErrorCodes::TokenInvalid;
+		send_response();
+		return;
+	}
+
+	const int touid = root["touid"].asInt();
+	const Json::Value arrays = root["text_array"];
+	if (touid <= 0 || !arrays.isArray() || arrays.empty()) {
+		rtvalue["error"] = ErrorCodes::Error_Json;
+		send_response();
+		return;
+	}
+
+	std::string client_msg_id = root.get("client_msg_id", "").asString();
+	if (client_msg_id.empty()) {
+		const Json::Value& first = arrays[0];
+		if (first.isMember("client_msg_id")) {
+			client_msg_id = first["client_msg_id"].asString();
+		}
+		else {
+			// Legacy clients send "msgid" (their local UUID/timestamp).
+			client_msg_id = first.get("msgid", "").asString();
+		}
+	}
+	if (client_msg_id.empty()) {
+		static std::atomic<long long> fallback_seq{ 0 };
+		const auto now = std::chrono::system_clock::now().time_since_epoch().count();
+		client_msg_id = "srv-" + std::to_string(uid) + "-" +
+			std::to_string(now) + "-" + std::to_string(++fallback_seq);
+	}
+
+	const std::string conversation_id =
+		std::to_string(std::min(uid, touid)) + ":" + std::to_string(std::max(uid, touid));
+
 	rtvalue["fromuid"] = uid;
 	rtvalue["touid"] = touid;
+	rtvalue["client_msg_id"] = client_msg_id;
+	rtvalue["text_array"] = arrays;
 
-	// 统一构造用于下发和持久化的 JSON 文本
-	std::string notify_str_cache = rtvalue.toStyledString();
+	long long server_msg_id = 0;
+	const std::string initial_payload = rtvalue.toStyledString();
 
-	Defer defer([this, &rtvalue, session]() {
-		std::string return_str = rtvalue.toStyledString();
-		session->Send(return_str, ID_TEXT_CHAT_MSG_RSP);
-		});
+	// Build the final payload (with server_msg_id) inside the DB transaction;
+	// the same transaction writes the outbox row when enabled.
+	auto build_final_payload = [&](long long assigned_id) {
+		rtvalue["server_msg_id"] = static_cast<Json::Int64>(assigned_id);
+		Json::Value out_array(Json::arrayValue);
+		for (const auto& txt_obj : arrays) {
+			Json::Value item = txt_obj;
+			item["server_msg_id"] = static_cast<Json::Int64>(assigned_id);
+			item["client_msg_id"] = client_msg_id;
+			out_array.append(item);
+		}
+		rtvalue["text_array"] = out_array;
+		return rtvalue.toStyledString();
+	};
 
-	// 先持久化，再投递。
-	// 无论对方是在线、离线还是跨服，先将消息入库 (Status=0)。
-	// 这样保证了消息不丢失。当对方收到消息回 ACK 时，再将其删除。
-	AsyncDBPool::GetInstance()->PostTask([uid, touid, notify_str_cache]() {
-		MysqlMgr::GetInstance()->SaveChatMessage(uid, touid, notify_str_cache);
-		});
+	auto feature_cfg = ConfigMgr::Inst()["Feature"];
+	const bool write_outbox = feature_cfg["OutboxEnabled"] == "true";
+	if (!MysqlMgr::GetInstance()->SaveChatMessage(
+		uid, touid, client_msg_id, conversation_id, initial_payload,
+		write_outbox, build_final_payload, server_msg_id)) {
+		rtvalue["error"] = ErrorCodes::RPCFailed;
+		send_response();
+		return;
+	}
+
+	const std::string notify_str_cache = rtvalue.toStyledString();
+	im::metrics::IncCounter("im_messages_received_total", 1,
+	                        "Total persisted chat messages");
+	rtvalue["error"] = ErrorCodes::Success;
+	send_response();
+
+	// Kafka delivery mode: the DeliveryConsumer owns live delivery.
+	if (ConfigMgr::Inst()["Feature"]["DeliveryMode"] == "kafka") {
+		return;
+	}
 
 	std::string to_ip_key = USERIPPREFIX + std::to_string(touid);
 	std::string to_ip_value;
@@ -219,6 +321,7 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 		auto to_sess = UserMgr::GetInstance()->GetSession(touid);
 		if (to_sess) {
 			std::cout << "[TextChat][Route] local deliver TCP 1019 to uid=" << touid
+				<< " server_msg_id=" << server_msg_id
 				<< " body_len=" << notify_str_cache.size() << std::endl;
 			to_sess->Send(notify_str_cache, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
 		}
@@ -236,7 +339,7 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 	text_msg_req.set_touid(touid);
 	for (const auto& txt_obj : arrays) {
 		auto content = txt_obj["content"].asString();
-		auto msgid = txt_obj["msgid"].asString();
+		auto msgid = txt_obj.get("client_msg_id", client_msg_id).asString();
 		auto* text_msg = text_msg_req.add_textmsgs();
 		text_msg->set_msgid(msgid);
 		text_msg->set_msgcontent(content);
@@ -250,7 +353,6 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 	// 如果RPC调用成功，但业务逻辑返回对方离线
 	if (rsp.error() == ErrorCodes::RecipientOffline) {
 		std::cout << "[TextChat][Route] gRPC target offline, saving to local redis" << std::endl;
-		// 将消息存入本地Redis的离线消息队列（加速拉取）
 		std::string offline_key = OFFLINE_MSG_PREFIX + std::to_string(touid);
 		RedisMgr::GetInstance()->LPush(offline_key, notify_str_cache);
 	}
@@ -261,9 +363,17 @@ void LogicSystem::GetOfflineMsgHandler(std::shared_ptr<CSession> session, const 
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
-	int uid = root["uid"].asInt();
 
-	std::cout << "[OfflineMsg] recv get offline msg req, uid=" << uid << std::endl;
+	// Session binding: ignore any uid supplied in the body.
+	const int uid = session->GetUserId();
+	const long long cursor = root.get("cursor", root.get("max_msg_id", 0)).asInt64();
+	if (uid <= 0) {
+		std::cout << "[OfflineMsg] reject unauthenticated session" << std::endl;
+		return;
+	}
+
+	std::cout << "[OfflineMsg] recv get offline msg req, uid=" << uid
+		<< " cursor=" << cursor << std::endl;
 
 	std::string offline_key = OFFLINE_MSG_PREFIX + std::to_string(uid);
 
@@ -271,8 +381,7 @@ void LogicSystem::GetOfflineMsgHandler(std::shared_ptr<CSession> session, const 
 	std::weak_ptr<CSession> weak_sess = session;
 
 	// 投递异步任务到 DB 线程池
-	AsyncDBPool::GetInstance()->PostTask([uid, offline_key, weak_sess]() {
-		// 在 DB 线程中执行
+	AsyncDBPool::GetInstance()->PostTask([uid, cursor, offline_key, weak_sess]() {
 		std::shared_ptr<CSession> shared_sess = weak_sess.lock();
 		if (!shared_sess) {
 			std::cout << "[OfflineMsg][Async] session expired, abort db query for uid=" << uid << std::endl;
@@ -281,20 +390,15 @@ void LogicSystem::GetOfflineMsgHandler(std::shared_ptr<CSession> session, const 
 
 		std::vector<long long> ids;
 		std::vector<std::string> db_payloads;
-		
-		// 当前逻辑只在返回 true 时下发离线消息；如果 DB 出现异常导致返回 false，
-		// 不会向客户端返回任何错误信息，也没有做重试控制（例如指数退避重试）。
-		// 阻塞式查询，但现在是在 Worker 线程中，不会阻塞主 Logic 线程
-		if (MysqlMgr::GetInstance()->GetUnreadChatMessages(uid, ids, db_payloads)) {
-			std::cout << "[OfflineMsg][Async] get " << db_payloads.size() << " unread messages for uid=" << uid << std::endl;
-			
+		if (MysqlMgr::GetInstance()->GetUnreadChatMessages(uid, cursor, 50, ids, db_payloads)) {
+			std::cout << "[OfflineMsg][Async] get " << db_payloads.size()
+				<< " unread messages for uid=" << uid << " cursor=" << cursor << std::endl;
+
 			for (const auto& payload : db_payloads) {
 				shared_sess->Send(payload, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
 			}
 
-			// 消息已从 MySQL 下发，清理 Redis 缓存 key，避免无限堆积
-			// 注意：真正的"已读"由客户端 ACK（OfflineMsgAckHandler）驱动，
-			// 这里只是清理加速缓存，不影响消息可靠性
+			// 消息已从 MySQL 下发，清理 Redis 缓存 key；真正已读仍由 ACK 驱动
 			RedisMgr::GetInstance()->Del(offline_key);
 			std::cout << "[OfflineMsg][Async] cleared redis cache key=" << offline_key << std::endl;
 		}
@@ -306,15 +410,31 @@ void LogicSystem::OfflineMsgAckHandler(std::shared_ptr<CSession> session, const 
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
-	// 客户端回包格式: { "uid": 1001, "max_msg_id": 10005 }
-	int uid = root["uid"].asInt();
-	long long max_msg_id = root["max_msg_id"].asInt64();
-	
-	std::cout << "[OfflineMsg][Ack] recv ack for uid=" << uid << " max_msg_id=" << max_msg_id << std::endl;
 
-	// 异步更新 DB 状态
-	AsyncDBPool::GetInstance()->PostTask([uid, max_msg_id]() {
-		MysqlMgr::GetInstance()->AckOfflineMessages(uid, max_msg_id);
+	const int uid = session->GetUserId();
+	if (uid <= 0) {
+		std::cout << "[OfflineMsg][Ack] reject unauthenticated session" << std::endl;
+		return;
+	}
+
+	std::vector<long long> ids;
+	const Json::Value& id_array = root.isMember("ids") ? root["ids"] : root["msg_ids"];
+	if (id_array.isArray()) {
+		for (const auto& item : id_array) {
+			const long long id = item.asInt64();
+			if (id > 0) {
+				ids.push_back(id);
+			}
+		}
+	}
+
+	std::cout << "[OfflineMsg][Ack] uid=" << uid << " ids=" << ids.size() << std::endl;
+	if (ids.empty()) {
+		return;
+	}
+
+	AsyncDBPool::GetInstance()->PostTask([uid, ids]() {
+		MysqlMgr::GetInstance()->AckOfflineMessages(uid, ids);
 		});
 }
 
@@ -353,7 +473,7 @@ bool LogicSystem::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<Use
 		userinfo->sex = root.isMember("sex") ? root["sex"].asInt() : 0;
 		userinfo->icon = root.isMember("icon") ? root["icon"].asString() : "";
 		std::cout << "user login uid is " << userinfo->uid << " user name is " << userinfo->name
-			<< " user email is " << userinfo->email << " pwd is " << userinfo->pwd << std::endl;
+			<< " user email is " << userinfo->email << std::endl;
 	}
 	else {
 		// Redis 没有数据，从 MySQL 查询

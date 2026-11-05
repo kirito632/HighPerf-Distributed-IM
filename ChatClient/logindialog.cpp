@@ -265,7 +265,12 @@ void LoginDialog::initHttpHandlers()
         if (jsonObj.contains("name")) {
             UserMgr::GetInstance()->SetName(jsonObj["name"].toString());
         }
-        UserMgr::GetInstance()->SetToken(si.Token);
+        // HTTP friend APIs use the JWT access token; ChatServer still uses the
+        // legacy token above until JWT login is enabled there.
+        const QString accessToken = jsonObj.value("access_token").toString(si.Token);
+        const QString refreshToken = jsonObj.value("refresh_token").toString();
+        UserMgr::GetInstance()->SetToken(accessToken);
+        UserMgr::GetInstance()->SetRefreshToken(refreshToken);
         
         qDebug() << "[LoginDialog] HTTP登录成功，已设置UserMgr - uid:" << si.Uid 
                  << " name:" << (jsonObj.contains("name") ? jsonObj["name"].toString() : "未提供");
@@ -326,7 +331,8 @@ void LoginDialog::slot_tcp_con_finish(bool bsuccess)
         // 连接成功，构建登录请求
         QJsonObject jsonObj;
         jsonObj["uid"] = _uid;
-        jsonObj["token"] = _token;
+        jsonObj["token"] = _token;  // legacy token for fallback ChatServer
+        jsonObj["access_token"] = UserMgr::GetInstance()->GetToken();
 
         QJsonDocument doc(jsonObj);
         QString jsonString = doc.toJson(QJsonDocument::Indented);

@@ -8,6 +8,7 @@
 #include"RedisMgr.h"
 #include"MysqlDao.h"
 #include"Singleton.h"
+#include "MetricsServer.h"
 #include <cppconn/exception.h>
 #include<csignal>
 class MysqlPool;
@@ -226,6 +227,17 @@ int main()
         return -1;
     }
 
+    MetricsServer metrics_server;
+    auto metrics_cfg = gCfgMgr["Metrics"];
+    if (metrics_cfg["Enabled"] == "true") {
+        const int metrics_port = std::stoi(metrics_cfg["Port"]);
+        std::string metrics_error;
+        if (!metrics_server.Start(static_cast<std::uint16_t>(metrics_port),
+                                  metrics_error)) {
+            std::cerr << "[Metrics] start failed: " << metrics_error << std::endl;
+        }
+    }
+
     // 从配置文件读取GateServer端口
     std::string gate_port_str = gCfgMgr["GateServer"]["Port"];
     unsigned short gate_port = atoi(gate_port_str.c_str());
@@ -255,6 +267,7 @@ int main()
 
         // 进入事件循环，会一直运行直到调用ioc.stop()
         ioc.run();
+        metrics_server.Stop();
     }
     catch (std::exception& e) {
         std::cerr << "exception is " << e.what() << std::endl;

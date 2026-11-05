@@ -6,6 +6,22 @@
 #include<json/reader.h>
 #include"RedisMgr.h"
 #include"MysqlMgr.h"
+#include"ConfigMgr.h"
+
+static bool CheckInternal(ServerContext* context) {
+    auto& cfg = ConfigMgr::Inst();
+    auto internal_cfg = cfg["Internal"];
+    const std::string expected = internal_cfg["Token"];
+    if (expected.empty()) {
+        return false;
+    }
+    const auto& metadata = context->client_metadata();
+    const auto it = metadata.find("x-internal-token");
+    if (it == metadata.end()) {
+        return false;
+    }
+    return std::string(it->second.data(), it->second.size()) == expected;
+}
 
 // 构造函数：初始化ChatServiceImpl
 ChatServiceImpl::ChatServiceImpl()
@@ -15,6 +31,9 @@ ChatServiceImpl::ChatServiceImpl()
 // 通知添加好友（当前用于内部RPC路径）
 Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendReq* request, AddFriendRsp* reply)
 {
+    if (!CheckInternal(context)) {
+        return Status(grpc::StatusCode::UNAUTHENTICATED, "missing internal token");
+    }
     // 查找用户是否在本服务器
     auto touid = request->touid();
     auto session = UserMgr::GetInstance()->GetSession(touid);
@@ -60,6 +79,9 @@ Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendR
 // 通知认证好友（当前用于内部RPC路径）
 Status ChatServiceImpl::NotifyAuthFriend(ServerContext* context, const AuthFriendReq* request, AuthFriendRsp* response)
 {
+    if (!CheckInternal(context)) {
+        return Status(grpc::StatusCode::UNAUTHENTICATED, "missing internal token");
+    }
     // [FriendNotify]
     std::cout << "[FriendNotify][Chat][gRPC] NotifyAuthFriend from_uid=" << request->fromuid()
         << " to_uid=" << request->touid() << std::endl;
@@ -69,6 +91,9 @@ Status ChatServiceImpl::NotifyAuthFriend(ServerContext* context, const AuthFrien
 // 通知文本聊天消息（跨服投递至目标服，再向目标会话下发 1019）
 Status ChatServiceImpl::NotifyTextChatMsg(ServerContext* context, const TextChatMsgReq* request, TextChatMsgRsp* response)
 {
+    if (!CheckInternal(context)) {
+        return Status(grpc::StatusCode::UNAUTHENTICATED, "missing internal token");
+    }
     // 诊断：打印收到的 gRPC 通知及目标在线情况（稍后再判断）
     std::cout << "[TextChat][gRPC] NotifyTextChatMsg recv fromuid=" << request->fromuid()
               << " touid=" << request->touid()

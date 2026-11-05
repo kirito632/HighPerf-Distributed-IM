@@ -78,15 +78,8 @@ public:
     Status Login(ServerContext* context, const message::LoginReq* request, message::LoginRsp* reply) override;
 
 private:
-    // 插入用户token
-    // 
-    // 参数：
-    //   - uid: 用户ID
-    //   - token: 认证令牌
-    // 
-    // 实现逻辑：
-    //   将token存储到Redis中（key = USERTOKENPREFIX + uid）
-    void insertToken(int uid, std::string token);
+    // Validate the shared service token supplied in gRPC metadata.
+    bool checkInternal(ServerContext* context);
 
     // 获取可用的ChatServer（负载均衡）
     // 

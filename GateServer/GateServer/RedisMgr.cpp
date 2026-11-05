@@ -163,7 +163,8 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
 
     redisReply* reply = (redisReply*)redisCommand(connect, "SET %s %s", key.c_str(), value.c_str());
     if (reply == nullptr) {
-        std::cout << "[RedisMgr::Set] Execut command [ SET " << key << "  " << value << " ] failure (reply==NULL)!\n";
+        std::cout << "[RedisMgr::Set] SET failure key=" << key
+                  << " value_len=" << value.size() << std::endl;
         return false;
     }
 
@@ -178,11 +179,85 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
     freeReplyObject(reply);
 
     if (ok) {
-        std::cout << "Execut command [ SET " << key << "  " << value << " ] success ! " << std::endl;
+        std::cout << "Execut command [ SET " << key << " ] success, value_len="
+                  << value.size() << std::endl;
         return true;
     }
-    std::cout << "Execut command [ SET " << key << "  " << value << " ] failure ! " << std::endl;
+    std::cout << "Execut command [ SET " << key << " ] failure" << std::endl;
     return false;
+}
+
+bool RedisMgr::SetEx(const std::string& key, const std::string& value, int seconds) {
+    auto connect = con_pool_->getConnection();
+    if (connect == nullptr) {
+        return false;
+    }
+    RedisConnectionGuard guard(con_pool_.get(), connect);
+
+    redisReply* reply = (redisReply*)redisCommand(
+        connect, "SET %s %s EX %d", key.c_str(), value.c_str(), seconds);
+    if (reply == nullptr) {
+        return false;
+    }
+    const bool ok = reply->type == REDIS_REPLY_STATUS;
+    freeReplyObject(reply);
+    return ok;
+}
+
+bool RedisMgr::GetDel(const std::string& key, std::string& value) {
+    auto connect = con_pool_->getConnection();
+    if (connect == nullptr) {
+        return false;
+    }
+    RedisConnectionGuard guard(con_pool_.get(), connect);
+
+    redisReply* reply = (redisReply*)redisCommand(connect, "GETDEL %s", key.c_str());
+    if (reply == nullptr) {
+        return false;
+    }
+    bool ok = false;
+    if (reply->type == REDIS_REPLY_STRING) {
+        value.assign(reply->str, reply->len);
+        ok = true;
+    }
+    freeReplyObject(reply);
+    return ok;
+}
+
+bool RedisMgr::Incr(const std::string& key, long long& value) {
+    auto connect = con_pool_->getConnection();
+    if (connect == nullptr) {
+        return false;
+    }
+    RedisConnectionGuard guard(con_pool_.get(), connect);
+
+    redisReply* reply = (redisReply*)redisCommand(connect, "INCR %s", key.c_str());
+    if (reply == nullptr) {
+        return false;
+    }
+    bool ok = false;
+    if (reply->type == REDIS_REPLY_INTEGER) {
+        value = reply->integer;
+        ok = true;
+    }
+    freeReplyObject(reply);
+    return ok;
+}
+
+bool RedisMgr::Expire(const std::string& key, int seconds) {
+    auto connect = con_pool_->getConnection();
+    if (connect == nullptr) {
+        return false;
+    }
+    RedisConnectionGuard guard(con_pool_.get(), connect);
+
+    redisReply* reply = (redisReply*)redisCommand(connect, "EXPIRE %s %d", key.c_str(), seconds);
+    if (reply == nullptr) {
+        return false;
+    }
+    const bool ok = reply->type == REDIS_REPLY_INTEGER && reply->integer == 1;
+    freeReplyObject(reply);
+    return ok;
 }
 
 // PUBLISH命令

@@ -35,7 +35,9 @@ enum ErrorCodes {
     EmailNotMatch = 1007,
     PasswdUpFailed = 1008,
     PasswdInvalid = 1009,
-    RPCGetFailed = 1010
+    RPCGetFailed = 1010,
+    TokenInvalid = 1012,
+    RateLimited = 1013
 };
 
 class Defer {

@@ -8,6 +8,12 @@ file(GLOB CHAT_SRCS
     ${CHATSERVER_SRC_DIR}/*.cxx
 )
 
+# Outbox publisher depends on librdkafka; keep it optional.
+list(REMOVE_ITEM CHAT_SRCS ${CHATSERVER_SRC_DIR}/OutboxPublisher.cpp ${CHATSERVER_SRC_DIR}/DeliveryConsumer.cpp)
+if(TARGET im_mq)
+    list(APPEND CHAT_SRCS ${CHATSERVER_SRC_DIR}/OutboxPublisher.cpp ${CHATSERVER_SRC_DIR}/DeliveryConsumer.cpp)
+endif()
+
 # 可执行文件
 add_executable(chat_server ${CHAT_SRCS})
 
@@ -19,7 +25,14 @@ target_link_libraries(chat_server PRIVATE
     OpenSSL::Crypto
     Threads::Threads
     Boost::system Boost::filesystem
+    im_auth
+    im_metrics
 )
+
+if(TARGET im_mq)
+    target_link_libraries(chat_server PRIVATE im_mq)
+    target_compile_definitions(chat_server PRIVATE IM_WITH_KAFKA=1)
+endif()
 
 if(HIREDIS_TARGET)
     target_link_libraries(chat_server PRIVATE ${HIREDIS_TARGET})

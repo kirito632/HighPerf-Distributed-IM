@@ -40,6 +40,9 @@ public:
     //   从服务器中移除指定会话
     void ClearSession(std::string);
 
+    // 停止接受新连接（幂等）
+    void Stop();
+
 private:
     // 处理接受连接的回调
     // 参数：

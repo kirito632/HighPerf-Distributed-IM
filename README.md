@@ -104,6 +104,35 @@ cmake ..
 make -j4
 ```
 
+### JWT 密钥（必须）
+
+服务端现在强制 JWT 登录。首次启动前生成密钥：
+
+```bash
+cd <project-root>
+bash scripts/dev/gen_jwt_keys.sh ./keys
+```
+
+确保 GateServer 和两个 ChatServer 的工作目录下都有：
+
+```text
+keys/jwt_private.pem   # 仅 GateServer 需要
+keys/jwt_public.pem    # GateServer / ChatServer 都需要
+```
+
+`JwtEnabled` 默认已开启；密钥缺失时 Gate 登录会返回 503，而不是退回旧 UUID token。
+
+### 内部 gRPC 令牌
+
+Gate/Chat/Status/Verify 之间的内部 RPC 使用共享令牌：
+
+```ini
+[Internal]
+Token = dev-internal-token
+```
+
+生产环境务必替换该值，并保证四个服务一致。
+
 ### 启动集群
 
 ```bash

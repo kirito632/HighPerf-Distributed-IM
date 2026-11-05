@@ -5,6 +5,7 @@
 #include <thread>
 #include <QThread>
 #include <QJsonArray>
+#include <QNetworkProxy>
 
 TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_message_id(0),_message_len(0)
 {
@@ -34,7 +35,7 @@ TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_message_id(0),_messa
             qDebug() << "[TcpMgr] readyRead: socket.readAll returned 0 bytes";
         }
 
-        const int headerSize = 4; // 两个 quint16 (msgId, msgLen) 大端格式
+        const int headerSize = 8; // 2B msgId + 2B flags + 4B body length
         // 保护性检查：避免无限循环
         while (true) {
             // 如果我们正在等待剩余的 body（已经解析了 header），直接检查是否够数据
@@ -54,15 +55,19 @@ TcpMgr::TcpMgr():_host(""),_port(0),_b_recv_pending(false),_message_id(0),_messa
                     return;
                 }
 
-                // 从 buffer 的前 4 字节解析 header（大端 —— high byte first）
-                // 使用 unsigned char 防止符号扩展问题
+                // 从 buffer 的前 8 字节解析 header（大端）
                 const unsigned char b0 = static_cast<unsigned char>(_buffer[0]);
                 const unsigned char b1 = static_cast<unsigned char>(_buffer[1]);
-                const unsigned char b2 = static_cast<unsigned char>(_buffer[2]);
-                const unsigned char b3 = static_cast<unsigned char>(_buffer[3]);
+                const unsigned char b4 = static_cast<unsigned char>(_buffer[4]);
+                const unsigned char b5 = static_cast<unsigned char>(_buffer[5]);
+                const unsigned char b6 = static_cast<unsigned char>(_buffer[6]);
+                const unsigned char b7 = static_cast<unsigned char>(_buffer[7]);
 
                 quint16 msgId = static_cast<quint16>((b0 << 8) | b1);
-                quint16 msgLen = static_cast<quint16>((b2 << 8) | b3);
+                quint32 msgLen = (static_cast<quint32>(b4) << 24) |
+                                 (static_cast<quint32>(b5) << 16) |
+                                 (static_cast<quint32>(b6) << 8) |
+                                 static_cast<quint32>(b7);
 
                 _message_id = msgId;
                 _message_len = msgLen;
@@ -196,7 +201,7 @@ void TcpMgr::initHandlers()
         // 成功：把用户信息设置到 UserMgr（如果有）
         if (jsonObj.contains("uid")) UserMgr::GetInstance()->SetUid(jsonObj["uid"].toInt());
         if (jsonObj.contains("name")) UserMgr::GetInstance()->SetName(jsonObj["name"].toString());
-        if (jsonObj.contains("token")) UserMgr::GetInstance()->SetToken(jsonObj["token"].toString());
+        // Do not overwrite the HTTP access token with a legacy chat token.
 
         // 登录成功后，初始化DB并获取Cursor
         int uid = UserMgr::GetInstance()->GetUid();
@@ -209,7 +214,7 @@ void TcpMgr::initHandlers()
         // 登录聊天服成功后，主动拉取离线消息（1023），带上 cursor
         QJsonObject offReq;
         offReq["uid"] = uid;
-        offReq["max_msg_id"] = cursor;
+        offReq["cursor"] = cursor;
         QString offJson = QString::fromUtf8(QJsonDocument(offReq).toJson(QJsonDocument::Compact));
         qDebug() << "[OfflineMsg][UI->TCP] send 1023 json=" << offJson;
         emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_GET_OFFLINE_MSG_REQ, offJson);
@@ -361,6 +366,7 @@ void TcpMgr::initHandlers()
         }
         int fromuid = obj.value("fromuid").toInt();
         int touid = obj.value("touid").toInt();
+        const qint64 serverMsgId = obj.value("server_msg_id").toVariant().toLongLong();
         auto arr = obj.value("text_array").toArray();
         qDebug() << "[TextChat] notify msgs count=" << arr.size() << " from=" << fromuid << " to=" << touid;
         for (const auto& v : arr) {
@@ -369,7 +375,7 @@ void TcpMgr::initHandlers()
             const QString content = o.value("content").toString();
             qDebug() << "[TextChat] msg id=" << msgId << " content=" << content;
             // 向上层发送专用信号，便于 UI 直接显示
-            emit sig_text_notify(fromuid, touid, msgId, content);
+            emit sig_text_notify(fromuid, touid, serverMsgId, msgId, content);
         }
         // 仍然保留通过 sig_recv_pkg 的整包派发（已在上层监听）
     });
@@ -383,6 +389,7 @@ void TcpMgr::slot_tcp_connect(ServerInfo si)
     qDebug() << "Connecting to server...";
     _host = si.Host;
     _port = static_cast<uint16_t>(si.Port.toUInt());
+    _socket.setProxy(QNetworkProxy::NoProxy);
     _socket.connectToHost(si.Host, _port);
 }
 
@@ -395,7 +402,12 @@ void TcpMgr::slot_send_data(ReqId reqId, QString data)
     QByteArray dataBytes = data.toUtf8();
 
     // 计算长度（使用网络字节序转换）
-    quint16 len = static_cast<quint16>(dataBytes.size());
+    if (dataBytes.size() > MAX_LENGTH) {
+        qDebug() << "[TcpMgr] body too large:" << dataBytes.size()
+                 << " max=" << MAX_LENGTH;
+        return;
+    }
+    quint32 len = static_cast<quint32>(dataBytes.size());
 
     // 创建一个QByteArray用于存储要发送的所有数据
     QByteArray block;
@@ -404,8 +416,8 @@ void TcpMgr::slot_send_data(ReqId reqId, QString data)
     // 设置数据流使用网络字节序
     out.setByteOrder(QDataStream::BigEndian);
 
-    // 写入ID和长度,,,
-    out << id << len;
+    // 2B msgid + 2B flags + 4B length
+    out << id << static_cast<quint16>(0) << len;
 
     // 添加字符串数据
     block.append(dataBytes);
