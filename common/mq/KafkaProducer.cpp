@@ -41,16 +41,34 @@ bool KafkaProducer::Init(const KafkaOptions& options, std::string& error) {
 }
 
 bool KafkaProducer::Produce(const std::string& topic, const std::string& key,
-                            const std::string& value, std::string& error) {
+                            const std::string& value, std::string& error,
+                            const std::vector<std::pair<std::string, std::string>>& headers) {
     if (!producer_) {
         error = "producer is not initialized";
         return false;
     }
 
+    RdKafka::Headers* kafka_headers = nullptr;
+    if (!headers.empty()) {
+        kafka_headers = RdKafka::Headers::create();
+        if (!kafka_headers) {
+            error = "failed to create Kafka headers";
+            return false;
+        }
+        for (const auto& header : headers) {
+            if (kafka_headers->add(header.first, header.second) != RdKafka::ERR_NO_ERROR) {
+                delete kafka_headers;
+                error = "failed to add Kafka header: " + header.first;
+                return false;
+            }
+        }
+    }
+
     RdKafka::ErrorCode code = producer_->produce(
         topic, RdKafka::Topic::PARTITION_UA, RdKafka::Producer::RK_MSG_COPY,
         const_cast<char*>(value.data()), value.size(), key.data(), key.size(),
-        0, nullptr, nullptr);
+        0, kafka_headers, nullptr);
+    if (code != RdKafka::ERR_NO_ERROR) delete kafka_headers;
     producer_->poll(0);
 
     if (code != RdKafka::ERR_NO_ERROR) {

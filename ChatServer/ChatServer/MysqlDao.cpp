@@ -421,6 +421,7 @@ bool MysqlDao::SaveChatMessage(int fromUid, int toUid,
                                const std::string& conversationId,
                                const std::string& initialPayload,
                                bool writeOutbox,
+                               const std::string& traceparent,
                                const std::function<std::string(long long)>& finalPayload,
                                long long& serverMsgId)
 {
@@ -484,12 +485,13 @@ bool MysqlDao::SaveChatMessage(int fromUid, int toUid,
             std::unique_ptr<sql::PreparedStatement> outbox(
                 con->prepareStatement(
                     "INSERT INTO outbox "
-                    "(event_id, aggregate_type, aggregate_id, event_type, payload, status, available_at, created_at) "
-                    "VALUES (?, 'message', ?, 'MessageCreated', ?, 0, NOW(), NOW()) "
+                    "(event_id, aggregate_type, aggregate_id, event_type, payload, traceparent, status, available_at, created_at) "
+                    "VALUES (?, 'message', ?, 'MessageCreated', ?, ?, 0, NOW(), NOW()) "
                     "ON DUPLICATE KEY UPDATE payload=VALUES(payload), available_at=NOW()"));
             outbox->setString(1, event_id);
             outbox->setString(2, std::to_string(serverMsgId));
             outbox->setString(3, final_payload);
+            outbox->setString(4, traceparent);
             outbox->executeUpdate();
         }
 
@@ -552,7 +554,7 @@ bool MysqlDao::GetPendingOutbox(int limit, std::vector<OutboxRow>& rows)
         sql::Connection* con = guard.get();
         std::unique_ptr<sql::PreparedStatement> pstmt(
             con->prepareStatement(
-                "SELECT id, event_id, event_type, payload FROM outbox "
+                "SELECT id, event_id, event_type, payload, traceparent FROM outbox "
                 "WHERE status=0 AND available_at<=NOW() ORDER BY id LIMIT ?"));
         pstmt->setInt(1, limit);
         std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
@@ -562,6 +564,7 @@ bool MysqlDao::GetPendingOutbox(int limit, std::vector<OutboxRow>& rows)
             row.event_id = res->getString("event_id");
             row.event_type = res->getString("event_type");
             row.payload = res->getString("payload");
+            row.traceparent = res->isNull("traceparent") ? "" : res->getString("traceparent");
             rows.push_back(std::move(row));
         }
         return true;

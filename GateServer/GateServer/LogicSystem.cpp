@@ -14,6 +14,7 @@
 #include "Singleton.h"
 #include "const.h"
 #include "crypto_utils.h"
+#include "Tracing.h"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -533,8 +534,12 @@ LogicSystem::LogicSystem() {
       SendJson(connection, root, http::status::service_unavailable);
       return true;
     }
+    auto jwt_span = im::tracing::StartSpan(
+        "gate.jwt.issue",
+        connection->_trace_span ? connection->_trace_span->Traceparent() : std::string{});
     TokenResult jwt_result =
         _token_service->Issue(userInfo.uid, "im.friend im.message");
+    if (jwt_span) jwt_span->SetAttribute("enduser.id", static_cast<std::int64_t>(userInfo.uid));
     if (!jwt_result.ok) {
       std::cerr << "[Auth] user_login issue token failed: "
                 << jwt_result.error << std::endl;
@@ -987,6 +992,9 @@ bool LogicSystem::RequireAuth(const std::shared_ptr<HttpConnection>& con,
 }
 
 void LogicSystem::HandleOAuthToken(const std::shared_ptr<HttpConnection>& con) {
+  auto jwt_span = im::tracing::StartSpan(
+      "gate.jwt.issue",
+      con->_trace_span ? con->_trace_span->Traceparent() : std::string{});
   if (!_token_service) {
     SendJson(con, OAuthError("temporarily_unavailable", "JWT service is disabled"),
              http::status::service_unavailable);
@@ -1021,6 +1029,7 @@ void LogicSystem::HandleOAuthToken(const std::shared_ptr<HttpConnection>& con) {
                http::status::internal_server_error);
       return;
     }
+    if (jwt_span) jwt_span->SetAttribute("enduser.id", static_cast<std::int64_t>(user.uid));
 
     Json::Value out;
     out["access_token"] = result.tokens.access_token;

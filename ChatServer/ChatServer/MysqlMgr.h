@@ -25,6 +25,7 @@ public:
                          const std::string& conversationId,
                          const std::string& initialPayload,
                          bool writeOutbox,
+                         const std::string& traceparent,
                          const std::function<std::string(long long)>& finalPayload,
                          long long& serverMsgId);
     bool UpdateChatMessagePayload(long long serverMsgId, const std::string& payload);

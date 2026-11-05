@@ -67,7 +67,8 @@ private slots:
     //   - id: 请求ID
     //   - res: 响应内容
     //   - err: 错误码
-    void slot_login_mod_finish(ReqId id, QString res, ErrorCodes err);
+    void slot_login_mod_finish(ReqId id, QString res, ErrorCodes err,
+                               QString traceparent);
     
     // 槽函数：处理TCP连接完成
     // 参数：

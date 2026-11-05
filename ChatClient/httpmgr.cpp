@@ -1,4 +1,5 @@
 #include "httpmgr.h"
+#include <QUuid>
 
 // 析构函数：清理资源
 HttpMgr::~HttpMgr()
@@ -42,6 +43,12 @@ void HttpMgr::PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod)
     // 设置HTTP请求头
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setHeader(QNetworkRequest::ContentLengthHeader, QByteArray::number(data.length()));
+    if (req_id == ReqId::ID_LOGIN_USER) {
+        const QString traceparent = QUuid::createUuid().toString(QUuid::WithoutBraces).remove('-');
+        const QByteArray traceId = traceparent.toLatin1();
+        const QByteArray spanId = QUuid::createUuid().toString(QUuid::WithoutBraces).remove('-').toLatin1().left(16);
+        request.setRawHeader("traceparent", "00-" + traceId + "-" + spanId + "-01");
+    }
 
     // 发送POST请求
     QNetworkReply* reply = _manager.post(request, data);
@@ -55,7 +62,8 @@ void HttpMgr::PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod)
         if(reply->error() != QNetworkReply::NoError){
             qDebug() << "Http error:" << reply->errorString();
             // 发送信号通知完成（带错误码）
-            emit sig_http_finish(req_id, "", ErrorCodes::ERR_NETWORK, mod);
+            emit sig_http_finish(req_id, "", ErrorCodes::ERR_NETWORK, mod,
+                                 QString::fromUtf8(reply->rawHeader("traceparent")));
             reply->deleteLater();
             return; // <- 关键：遇错后直接返回，避免继续走成功分支
         }
@@ -65,7 +73,8 @@ void HttpMgr::PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod)
         qDebug() << "Http response:" << res;
         
         // 发送信号通知完成（成功）
-        emit sig_http_finish(req_id, res, ErrorCodes::SUCCESS, mod);
+        emit sig_http_finish(req_id, res, ErrorCodes::SUCCESS, mod,
+                             QString::fromUtf8(reply->rawHeader("traceparent")));
         reply->deleteLater();
         return;
     });
@@ -82,7 +91,8 @@ void HttpMgr::PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod)
 // 作用：
 //   根据模块类型（mod）将结果分发到对应的专用信号
 //   便于不同模块独立处理自己的HTTP响应
-void HttpMgr::slot_http_finish(ReqId id, QString res, ErrorCodes err, Modules mod)
+void HttpMgr::slot_http_finish(ReqId id, QString res, ErrorCodes err, Modules mod,
+                               QString traceparent)
 {
     qDebug() << "slot_http_finish called, mod=" << mod << "id=" << id;
 
@@ -99,6 +109,6 @@ void HttpMgr::slot_http_finish(ReqId id, QString res, ErrorCodes err, Modules mo
 
     if(mod == Modules::LOGINMOD){
         // 发送信号通知登录模块响应结束了
-        emit sig_login_mod_finish(id, res, err);
+        emit sig_login_mod_finish(id, res, err, traceparent);
     }
 }

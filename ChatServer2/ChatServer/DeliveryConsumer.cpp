@@ -10,6 +10,7 @@
 #include "CSession.h"
 #include "TopicNames.h"
 #include "const.h"
+#include "Tracing.h"
 
 DeliveryConsumer::~DeliveryConsumer() { Stop(); }
 
@@ -67,6 +68,19 @@ void DeliveryConsumer::Run() {
 }
 
 void DeliveryConsumer::HandleMessage(RdKafka::Message& message) {
+    std::string parent_traceparent;
+    if (auto* headers = message.headers()) {
+        const auto header = headers->get_last("traceparent");
+        if (header.err() == RdKafka::ERR_NO_ERROR && header.value()) {
+            parent_traceparent.assign(static_cast<const char*>(header.value()),
+                                      header.value_size());
+        }
+    }
+    auto span = im::tracing::StartSpan("kafka.delivery", parent_traceparent);
+    if (span) {
+        span->SetAttribute("messaging.system", "kafka");
+        span->SetAttribute("messaging.destination.name", message.topic_name());
+    }
     std::string error;
     std::string event_id;
     if (message.key()) {
@@ -79,6 +93,7 @@ void DeliveryConsumer::HandleMessage(RdKafka::Message& message) {
         // Defensive fallback for producers that did not set a Kafka key.
         event_id = "payload:" + std::to_string(message.offset());
     }
+    if (span) span->SetAttribute("im.event_id", event_id);
 
     if (MysqlMgr::GetInstance()->IsEventProcessed(event_id)) {
         _consumer.Commit(message, error);
@@ -89,7 +104,9 @@ void DeliveryConsumer::HandleMessage(RdKafka::Message& message) {
     Json::Value root;
     if (!reader.parse(payload, root) || !root.isObject()) {
         std::cerr << "[Delivery] malformed event id=" << event_id << std::endl;
-        _dlq.Produce(im::mq::kMessageDlq, event_id, payload, error);
+        std::vector<std::pair<std::string, std::string>> dlq_headers;
+        if (span) dlq_headers.emplace_back("traceparent", span->Traceparent());
+        _dlq.Produce(im::mq::kMessageDlq, event_id, payload, error, dlq_headers);
         _dlq.Flush(2000, error);
         MysqlMgr::GetInstance()->MarkEventProcessed(event_id, "Malformed", _consumer_name);
         _consumer.Commit(message, error);
@@ -99,6 +116,10 @@ void DeliveryConsumer::HandleMessage(RdKafka::Message& message) {
     const int to_uid = root.get("touid", 0).asInt();
     const long long server_msg_id =
         root.get("server_msg_id", Json::Int64(0)).asInt64();
+    if (span) {
+        span->SetAttribute("im.recipient.id", static_cast<std::int64_t>(to_uid));
+        span->SetAttribute("im.server_msg_id", static_cast<std::int64_t>(server_msg_id));
+    }
     const std::string event_type = root.get("event_type", "MessageCreated").asString();
     if (to_uid > 0 && server_msg_id > 0 &&
         !MysqlMgr::GetInstance()->IsMessageUnread(to_uid, server_msg_id)) {
@@ -112,7 +133,8 @@ void DeliveryConsumer::HandleMessage(RdKafka::Message& message) {
     if (to_uid > 0) {
         auto session = UserMgr::GetInstance()->GetSession(to_uid);
         if (session) {
-            session->Send(payload, ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+            if (span) root["traceparent"] = span->Traceparent();
+            session->Send(root.toStyledString(), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
         }
     }
 

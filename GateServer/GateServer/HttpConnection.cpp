@@ -215,6 +215,17 @@ void HttpConnection::HandleReq()
     // 设置响应版本
     _response.version(_request.version());
     _response.keep_alive(false);
+    const std::string method(_request.method_string());
+    const std::string target(_request.target());
+    const auto query = target.find('?');
+    const std::string route = target.substr(0, query);
+    const auto parent = _request["traceparent"];
+    _trace_span = im::tracing::StartSpan(method + " " + route,
+        parent.empty() ? std::string{} : std::string(parent));
+    if (_trace_span) {
+        _trace_span->SetAttribute("http.method", method);
+        _trace_span->SetAttribute("http.route", route);
+    }
 
     // 处理GET请求
     if (_request.method() == http::verb::get) {
@@ -278,6 +289,11 @@ void HttpConnection::HandleReq()
 void HttpConnection::WriteResponse()
 {
     auto self = shared_from_this();
+    if (_trace_span) {
+        _trace_span->SetAttribute("http.status_code",
+            static_cast<std::int64_t>(_response.result_int()));
+        _response.set("traceparent", _trace_span->Traceparent());
+    }
     // 设置响应内容长度
     _response.content_length(_response.body().size());
 
@@ -304,6 +320,10 @@ void HttpConnection::WriteResponse()
 
             // 取消超时定时器
             self->_deadline.cancel();
+            if (self->_trace_span) {
+                self->_trace_span->End();
+                self->_trace_span.reset();
+            }
         });
 }
 

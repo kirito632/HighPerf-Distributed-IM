@@ -60,7 +60,8 @@ private slots:
     // 
     // 作用：
     //   根据模块类型（mod）将结果分发到对应的信号
-    void slot_http_finish(ReqId id, QString res, ErrorCodes err, Modules mod);
+    void slot_http_finish(ReqId id, QString res, ErrorCodes err, Modules mod,
+                          QString traceparent);
 
 signals:
     // 信号：HTTP请求完成（通用）
@@ -69,7 +70,8 @@ signals:
     //   - res: 响应内容
     //   - err: 错误码
     //   - mod: 模块类型
-    void sig_http_finish(ReqId id, QString res, ErrorCodes err, Modules mod);
+    void sig_http_finish(ReqId id, QString res, ErrorCodes err, Modules mod,
+                         QString traceparent);
     
     // 信号：注册模块完成
     void sig_reg_mod_finish(ReqId id, QString res, ErrorCodes err);
@@ -78,7 +80,8 @@ signals:
     void sig_forget_mod_finish(ReqId id, QString res, ErrorCodes err);
     
     // 信号：登录模块完成
-    void sig_login_mod_finish(ReqId id, QString res, ErrorCodes err);
+    void sig_login_mod_finish(ReqId id, QString res, ErrorCodes err,
+                              QString traceparent);
 };
 
 #endif // HTTPMGR_H

@@ -388,6 +388,7 @@ public:
                          const std::string& conversationId,
                          const std::string& initialPayload,
                          bool writeOutbox,
+                         const std::string& traceparent,
                          const std::function<std::string(long long)>& finalPayload,
                          long long& serverMsgId);
     bool UpdateChatMessagePayload(long long serverMsgId, const std::string& payload);
@@ -397,6 +398,7 @@ public:
         std::string event_id;
         std::string event_type;
         std::string payload;
+        std::string traceparent;
     };
     bool GetPendingOutbox(int limit, std::vector<OutboxRow>& rows);
     bool MarkOutboxPublished(const std::vector<long long>& ids);

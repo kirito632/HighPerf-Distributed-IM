@@ -7,6 +7,7 @@
 #include "MysqlDao.h"
 #include "MysqlMgr.h"
 #include "TopicNames.h"
+#include "Tracing.h"
 
 OutboxPublisher::~OutboxPublisher() { Stop(); }
 
@@ -52,9 +53,18 @@ void OutboxPublisher::Run() {
         std::vector<long long> ids;
         bool ok = true;
         for (const auto& row : rows) {
+            auto span = im::tracing::StartSpan("kafka.outbox.publish", row.traceparent);
+            if (span) {
+                span->SetAttribute("messaging.system", "kafka");
+                span->SetAttribute("messaging.destination.name", im::mq::kMessageCreated);
+                span->SetAttribute("im.event_id", row.event_id);
+            }
+            const std::string traceparent = span ? span->Traceparent() : row.traceparent;
+            std::vector<std::pair<std::string, std::string>> headers;
+            if (!traceparent.empty()) headers.emplace_back("traceparent", traceparent);
             // aggregate_id is already the durable server message id.
             if (!_producer.Produce(im::mq::kMessageCreated, row.event_id,
-                                   row.payload, error)) {
+                                   row.payload, error, headers)) {
                 ok = false;
                 break;
             }

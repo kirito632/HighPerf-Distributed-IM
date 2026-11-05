@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(FullStackProject LANGUAGES CXX)
 
 option(BUILD_TESTING "Build the unit-test tree" OFF)
+option(IM_WITH_OPENTELEMETRY "Build OpenTelemetry OTLP tracing support" OFF)
 include(CTest)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -116,6 +117,46 @@ target_link_libraries(im_metrics PUBLIC
   Boost::system
   Threads::Threads
 )
+
+add_library(im_tracing STATIC common/tracing/Tracing.cpp)
+target_include_directories(im_tracing PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/common/tracing)
+target_link_libraries(im_tracing PUBLIC Threads::Threads)
+if(IM_WITH_OPENTELEMETRY)
+  set(IM_BUILD_TESTING ${BUILD_TESTING})
+  set(WITH_OTLP_GRPC OFF CACHE BOOL "" FORCE)
+  set(WITH_OTLP_HTTP ON CACHE BOOL "" FORCE)
+  set(WITH_HTTP_CLIENT_CURL ON CACHE BOOL "" FORCE)
+  set(WITH_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(WITH_TESTING OFF CACHE BOOL "" FORCE)
+  set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+  set(WITH_BENCHMARK OFF CACHE BOOL "" FORCE)
+  set(WITH_LOGS_PREVIEW OFF CACHE BOOL "" FORCE)
+  set(WITH_METRICS_PREVIEW OFF CACHE BOOL "" FORCE)
+  set(WITH_NO_DEPRECATED_CODE ON CACHE BOOL "" FORCE)
+  set(WITH_STL ON CACHE BOOL "" FORCE)
+  FetchContent_Declare(
+    opentelemetry_proto
+    URL https://codeload.github.com/open-telemetry/opentelemetry-proto/tar.gz/refs/tags/v1.4.0
+    URL_HASH SHA256=53cd32cedb27762ea2060a9c8d83e4b822de13d73b5d5d37a2db3cf55018d694
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  )
+  FetchContent_MakeAvailable(opentelemetry_proto)
+  set(OTELCPP_PROTO_PATH ${opentelemetry_proto_SOURCE_DIR})
+  FetchContent_Declare(
+    opentelemetry_cpp
+    URL https://codeload.github.com/open-telemetry/opentelemetry-cpp/tar.gz/refs/tags/v1.19.0
+    URL_HASH SHA256=e0330194b72f2fe4c0ce3ece06b02dc4aa0ab491eb75bf42c6f5e283912e468c
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  )
+  FetchContent_MakeAvailable(opentelemetry_cpp)
+  set(BUILD_TESTING ${IM_BUILD_TESTING})
+  target_compile_definitions(im_tracing PUBLIC IM_WITH_OPENTELEMETRY=1)
+  target_link_libraries(im_tracing PUBLIC
+    opentelemetry_trace
+    opentelemetry_sdk
+    opentelemetry_exporter_otlp_http
+  )
+endif()
 
 # Kafka wrapper (librdkafka via pkg-config); optional so Kafka can stay off.
 add_subdirectory(common/mq)

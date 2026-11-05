@@ -70,11 +70,12 @@ bool MysqlMgr::SaveChatMessage(int fromUid, int toUid,
                                const std::string& conversationId,
                                const std::string& initialPayload,
                                bool writeOutbox,
+                               const std::string& traceparent,
                                const std::function<std::string(long long)>& finalPayload,
                                long long& serverMsgId)
 {
     return _dao.SaveChatMessage(fromUid, toUid, clientMsgId, conversationId,
-                                initialPayload, writeOutbox, finalPayload,
+                                initialPayload, writeOutbox, traceparent, finalPayload,
                                 serverMsgId);
 }
 

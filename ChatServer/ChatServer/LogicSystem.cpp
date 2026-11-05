@@ -4,6 +4,7 @@
 #include "UserMgr.h"
 #include "AsyncDBPool.h"
 #include "ConfigMgr.h"
+#include "Tracing.h"
 #include "JwtKeys.h"
 #include "JwtVerifier.h"
 #include "Metrics.h"
@@ -118,10 +119,15 @@ void LogicSystem::LoginHandler(std::shared_ptr<CSession> session, const short& m
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
+	auto trace_span = im::tracing::StartSpan("tcp.login", root.get("traceparent", "").asString());
 	int uid = root["uid"].asInt();
 	std::cout << "[LoginHandler] recv uid=" << uid << std::endl;
 
 	Json::Value rtvalue;
+	if (trace_span) {
+		trace_span->SetAttribute("enduser.id", static_cast<std::int64_t>(uid));
+		rtvalue["traceparent"] = trace_span->Traceparent();
+	}
 	// JWT is mandatory; the legacy Redis utoken path is removed.
 	bool token_ok = false;
 	if (_jwt_verifier) {
@@ -209,6 +215,7 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
+	auto trace_span = im::tracing::StartSpan("tcp.chat.send", root.get("traceparent", "").asString());
 
 	Json::Value rtvalue;
 	rtvalue["error"] = ErrorCodes::Success;
@@ -232,6 +239,11 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 	}
 
 	const int touid = root["touid"].asInt();
+	if (trace_span) {
+		trace_span->SetAttribute("enduser.id", static_cast<std::int64_t>(uid));
+		trace_span->SetAttribute("im.recipient.id", static_cast<std::int64_t>(touid));
+		rtvalue["traceparent"] = trace_span->Traceparent();
+	}
 	const Json::Value arrays = root["text_array"];
 	if (touid <= 0 || !arrays.isArray() || arrays.empty()) {
 		rtvalue["error"] = ErrorCodes::Error_Json;
@@ -259,6 +271,7 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 
 	const std::string conversation_id =
 		std::to_string(std::min(uid, touid)) + ":" + std::to_string(std::max(uid, touid));
+	if (trace_span) trace_span->SetAttribute("im.client_msg_id", client_msg_id);
 
 	rtvalue["fromuid"] = uid;
 	rtvalue["touid"] = touid;
@@ -287,11 +300,13 @@ void LogicSystem::DealChatTextMsg(std::shared_ptr<CSession> session, const short
 	const bool write_outbox = feature_cfg["OutboxEnabled"] == "true";
 	if (!MysqlMgr::GetInstance()->SaveChatMessage(
 		uid, touid, client_msg_id, conversation_id, initial_payload,
-		write_outbox, build_final_payload, server_msg_id)) {
+		write_outbox, trace_span ? trace_span->Traceparent() : std::string{},
+		build_final_payload, server_msg_id)) {
 		rtvalue["error"] = ErrorCodes::RPCFailed;
 		send_response();
 		return;
 	}
+	if (trace_span) trace_span->SetAttribute("im.server_msg_id", static_cast<std::int64_t>(server_msg_id));
 
 	const std::string notify_str_cache = rtvalue.toStyledString();
 	im::metrics::IncCounter("im_messages_received_total", 1,
@@ -363,6 +378,7 @@ void LogicSystem::GetOfflineMsgHandler(std::shared_ptr<CSession> session, const 
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
+	auto trace_span = im::tracing::StartSpan("tcp.chat.offline_fetch", root.get("traceparent", "").asString());
 
 	// Session binding: ignore any uid supplied in the body.
 	const int uid = session->GetUserId();
@@ -379,9 +395,11 @@ void LogicSystem::GetOfflineMsgHandler(std::shared_ptr<CSession> session, const 
 
 	// 使用 weak_ptr 防止回调时 session 已销毁
 	std::weak_ptr<CSession> weak_sess = session;
+	const std::string traceparent = trace_span ? trace_span->Traceparent() : std::string{};
 
 	// 投递异步任务到 DB 线程池
-	AsyncDBPool::GetInstance()->PostTask([uid, cursor, offline_key, weak_sess]() {
+	AsyncDBPool::GetInstance()->PostTask([uid, cursor, offline_key, weak_sess, traceparent]() {
+		auto db_span = im::tracing::StartSpan("mysql.chat.offline_fetch", traceparent);
 		std::shared_ptr<CSession> shared_sess = weak_sess.lock();
 		if (!shared_sess) {
 			std::cout << "[OfflineMsg][Async] session expired, abort db query for uid=" << uid << std::endl;
@@ -410,6 +428,7 @@ void LogicSystem::OfflineMsgAckHandler(std::shared_ptr<CSession> session, const 
 	Json::Reader reader;
 	Json::Value root;
 	reader.parse(msg_data, root);
+	auto trace_span = im::tracing::StartSpan("tcp.chat.ack", root.get("traceparent", "").asString());
 
 	const int uid = session->GetUserId();
 	if (uid <= 0) {
@@ -433,7 +452,9 @@ void LogicSystem::OfflineMsgAckHandler(std::shared_ptr<CSession> session, const 
 		return;
 	}
 
-	AsyncDBPool::GetInstance()->PostTask([uid, ids]() {
+	const std::string traceparent = trace_span ? trace_span->Traceparent() : std::string{};
+	AsyncDBPool::GetInstance()->PostTask([uid, ids, traceparent]() {
+		auto db_span = im::tracing::StartSpan("mysql.chat.ack", traceparent);
 		MysqlMgr::GetInstance()->AckOfflineMessages(uid, ids);
 		});
 }

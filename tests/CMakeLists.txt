@@ -32,6 +32,7 @@ add_executable(im_unit_tests
     cpp/unit/test_jwt.cpp
     cpp/unit/test_jwks.cpp
     cpp/unit/test_token_service.cpp
+    cpp/unit/test_tracing.cpp
     ${CMAKE_SOURCE_DIR}/ChatServer/ChatServer/MsgNode.cpp
     ${CMAKE_SOURCE_DIR}/ChatServer/ChatServer/crypto_utils.cpp
 )
@@ -41,6 +42,7 @@ add_dependencies(im_unit_tests jwt_test_keys)
 target_include_directories(im_unit_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/ChatServer/ChatServer
     ${CMAKE_SOURCE_DIR}/common/auth
+    ${CMAKE_SOURCE_DIR}/common/tracing
     ${CMAKE_SOURCE_DIR}
     ${JSONCPP_INCLUDE_DIR}
 )
@@ -52,12 +54,17 @@ target_compile_definitions(im_unit_tests PRIVATE
 target_link_libraries(im_unit_tests PRIVATE
     GTest::gtest_main
     im_auth
+    im_tracing
 )
 
 if(TARGET im_mq)
     target_sources(im_unit_tests PRIVATE cpp/unit/test_event_envelope.cpp)
     target_include_directories(im_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/common/mq)
     target_link_libraries(im_unit_tests PRIVATE im_mq)
+endif()
+
+if(IM_WITH_OPENTELEMETRY)
+    target_compile_definitions(im_unit_tests PRIVATE IM_WITH_OPENTELEMETRY=1)
 endif()
 
 gtest_discover_tests(im_unit_tests

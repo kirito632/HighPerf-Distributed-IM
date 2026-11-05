@@ -26,6 +26,7 @@ target_link_libraries(chat_server2 PRIVATE
     Boost::system Boost::filesystem
     im_auth
     im_metrics
+    im_tracing
 )
 
 if(TARGET im_mq)

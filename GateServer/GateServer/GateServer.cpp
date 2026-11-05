@@ -9,6 +9,8 @@
 #include"MysqlDao.h"
 #include"Singleton.h"
 #include "MetricsServer.h"
+#include "Tracing.h"
+#include <cstdlib>
 #include <cppconn/exception.h>
 #include<csignal>
 class MysqlPool;
@@ -192,6 +194,20 @@ int main()
 
     // 获取配置管理器实例
     auto& gCfgMgr = ConfigMgr::Inst();
+    auto tracing_cfg = gCfgMgr["Tracing"];
+    const char* tracing_override = std::getenv("IM_TRACING_ENABLED");
+    const bool tracing_enabled = tracing_override
+        ? (std::string(tracing_override) == "true" || std::string(tracing_override) == "1")
+        : gCfgMgr["Feature"]["TracingEnabled"] == "true";
+    const char* endpoint_env = std::getenv("OTEL_EXPORTER_OTLP_ENDPOINT");
+    const std::string tracing_endpoint = !tracing_cfg["Endpoint"].empty()
+        ? tracing_cfg["Endpoint"]
+        : (endpoint_env ? endpoint_env : "http://127.0.0.1:4318/v1/traces");
+    std::string tracing_error;
+    if (!im::tracing::Init(tracing_enabled, tracing_endpoint, "gate-server", tracing_error)) {
+        std::cerr << "[Tracing] disabled: " << tracing_error << std::endl;
+    }
+    std::atexit(im::tracing::Shutdown);
 
     // 从配置文件读取MySQL连接信息
     std::string host = gCfgMgr["Mysql"]["Host"];

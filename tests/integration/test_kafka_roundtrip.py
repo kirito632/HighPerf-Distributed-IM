@@ -33,3 +33,4 @@ def test_kafka_produce_consume_roundtrip():
     )
     assert consumed.returncode == 0, consumed.stderr
     assert value in consumed.stdout
+    assert "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01" in consumed.stdout

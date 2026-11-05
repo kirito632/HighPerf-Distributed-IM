@@ -47,6 +47,8 @@ public:
     // 设置/获取 refresh token（用于 HTTP 401 自动续期）
     void SetRefreshToken(const QString &token);
     QString GetRefreshToken() const;
+    void SetTraceparent(const QString &traceparent);
+    QString GetTraceparent() const;
 
     // ========== 获取用户信息（线程安全）==========
     
@@ -72,6 +74,7 @@ private:
     QString _name;                 // 用户名
     QString _token;                // 认证令牌
     QString _refreshToken;         // refresh token
+    QString _traceparent;
     int _uid = 0;                  // 用户ID
 };
 

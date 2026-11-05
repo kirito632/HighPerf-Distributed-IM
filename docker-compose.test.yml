@@ -82,7 +82,6 @@ services:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
       - "16686:16686"
-      - "4317:4317"
       - "4318:4318"
 
   prometheus-test:
@@ -110,6 +109,7 @@ services:
       - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus-test
+      - jaeger-test
 
 volumes:
   mysql_test_data:

@@ -112,6 +112,18 @@ QString UserMgr::GetRefreshToken() const
     return _refreshToken;
 }
 
+void UserMgr::SetTraceparent(const QString &traceparent)
+{
+    QWriteLocker locker(&_lock);
+    _traceparent = traceparent;
+}
+
+QString UserMgr::GetTraceparent() const
+{
+    QReadLocker locker(&_lock);
+    return _traceparent;
+}
+
 // 打印当前用户状态（线程安全）
 // 
 // 返回值：

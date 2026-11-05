@@ -87,7 +87,9 @@ signals:
 
     // 文本聊天下行（1019）通知：fromuid -> touid 的一条文本（仅传首条内容，列表由上层自行遍历需要的话）
     // 增加 msgId 参数，用于去重和ACK
-    void sig_text_notify(int fromUid, int toUid, qint64 serverMsgId, const QString &msgId, const QString &content);
+    void sig_text_notify(int fromUid, int toUid, qint64 serverMsgId,
+                         const QString &msgId, const QString &content,
+                         const QString &traceparent);
 };
 
 #endif // TCPMGR_H

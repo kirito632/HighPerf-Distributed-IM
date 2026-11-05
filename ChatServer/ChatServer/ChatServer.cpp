@@ -20,6 +20,8 @@
 #include "MysqlDao.h"
 #include "Metrics.h"
 #include "MetricsServer.h"
+#include "Tracing.h"
+#include <cstdlib>
 #ifdef IM_WITH_KAFKA
 #include "OutboxPublisher.h"
 #include "DeliveryConsumer.h"
@@ -128,6 +130,20 @@ int main()
     std::cout << "trying to load config at: " << (std::filesystem::current_path() / "config_chat2.ini") << std::endl;
 
     auto& cfg = ConfigMgr::Inst();
+    auto tracing_cfg = cfg["Tracing"];
+    const char* tracing_override = std::getenv("IM_TRACING_ENABLED");
+    const bool tracing_enabled = tracing_override
+        ? (std::string(tracing_override) == "true" || std::string(tracing_override) == "1")
+        : cfg["Feature"]["TracingEnabled"] == "true";
+    const char* endpoint_env = std::getenv("OTEL_EXPORTER_OTLP_ENDPOINT");
+    const std::string tracing_endpoint = !tracing_cfg["Endpoint"].empty()
+        ? tracing_cfg["Endpoint"]
+        : (endpoint_env ? endpoint_env : "http://127.0.0.1:4318/v1/traces");
+    std::string tracing_error;
+    if (!im::tracing::Init(tracing_enabled, tracing_endpoint, "chat-server", tracing_error)) {
+        std::cerr << "[Tracing] disabled: " << tracing_error << std::endl;
+    }
+    std::atexit(im::tracing::Shutdown);
     auto server_name = cfg["SelfServer"]["Name"];
     std::transform(server_name.begin(), server_name.end(), server_name.begin(), ::tolower);
 

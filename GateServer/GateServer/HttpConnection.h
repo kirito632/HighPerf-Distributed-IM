@@ -1,5 +1,6 @@
 #pragma once
 #include"const.h"
+#include "Tracing.h"
 
 // HTTP连接类：处理单个HTTP客户端连接
 // 
@@ -76,6 +77,7 @@ private:
 
     // 鉴权中间件写入的当前登录 uid；0 表示未鉴权/兼容模式
     int _auth_uid = 0;
+    std::unique_ptr<im::tracing::Span> _trace_span;
 };
 
 

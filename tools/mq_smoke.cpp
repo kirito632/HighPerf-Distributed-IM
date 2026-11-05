@@ -25,7 +25,9 @@ int Produce(const std::string& topic, const std::string& key,
         std::cerr << error << std::endl;
         return 2;
     }
-    if (!producer.Produce(topic, key, value, error) ||
+    const std::vector<std::pair<std::string, std::string>> headers = {
+        {"traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"}};
+    if (!producer.Produce(topic, key, value, error, headers) ||
         !producer.Flush(5000, error)) {
         std::cerr << error << std::endl;
         return 3;
@@ -59,8 +61,17 @@ int Consume(const std::string& topic, const std::string& group,
         }
         const std::string key =
             message->key() ? *message->key() : std::string();
+        std::string traceparent;
+        if (auto* headers = message->headers()) {
+            const auto header = headers->get_last("traceparent");
+            if (header.err() == RdKafka::ERR_NO_ERROR && header.value()) {
+                traceparent.assign(static_cast<const char*>(header.value()),
+                                   header.value_size());
+            }
+        }
         std::cout << "consumed topic=" << message->topic_name()
-                  << " key=" << key << " payload=" << payload << std::endl;
+                  << " key=" << key << " traceparent=" << traceparent
+                  << " payload=" << payload << std::endl;
         consumer.Commit(*message, error);
         return 0;
     }

@@ -190,8 +190,10 @@ void LoginDialog::onForgotClicked()
 //   1. 检查网络错误
 //   2. 解析JSON响应
 //   3. 调用注册的处理器函数
-void LoginDialog::slot_login_mod_finish(ReqId id, QString res, ErrorCodes err)
+void LoginDialog::slot_login_mod_finish(ReqId id, QString res, ErrorCodes err,
+                                        QString traceparent)
 {
+    UserMgr::GetInstance()->SetTraceparent(traceparent);
     // 检查网络错误
     if (err != ErrorCodes::SUCCESS) {
         QMessageBox::information(this, "错误", "网络请求错误");
@@ -333,6 +335,7 @@ void LoginDialog::slot_tcp_con_finish(bool bsuccess)
         jsonObj["uid"] = _uid;
         jsonObj["token"] = _token;  // legacy token for fallback ChatServer
         jsonObj["access_token"] = UserMgr::GetInstance()->GetToken();
+        jsonObj["traceparent"] = UserMgr::GetInstance()->GetTraceparent();
 
         QJsonDocument doc(jsonObj);
         QString jsonString = doc.toJson(QJsonDocument::Indented);
@@ -394,6 +397,9 @@ void LoginDialog::onTcpRecvPkg(ReqId id, const QString &body)
         return;
     }
     QJsonObject o = doc.object();
+    if (o.contains("traceparent")) {
+        UserMgr::GetInstance()->SetTraceparent(o.value("traceparent").toString());
+    }
 
     // 获取错误码（支持 "error" 或 "err" 字段）
     int err = -1;

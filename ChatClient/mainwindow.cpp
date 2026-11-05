@@ -352,7 +352,9 @@ void MainWindow::setupUi()
 
     // 文本聊天下行（1019）：展示到 ChatDialog
     connect(TcpMgr::GetInstance(), &TcpMgr::sig_text_notify,
-            this, [this](int fromUid, int toUid, qint64 serverMsgId, const QString &msgId, const QString &content) {
+            this, [this](int fromUid, int toUid, qint64 serverMsgId,
+                         const QString &msgId, const QString &content,
+                         const QString &traceparent) {
                 qDebug() << "[MainWindow] sig_text_notify received from=" << fromUid << " to=" << toUid 
                          << " msgId=" << msgId << " myUid=" << UserMgr::GetInstance()->GetUid() << " content=" << content;
                 
@@ -380,6 +382,7 @@ void MainWindow::setupUi()
                 // Precise ACK: acknowledge only the server id of this notification.
                 QJsonObject ackRoot;
                 ackRoot["uid"] = UserMgr::GetInstance()->GetUid();
+                ackRoot["traceparent"] = traceparent;
                 QJsonArray ackIds;
                 if (serverMsgId > 0) {
                     ackIds.append(serverMsgId);
@@ -418,6 +421,7 @@ void MainWindow::setupUi()
                                 QJsonObject root;
                                 root["fromuid"] = UserMgr::GetInstance()->GetUid();
                                 root["touid"] = fromUid;
+                                root["traceparent"] = UserMgr::GetInstance()->GetTraceparent();
                                 QJsonArray arr;
                                 QJsonObject elem;
                                 elem["content"] = text;
@@ -717,6 +721,7 @@ void MainWindow::setupContactsWidget()
                         QJsonObject root;
                         root["fromuid"] = UserMgr::GetInstance()->GetUid();
                         root["touid"] = touid;
+                        root["traceparent"] = UserMgr::GetInstance()->GetTraceparent();
                         QJsonArray arr;
                         QJsonObject elem;
                         elem["content"] = text;

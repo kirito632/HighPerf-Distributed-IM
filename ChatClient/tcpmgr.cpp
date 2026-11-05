@@ -214,6 +214,7 @@ void TcpMgr::initHandlers()
         // 登录聊天服成功后，主动拉取离线消息（1023），带上 cursor
         QJsonObject offReq;
         offReq["uid"] = uid;
+        offReq["traceparent"] = UserMgr::GetInstance()->GetTraceparent();
         offReq["cursor"] = cursor;
         QString offJson = QString::fromUtf8(QJsonDocument(offReq).toJson(QJsonDocument::Compact));
         qDebug() << "[OfflineMsg][UI->TCP] send 1023 json=" << offJson;
@@ -367,6 +368,7 @@ void TcpMgr::initHandlers()
         int fromuid = obj.value("fromuid").toInt();
         int touid = obj.value("touid").toInt();
         const qint64 serverMsgId = obj.value("server_msg_id").toVariant().toLongLong();
+        const QString traceparent = obj.value("traceparent").toString();
         auto arr = obj.value("text_array").toArray();
         qDebug() << "[TextChat] notify msgs count=" << arr.size() << " from=" << fromuid << " to=" << touid;
         for (const auto& v : arr) {
@@ -375,7 +377,8 @@ void TcpMgr::initHandlers()
             const QString content = o.value("content").toString();
             qDebug() << "[TextChat] msg id=" << msgId << " content=" << content;
             // 向上层发送专用信号，便于 UI 直接显示
-            emit sig_text_notify(fromuid, touid, serverMsgId, msgId, content);
+            emit sig_text_notify(fromuid, touid, serverMsgId, msgId, content,
+                                 traceparent);
         }
         // 仍然保留通过 sig_recv_pkg 的整包派发（已在上层监听）
     });

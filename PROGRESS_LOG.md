@@ -204,6 +204,15 @@ test_metrics.py 通过
   - `DeliveryMode=legacy`
 - Qt 客户端仍未实际编译（环境无 Qt 头文件/qmake）。
 
+### Step 7：OpenTelemetry tracing（实现中）
+
+- Gate HTTP span + W3C `traceparent` 请求/响应头。
+- Qt 把登录 HTTP context 传播到 TCP 登录、发消息、离线拉取与 ACK。
+- ChatServer/ChatServer2 TCP span、Outbox 持久化 `traceparent`、Kafka header、Delivery span 与接收端 ACK context。
+- `IM_WITH_OPENTELEMETRY` 可选构建；使用官方 OTLP/HTTP exporter，默认关闭，不增加默认构建依赖。
+- Jaeger 使用 OTLP/HTTP 4318；Grafana provision Jaeger datasource。
+- 环境限制：当前 Docker registry 对 `jaegertracing/all-in-one:1.62` 返回 `denied`，故容器端到端 UI 验收待 registry 可用后补做。
+
 ## 复现命令
 
 ```bash

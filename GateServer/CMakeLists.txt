@@ -31,6 +31,7 @@ target_link_libraries(gate_server PRIVATE
     Boost::system Boost::filesystem
     im_auth
     im_metrics
+    im_tracing
 )
 
 if(HIREDIS_TARGET)
