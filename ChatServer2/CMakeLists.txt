@@ -27,6 +27,7 @@ target_link_libraries(chat_server2 PRIVATE
     im_auth
     im_metrics
     im_tracing
+    im_registry
 )
 
 if(TARGET im_mq)

@@ -19,6 +19,7 @@ target_link_libraries(status_server PRIVATE
     OpenSSL::Crypto
     Threads::Threads
     Boost::system Boost::filesystem
+    im_registry
 )
 
 if(HIREDIS_TARGET)

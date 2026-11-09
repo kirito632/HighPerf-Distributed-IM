@@ -33,6 +33,7 @@ add_executable(im_unit_tests
     cpp/unit/test_jwks.cpp
     cpp/unit/test_token_service.cpp
     cpp/unit/test_tracing.cpp
+    cpp/unit/test_registry.cpp
     ${CMAKE_SOURCE_DIR}/ChatServer/ChatServer/MsgNode.cpp
     ${CMAKE_SOURCE_DIR}/ChatServer/ChatServer/crypto_utils.cpp
 )
@@ -43,6 +44,7 @@ target_include_directories(im_unit_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/ChatServer/ChatServer
     ${CMAKE_SOURCE_DIR}/common/auth
     ${CMAKE_SOURCE_DIR}/common/tracing
+    ${CMAKE_SOURCE_DIR}/common/registry
     ${CMAKE_SOURCE_DIR}
     ${JSONCPP_INCLUDE_DIR}
 )
@@ -55,6 +57,7 @@ target_link_libraries(im_unit_tests PRIVATE
     GTest::gtest_main
     im_auth
     im_tracing
+    im_registry
 )
 
 if(TARGET im_mq)

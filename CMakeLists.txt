@@ -158,6 +158,15 @@ if(IM_WITH_OPENTELEMETRY)
   )
 endif()
 
+# etcd service registry (HTTP v3 JSON gateway via libcurl).
+find_package(CURL REQUIRED)
+add_library(im_registry STATIC common/registry/EtcdRegistry.cpp)
+target_include_directories(im_registry PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/common/registry)
+target_link_libraries(im_registry PUBLIC CURL::libcurl Threads::Threads)
+if(JSONCPP_TARGET)
+  target_link_libraries(im_registry PUBLIC ${JSONCPP_TARGET})
+endif()
+
 # Kafka wrapper (librdkafka via pkg-config); optional so Kafka can stay off.
 add_subdirectory(common/mq)
 
@@ -166,6 +175,10 @@ if(TARGET im_mq)
   add_executable(mq_smoke tools/mq_smoke.cpp)
   target_link_libraries(mq_smoke PRIVATE im_mq)
 endif()
+
+# etcd registry probe: register/discover one instance for integration tests.
+add_executable(registry_probe tools/registry_probe.cpp)
+target_link_libraries(registry_probe PRIVATE im_registry)
 
 # Unit tests. GoogleTest is fetched only when BUILD_TESTING is enabled so
 # production builds do not pay the googleTest download/compile cost.

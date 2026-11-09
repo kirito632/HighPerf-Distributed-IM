@@ -16,7 +16,8 @@
 > **Step 5 完成（2026-11-01）**：`DeliveryConsumer` 消费 Kafka、`processed_events` 幂等、`DeliveryMode=kafka`、陈旧事件跳过、畸形事件入 `im.message.dlq`；27/27 集成测试通过，ChatServer2 同步并编译通过。  
 > **Step 6 完成（2026-11-01）**：Gate/Chat Prometheus 文本指标端点、消息/Outbox/Delivery 计数、Prometheus 抓取、Grafana IM Overview 面板、3 条告警规则；29/29 集成测试通过。  
 > **Step 7 完成（2026-11-09）**：OpenTelemetry 可选构建、W3C `traceparent` 从 HTTP 登录贯穿 TCP 登录/发消息/Outbox/Kafka/Delivery，Jaeger v2 端到端验收，新增 `tests/integration/test_trace.py`；35/35 单测、31/31 集成测试通过（1 个 Kafka 测试默认跳过）。  
-> **Step 9 完成（2026-11-09）**：Nginx TLS/HTTP2 终止、Gate 反向代理、登录/API 双限流 zone、自签证书脚本与 `test_nginx.py`；3/3 Nginx 测试通过。
+> **Step 9 完成（2026-11-09）**：Nginx TLS/HTTP2 终止、Gate 反向代理、登录/API 双限流 zone、自签证书脚本与 `test_nginx.py`；3/3 Nginx 测试通过。  
+> **Step 8 完成（2026-11-09）**：`im_registry`（etcd v3 HTTP JSON gateway + libcurl）、租约注册/keepalive/revoke、StatusServer 注册中心发现与配置回退、`registry_probe` 与 `test_etcd_registry.py`；39/39 单测、37/37 集成测试通过。
 >
 > 主线：**消息可靠性（Kafka + Outbox）→ 可观测性（Prometheus/OTel）→ 服务治理（etcd/Nginx）→ 工程质量（GoogleTest/CI）**。
 >

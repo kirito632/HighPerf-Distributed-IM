@@ -236,12 +236,32 @@ traceparent 经 nginx 透传，trace id 不变
 120 次快速请求出现 429
 ```
 
+### Step 8：etcd 服务注册/发现
+
+- `common/registry/EtcdRegistry.{h,cpp}`：基于 etcd v3 HTTP JSON gateway 的轻量客户端（libcurl），支持 lease grant/keepalive/revoke、kv put/range、range delete 和 base64；不引入 etcd gRPC 依赖。
+- `tools/registry_probe.cpp`：`register` / `discover` 小工具，集成测试用它验证租约注册、发现和主动摘除。
+- ChatServer/ChatServer2 启动时以 10s 租约注册 `im/services/chatserver/<name>`，每 3s keepalive，SIGINT/SIGTERM 退出时 revoke 删除 key。
+- StatusServer `getChatServer` 每次请求从 etcd 发现 `chatserver` 实例，再按原最小连接数策略挑选；发现失败或为空时回退到 `[chatservers]` 配置。
+- 开关：`[Feature] EtcdEnabled`（默认 false）+ `[Etcd] Endpoints`；测试用 `IM_ETCD_ENABLED=1` / `IM_ETCD_ENDPOINT` 覆盖。
+- `tests/integration/test_etcd_registry.py`：注册可见性、Status gRPC 解析结果、probe 租约注册与主动 revoke 摘除。
+- 文档：`docs/ETCD_REGISTRY.md`。
+
+验收：
+
+```text
+39 unit tests（含 4 个 registry 测试）
+37 integration tests（1 个 Kafka 默认跳过）
+etcd: chatserver1 -> 127.0.0.1:18090
+status: [getChatServer] etcd discovered 1 chatserver instance(s)
+probe: 租约内可发现，revoke 后 5s 内消失
+```
+
 ## 当前状态
 
-- 测试环境（MySQL/Redis/Kafka/Jaeger/Nginx/Chat/Gate/Status）已启动并验证。
+- 测试环境（MySQL/Redis/Kafka/etcd/Jaeger/Nginx/Chat/Gate/Status）已启动并验证。
 - Prometheus targets `19101` / `19103` 均为 `up=1`，Grafana `IM Overview` 已 provision；Grafana 已 provision Jaeger datasource（`http://jaeger-test:16686`）。
 - `Feature.KafkaEnabled` 与 `DeliveryMode` 目前由测试配置控制。
-- `TracingEnabled` 默认关闭；测试时用 `IM_TRACING_ENABLED=1` 覆盖，不改仓库配置。
+- `TracingEnabled`、`EtcdEnabled` 默认关闭；测试时用 `IM_TRACING_ENABLED=1`、`IM_ETCD_ENABLED=1` 覆盖，不改仓库配置。
 - Nginx 测试入口：`https://127.0.0.1:18443`（自签证书，仅测试环境）。
 - 生产默认：
   - `JwtEnabled=true`（启动前必须生成密钥）
@@ -280,6 +300,12 @@ cmake -S . -B build_otel -DIM_WITH_OPENTELEMETRY=ON -DBUILD_TESTING=ON
 cmake --build build_otel --target gate_server chat_server chat_server2 status_server im_unit_tests -j4
 IM_TRACING_ENABLED=1 BIN_DIR=$PWD/build_otel/bin bash scripts/dev/run_test_services.sh
 
+# etcd（Step 8）
+docker compose -f docker-compose.test.yml --profile governance up -d --wait etcd-test
+IM_ETCD_ENABLED=1 IM_ETCD_ENDPOINT=http://127.0.0.1:12379 \
+  BIN_DIR=$PWD/build_test/bin bash scripts/dev/run_test_services.sh
+build_test/bin/registry_probe discover --service chatserver
+
 # Nginx TLS gateway
 bash scripts/dev/gen_nginx_certs.sh
 docker compose -f docker-compose.test.yml --profile gateway up -d nginx-test
@@ -287,16 +313,19 @@ docker compose -f docker-compose.test.yml --profile gateway up -d nginx-test
 
 # 测试（依赖装在 ~/venvs/im，见 tests/requirements-test.txt）
 ./build_test/bin/im_unit_tests
-IM_E2E=1 ~/venvs/im/bin/python -m pytest tests/integration -q
+IM_E2E=1 IM_TRACE_E2E=1 IM_NGINX_E2E=1 IM_ETCD_E2E=1 \
+  ~/venvs/im/bin/python -m pytest tests/integration -q
 IM_KAFKA_E2E=1 MQ_SMOKE_BIN=build_test/bin/mq_smoke \
   ~/venvs/im/bin/python -m pytest tests/integration/test_kafka_roundtrip.py -q
 IM_TRACE_E2E=1 ~/venvs/im/bin/python -m pytest tests/integration/test_trace.py -q
 IM_NGINX_E2E=1 ~/venvs/im/bin/python -m pytest tests/integration/test_nginx.py -q
+IM_ETCD_E2E=1 ~/venvs/im/bin/python -m pytest tests/integration/test_etcd_registry.py -q
 ```
 
 ## 下一步
 
-- Step 8：etcd 服务注册/发现
 - 清理 pass-the-hash 分支与 `VerifyServer/config.json` 明文凭据
 - Qt 客户端编译与手工冒烟
 - ChatServer2 的 metrics server 运行态接入（当前只验证 ChatServer1/Gate）
+- Step 10：CI 完整化（clang-tidy / ASan / 覆盖率）
+- Step 11：故障注入与压测

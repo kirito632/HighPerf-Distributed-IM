@@ -18,6 +18,7 @@
 #include"RedisMgr.h"
 #include "ChatServiceImpl.h"
 #include "const.h"
+#include "EtcdRegistry.h"
 #include <filesystem>
 #include "MysqlDao.h"
 #ifdef IM_WITH_KAFKA
@@ -438,6 +439,32 @@ int main()
         // 从 pool 的 io_context 创建 CServer，确保 CServer 使用该 io_context
         CServer s(io_context, static_cast<unsigned short>(port));
 
+        // etcd 服务注册（可选）：把本实例的 host/port 写入带租约的 key，
+        // StatusServer 通过 Discover 只看到存活实例。
+        std::unique_ptr<im::registry::ServiceRegistry> service_registry;
+        const char* etcd_override = std::getenv("IM_ETCD_ENABLED");
+        const bool etcd_enabled = etcd_override
+            ? (std::string(etcd_override) == "true" || std::string(etcd_override) == "1")
+            : cfg["Feature"]["EtcdEnabled"] == "true";
+        if (etcd_enabled) {
+            const char* endpoint_env = std::getenv("IM_ETCD_ENDPOINT");
+            const std::string etcd_endpoint = !cfg["Etcd"]["Endpoints"].empty()
+                ? cfg["Etcd"]["Endpoints"]
+                : (endpoint_env ? endpoint_env : "http://127.0.0.1:12379");
+            service_registry = std::make_unique<im::registry::ServiceRegistry>(
+                etcd_endpoint, "chatserver", server_name,
+                cfg["SelfServer"]["Host"], port, 10);
+            std::string registry_error;
+            if (!service_registry->Start(registry_error)) {
+                std::cerr << "[Etcd] registration failed: " << registry_error << std::endl;
+                service_registry.reset();
+            }
+            else {
+                std::cout << "[Etcd] registered chatserver/" << server_name
+                    << " at " << etcd_endpoint << std::endl;
+            }
+        }
+
         // 主线程阻塞等待 signal 回通知退出
         std::unique_lock<std::mutex> lk(mutex_quit);
         std::cout << "About to wait on cond_quit\n";
@@ -446,6 +473,11 @@ int main()
         // 主线程先停止 acceptor，再停止 IO 池；Stop() 幂等，析构时再次调用安全。
         s.Stop();
         pool->Stop();
+
+        if (service_registry) {
+            service_registry->Stop();
+            service_registry.reset();
+        }
 
         // 停止 outbox publisher，确保不再访问 MySQL/Kafka
 #ifdef IM_WITH_KAFKA

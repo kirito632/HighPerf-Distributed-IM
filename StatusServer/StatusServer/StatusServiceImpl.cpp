@@ -2,11 +2,15 @@
 #include "ConfigMgr.h"
 #include "const.h"
 #include "RedisMgr.h"
+#include "EtcdRegistry.h"
 
 #include <algorithm>
 #include <climits>
+#include <cstdlib>
 #include <sstream>
+#include <string>
 #include <cctype>
+#include <vector>
 #include<grpc/grpc.h>
 
 // 辅助函数：去除字符串首尾的空白字符
@@ -16,6 +20,27 @@ static inline std::string trim(const std::string& s) {
     while (r > l && std::isspace((unsigned char)s[r - 1])) --r;
     return s.substr(l, r - l);
 }
+
+namespace {
+
+// etcd 开关：配置文件默认关闭，测试时用 IM_ETCD_ENABLED=1 打开。
+bool EtcdEnabled() {
+    const char* override_value = std::getenv("IM_ETCD_ENABLED");
+    if (override_value) {
+        return std::string(override_value) == "true" ||
+               std::string(override_value) == "1";
+    }
+    return ConfigMgr::Inst()["Feature"]["EtcdEnabled"] == "true";
+}
+
+std::string EtcdEndpoint() {
+    const std::string configured = ConfigMgr::Inst()["Etcd"]["Endpoints"];
+    if (!configured.empty()) return configured;
+    const char* env = std::getenv("IM_ETCD_ENDPOINT");
+    return env && *env ? std::string(env) : "http://127.0.0.1:12379";
+}
+
+}  // namespace
 
 bool StatusServiceImpl::checkInternal(ServerContext* context) {
     auto& cfg = ConfigMgr::Inst();
@@ -55,15 +80,43 @@ ChatServer StatusServiceImpl::getChatServer()
     ChatServer best;
     bool initialized = false;
 
-    // 检查服务器列表是否为空
-    if (_servers.empty()) {
-        std::cerr << "[getChatServer] _servers is empty\n";
+    // 优先使用 etcd 注册中心；没有实例或 etcd 不可用时回退到配置文件。
+    std::vector<ChatServer> candidates;
+    if (EtcdEnabled()) {
+        std::vector<im::registry::ServiceInstance> instances;
+        std::string discovery_error;
+        if (im::registry::Discover(EtcdEndpoint(), "chatserver", instances,
+                                   discovery_error)) {
+            for (const auto& instance : instances) {
+                ChatServer server;
+                server.name = instance.id;
+                server.host = instance.host;
+                server.port = std::to_string(instance.port);
+                server.con_count = INT_MAX;
+                candidates.push_back(server);
+            }
+            std::cout << "[getChatServer] etcd discovered " << candidates.size()
+                      << " chatserver instance(s)" << std::endl;
+        }
+        else {
+            std::cerr << "[getChatServer] etcd discovery failed: "
+                      << discovery_error << ", falling back to config" << std::endl;
+        }
+    }
+
+    if (candidates.empty()) {
+        for (const auto& kv : _servers) {
+            candidates.push_back(kv.second);
+        }
+    }
+
+    if (candidates.empty()) {
+        std::cerr << "[getChatServer] no chatserver available\n";
         return best;
     }
 
-    // 遍历所有ChatServer，选择连接数最少的
-    for (auto& kv : _servers) {
-        ChatServer s = kv.second;
+    // 遍历候选服务器，选择连接数最少的
+    for (auto& s : candidates) {
 
         // 从 Redis 读取当前服务器的登录记录数
         std::string count_str = RedisMgr::GetInstance()->HGet(LOGIN_COUNT, s.name);
@@ -87,8 +140,8 @@ ChatServer StatusServiceImpl::getChatServer()
     }
 
     // 如果所有 server 的 con_count 都是 INT_MAX，表示 Redis 没有记录，也返回第一台服务器（验证不会返回空）
-    if (!initialized && !_servers.empty()) {
-        best = _servers.begin()->second;
+    if (!initialized) {
+        best = candidates.front();
     }
 
     std::cout << "[getChatServer] selected name=" << best.name << " host=" << best.host
