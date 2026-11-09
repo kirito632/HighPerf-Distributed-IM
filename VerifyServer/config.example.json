@@ -1,0 +1,21 @@
+{
+  "email": {
+    "user": "your-account@example.com",
+    "pass": "smtp-auth-code"
+  },
+  "internal": {
+    "token": "dev-internal-token"
+  },
+  "mysql": {
+    "host": "127.0.0.1",
+    "port": 13306,
+    "user": "chatuser",
+    "passwd": "test",
+    "database": "chat_system_test"
+  },
+  "redis": {
+    "host": "127.0.0.1",
+    "port": 16380,
+    "passwd": "test"
+  }
+}

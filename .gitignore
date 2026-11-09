@@ -89,3 +89,7 @@ keys/
 # OpenTelemetry build tree and local TLS material
 build_otel/
 deploy/nginx/certs/
+
+# Local secrets: VerifyServer SMTP/database credentials
+VerifyServer/config.json
+VerifyServer/node_modules/

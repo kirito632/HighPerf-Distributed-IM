@@ -1,91 +1,49 @@
-# VerifyServer 配置文件说明
+# VerifyServer 配置说明
 
-## config.json 配置说明
+`VerifyServer/config.json` **不再提交到仓库**（已加入 `.gitignore`），因为它保存 SMTP 授权码、MySQL/Redis 口令。仓库里只保留脱敏的 `config.example.json`。
 
-### 当前配置（远程服务器）
+## 初始化
 
-当前配置文件指向远程服务器 `81.68.86.146`：
-- MySQL: `81.68.86.146:3306`
-- Redis: `81.68.86.146:6380`
+```bash
+cp VerifyServer/config.example.json VerifyServer/config.json
+# 编辑 config.json，填入真实的 SMTP 授权码和数据库口令
+```
 
-### 切换到本机配置
+也可以把配置放在仓库外，用 `VERIFY_CONFIG` 指定：
 
-如果需要切换到本机（本地）配置，需要修改 `config.json` 文件：
+```bash
+VERIFY_CONFIG=/etc/im/verify.json node server.js
+```
 
-#### 修改前（远程服务器）
+## 环境变量覆盖
+
+环境变量优先于 `config.json`，适合 Docker/K8s：
+
+| 变量 | 含义 |
+|---|---|
+| `SMTP_USER` / `SMTP_PASS` | 发件邮箱与 SMTP 授权码 |
+| `MYSQL_HOST` / `MYSQL_PORT` | MySQL 地址与端口 |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASS` | Redis 地址、端口、口令 |
+| `INTERNAL_TOKEN` | Gate/Chat/Status/Verify 内部 gRPC 令牌 |
+
+## 测试环境示例
+
+`config.example.json` 使用 `docker-compose.test.yml` 的端口：
+
 ```json
 {
-  "mysql": {
-    "host": "81.68.86.146",
-    "user": "root",
-    "passwd": "password"
-  },
-  "redis": {
-    "host": "81.68.86.146",
-    "port": 6380,
-    "passwd": 123456
-  }
+  "email":  { "user": "your-account@example.com", "pass": "smtp-auth-code" },
+  "internal": { "token": "dev-internal-token" },
+  "mysql":  { "host": "127.0.0.1", "port": 13306, "user": "chatuser", "passwd": "test", "database": "chat_system_test" },
+  "redis":  { "host": "127.0.0.1", "port": 16380, "passwd": "test" }
 }
 ```
 
-#### 修改后（本机）
-```json
-{
-  "mysql": {
-    "host": "127.0.0.1",
-    "user": "chatuser",
-    "passwd": "123456"
-  },
-  "redis": {
-    "host": "127.0.0.1",
-    "port": 6380,  // 或 6379（标准端口）
-    "passwd": "123456"  // 如果无密码，改为 ""
-  }
-}
-```
+如果不需要真实发信，可以只使用测试账号并关闭邮件发送路径；集成测试不依赖 SMTP。
 
-### 修改注意事项
+## 安全要求
 
-1. **MySQL配置**：
-   - `host`: 改成本机 IP（127.0.0.1 或 localhost）
-   - `user`: 根据实际情况修改（如：chatuser）
-   - `passwd`: 根据实际情况修改（如：123456）
-   - 确保本机MySQL中有 `chat_system` 数据库
-
-2. **Redis配置**：
-   - `host`: 改成本机 IP（127.0.0.1 或 localhost）
-   - `port`: 本机Redis的端口（通常是6379，当前使用6380）
-   - `passwd`: 本机Redis的密码（如果无密码，改为空字符串 `""`）
-
-3. **其他服务同步**：
-   如果改成本机配置，需要同时修改以下文件：
-   - `GateServer\GateServer\config.ini`
-   - `StatusServer\StatusServer\config.ini`
-   - `ChatServer\ChatServer\config.ini`
-   
-   确保这些服务都指向同一个Redis和MySQL服务器。
-
-4. **验证配置**：
-   - 启动Redis：确保本机Redis已启动
-   - 启动MySQL：确保本机MySQL已启动
-   - 测试连接：使用命令行工具测试连接
-     ```bash
-     # 测试Redis
-     redis-cli -h 127.0.0.1 -p 6380 -a 123456
-     
-     # 测试MySQL
-     mysql -h 127.0.0.1 -P 3306 -u chatuser -p
-     ```
-
-## 当前配置状态
-
-✅ **当前配置（远程服务器）可正常工作**
-- Redis连接：`81.68.86.146:6380`
-- MySQL连接：`81.68.86.146:3306`
-- 已验证可以发送验证码并注册账号
-
-## 建议
-
-- 如果是在远程服务器上部署生产环境，保持当前配置
-- 如果需要在本机开发/测试，可以改成本机配置，更方便调试
-
+1. **不要提交真实凭据**：提交前执行 `git status`，确认 `VerifyServer/config.json` 不在变更列表。
+2. **轮换历史凭据**：该文件曾在 git 历史中出现过，旧的 SMTP 授权码和数据库口令应视为已泄露，需要在服务商侧重新生成。
+3. 生产环境使用 `VERIFY_CONFIG` 指向仓库外文件，并通过环境变量注入密钥；不要依赖 Docker 镜像内的明文配置。
+4. 若需要彻底清理历史，可在确认所有克隆已迁移后执行 `git filter-repo` 重写历史；该操作会改变提交哈希，需团队统一执行。

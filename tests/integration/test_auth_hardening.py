@@ -101,3 +101,28 @@ def test_code_attempts_are_rate_limited(gate_url: str):
     blocked = requests.post(f"{gate_url}/user_register", json=payload, timeout=5)
     assert blocked.status_code == 429
     assert blocked.json()["error"] == 1013
+
+def test_plaintext_password_still_logs_in(gate_url: str):
+    response = requests.post(
+        f"{gate_url}/user_login",
+        json={"user": EMAIL, "passwd": PASSWORD},
+        timeout=5,
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["error"] == 0, data
+    assert data.get("access_token"), data
+
+
+def test_password_hash_is_not_accepted_as_password(gate_url: str):
+    import hashlib
+
+    digest = hashlib.sha256(PASSWORD.encode()).hexdigest()
+    response = requests.post(
+        f"{gate_url}/user_login",
+        json={"user": EMAIL, "passwd": digest},
+        timeout=5,
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["error"] != 0, data

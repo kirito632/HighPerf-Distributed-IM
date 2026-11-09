@@ -1,51 +1,57 @@
-// VerifyServer配置加载模块
-// 
-// 作用：
-//   从config.json文件读取配置信息，并提供给其他模块使用
-// 
-//  重要配置说明：
-//   当前配置指向远程服务器 81.68.86.146
-//   
-//   如果需要改成本机配置，请修改 config.json 文件：
-//   - mysql.host: "81.68.86.146" → "127.0.0.1" 或 "localhost"
-//   - mysql.user: "root" → "chatuser" (根据实际MySQL用户)
-//   - mysql.passwd: "123456" (根据实际MySQL密码)
-//   - redis.host: "81.68.86.146" → "127.0.0.1" 或 "localhost"
-//   - redis.port: 6380 (保持不变，如果本机使用标准端口可改为6379)
-//   - redis.passwd: 123456 (如果本机Redis无密码，改为 "")
-// 
-// 注意：
-//   1. 如果改成本机配置，需要确保本机已安装并运行Redis和MySQL
-//   2. 确保本机MySQL中有 chat_system 数据库
-//   3. 确保本机Redis已启动并配置了相同的密码
-//   4. 如果其他服务（GateServer、StatusServer、ChatServer）还在使用远程服务器，
-//      需要同时修改它们的config.ini文件，保持配置一致
+// VerifyServer 配置加载模块
+//
+// 配置来源（后者覆盖前者）：
+//   1. VerifyServer/config.json（本地文件，已被 .gitignore 忽略）
+//   2. 环境变量：SMTP_USER / SMTP_PASS / REDIS_HOST / REDIS_PORT /
+//      REDIS_PASS / INTERNAL_TOKEN
+//
+// 新环境请复制 config.example.json 为 config.json 再填写，或使用
+// VERIFY_CONFIG 指向仓库外的配置文件（推荐，避免再次提交凭据）。
+// 提交任何文件前确认其中没有真实的邮箱授权码、数据库口令。
 
 const fs = require('fs');
+const path = require('path');
 
-// 读取并解析config.json配置文件
-let config = JSON.parse(fs.readFileSync('config.json', 'utf8'));
+const configPath = process.env.VERIFY_CONFIG ||
+    path.join(__dirname, 'config.json');
 
-// 提取邮箱配置
-let email_user = config.email.user;    // 发件人邮箱地址
-let email_pass = config.email.pass;    // 授权码或密码
+let config = {};
+if (fs.existsSync(configPath)) {
+    config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+}
 
-// 提取MySQL配置
-let mysql_host = config.mysql.host;    // MySQL主机地址（当前：远程服务器）
-let mysql_port = config.mysql.port;    // MySQL端口号
+const email = config.email || {};
+const mysql = config.mysql || {};
+const redis = config.redis || {};
 
-// 提取Redis配置
-// 优先读环境变量（Docker/K8s注入），fallback到config.json
-let redis_host = process.env.REDIS_HOST || config.redis.host;
-let redis_port = process.env.REDIS_PORT || config.redis.port;
-let redis_passwd = process.env.REDIS_PASS || config.redis.passwd;
+// 邮箱配置：环境变量优先，避免把授权码写进仓库。
+let email_user = process.env.SMTP_USER || email.user || "";
+let email_pass = process.env.SMTP_PASS || email.pass || "";
 
-// 验证码Redis键前缀（与const.js保持一致）
+// MySQL 配置
+let mysql_host = process.env.MYSQL_HOST || mysql.host || "127.0.0.1";
+let mysql_port = process.env.MYSQL_PORT || mysql.port || 3306;
+
+// Redis 配置
+let redis_host = process.env.REDIS_HOST || redis.host || "127.0.0.1";
+let redis_port = process.env.REDIS_PORT || redis.port || 6379;
+let redis_passwd = process.env.REDIS_PASS || redis.passwd || "";
+
+// 验证码 Redis 键前缀（与 const.js 保持一致）
 let code_prefix = "code_";
 
 // 内部 gRPC 服务令牌；生产环境优先使用 INTERNAL_TOKEN 环境变量
 let internal_token = process.env.INTERNAL_TOKEN ||
     (config.internal && config.internal.token) || "";
 
-// 导出所有配置项
-module.exports = { email_pass, email_user, mysql_host, mysql_port, redis_host, redis_port, redis_passwd, code_prefix, internal_token }
+module.exports = {
+    email_pass,
+    email_user,
+    mysql_host,
+    mysql_port,
+    redis_host,
+    redis_port,
+    redis_passwd,
+    code_prefix,
+    internal_token
+}

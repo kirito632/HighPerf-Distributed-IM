@@ -615,11 +615,6 @@ bool MysqlDao::CheckPwd(const std::string& email, const std::string& pwd, UserIn
             std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
             return s;
             };
-        auto is_hex64 = [](const std::string& s) {
-            if (s.size() != 64) return false;
-            for (unsigned char c : s) if (!std::isxdigit(c)) return false;
-            return true;
-            };
 
         std::string db_pwd_norm = to_lower_copy(rtrim_copy(origin_pwd));
         std::string incoming = pwd;
@@ -628,11 +623,11 @@ bool MysqlDao::CheckPwd(const std::string& email, const std::string& pwd, UserIn
         std::string incoming_hashed = sha256_hex(incoming);
         std::string incoming_hashed_trim = sha256_hex(incoming_trim);
 
+        // Only the hash of the supplied plaintext may match the stored hash.
+        // Accepting the stored hash itself as the password (pass-the-hash) is
+        // intentionally not supported: a leaked database hash must not become
+        // a login credential.
         if (to_lower_copy(incoming_hashed) == db_pwd_norm || to_lower_copy(incoming_hashed_trim) == db_pwd_norm) {
-            return true;
-        }
-
-        if (is_hex64(incoming) && to_lower_copy(incoming) == db_pwd_norm) {
             return true;
         }
 

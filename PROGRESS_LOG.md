@@ -256,6 +256,22 @@ status: [getChatServer] etcd discovered 1 chatserver instance(s)
 probe: 租约内可发现，revoke 后 5s 内消失
 ```
 
+### 安全清理：pass-the-hash 与明文凭据
+
+- Gate `CheckPwd` 删除“把数据库里的 SHA-256 哈希当密码提交即可登录”的分支：只接受用户明文口令的 SHA-256 与库内哈希比对，泄露的哈希不再等价于口令。
+- `VerifyServer/config.json` 从 git 索引移除并加入 `.gitignore`；新增脱敏的 `VerifyServer/config.example.json`。
+- `VerifyServer/config.js` 支持 `VERIFY_CONFIG` 指定仓库外配置，并支持 `SMTP_USER`/`SMTP_PASS`/`MYSQL_*`/`REDIS_*`/`INTERNAL_TOKEN` 环境变量覆盖，Docker/K8s 不再需要明文配置文件。
+- 新增回归测试：正确密码仍可登录；把数据库哈希当密码提交会被拒绝。
+- 注意：历史提交中的旧 SMTP 授权码与数据库口令应视为已泄露，需在服务商侧轮换；彻底清理 git 历史需团队统一执行 `git filter-repo`。
+
+验收：
+
+```text
+39 unit tests
+39 integration tests（1 个 Kafka 默认跳过）
+test_auth_hardening.py: 5 passed（含哈希登录拒绝、明文登录成功）
+```
+
 ## 当前状态
 
 - 测试环境（MySQL/Redis/Kafka/etcd/Jaeger/Nginx/Chat/Gate/Status）已启动并验证。
@@ -324,7 +340,8 @@ IM_ETCD_E2E=1 ~/venvs/im/bin/python -m pytest tests/integration/test_etcd_regist
 
 ## 下一步
 
-- 清理 pass-the-hash 分支与 `VerifyServer/config.json` 明文凭据
+- 口令哈希升级：SHA-256 → Argon2id/bcrypt（需种子数据与登录时自动升级）
+- 在 SMTP/数据库服务商侧轮换历史提交中出现过的旧凭据
 - Qt 客户端编译与手工冒烟
 - ChatServer2 的 metrics server 运行态接入（当前只验证 ChatServer1/Gate）
 - Step 10：CI 完整化（clang-tidy / ASan / 覆盖率）
