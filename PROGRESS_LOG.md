@@ -218,12 +218,31 @@ Jaeger /api/traces/{trace_id} 返回 gate-server + chat-server span
 outbox.traceparent 与 HTTP 请求 trace id 一致
 ```
 
+### Step 9：Nginx TLS + 限流
+
+- `deploy/nginx/nginx.conf`：TLS 1.2/1.3 + HTTP/2 终止，反向代理 Gate，带 `X-Real-IP`/`X-Forwarded-For`/`X-Forwarded-Proto` 与 upstream keepalive。
+- 两个限流 zone：`/user_login`、`/oauth/token` 5 r/s（burst 5/3）；其余路径 20 r/s（burst 20），统一返回 429。
+- `scripts/dev/gen_nginx_certs.sh` 生成自签证书；`deploy/nginx/certs/` 已加入 `.gitignore`。
+- `docker-compose.test.yml` 新增 `nginx-test`（profile `gateway`，18443→443，通过 `host.docker.internal` 回源宿主机 Gate）。
+- `tests/integration/test_nginx.py`：HTTPS 登录、`traceparent` 透传、120 次快速请求触发限流。
+- 访问日志格式记录 `trace=$http_traceparent`，可从边缘日志直接跳到 Jaeger trace。
+
+验收：
+
+```text
+3 nginx integration tests passed
+HTTPS 登录 200，Gate 返回 access_token（nginx 终止 TLS）
+traceparent 经 nginx 透传，trace id 不变
+120 次快速请求出现 429
+```
+
 ## 当前状态
 
-- 测试环境（MySQL/Redis/Kafka/Jaeger/Chat/Gate/Status）已启动并验证。
+- 测试环境（MySQL/Redis/Kafka/Jaeger/Nginx/Chat/Gate/Status）已启动并验证。
 - Prometheus targets `19101` / `19103` 均为 `up=1`，Grafana `IM Overview` 已 provision；Grafana 已 provision Jaeger datasource（`http://jaeger-test:16686`）。
 - `Feature.KafkaEnabled` 与 `DeliveryMode` 目前由测试配置控制。
 - `TracingEnabled` 默认关闭；测试时用 `IM_TRACING_ENABLED=1` 覆盖，不改仓库配置。
+- Nginx 测试入口：`https://127.0.0.1:18443`（自签证书，仅测试环境）。
 - 生产默认：
   - `JwtEnabled=true`（启动前必须生成密钥）
   - `OutboxEnabled=false`
@@ -261,18 +280,23 @@ cmake -S . -B build_otel -DIM_WITH_OPENTELEMETRY=ON -DBUILD_TESTING=ON
 cmake --build build_otel --target gate_server chat_server chat_server2 status_server im_unit_tests -j4
 IM_TRACING_ENABLED=1 BIN_DIR=$PWD/build_otel/bin bash scripts/dev/run_test_services.sh
 
+# Nginx TLS gateway
+bash scripts/dev/gen_nginx_certs.sh
+docker compose -f docker-compose.test.yml --profile gateway up -d nginx-test
+# https://127.0.0.1:18443
+
 # 测试（依赖装在 ~/venvs/im，见 tests/requirements-test.txt）
 ./build_test/bin/im_unit_tests
 IM_E2E=1 ~/venvs/im/bin/python -m pytest tests/integration -q
 IM_KAFKA_E2E=1 MQ_SMOKE_BIN=build_test/bin/mq_smoke \
   ~/venvs/im/bin/python -m pytest tests/integration/test_kafka_roundtrip.py -q
 IM_TRACE_E2E=1 ~/venvs/im/bin/python -m pytest tests/integration/test_trace.py -q
+IM_NGINX_E2E=1 ~/venvs/im/bin/python -m pytest tests/integration/test_nginx.py -q
 ```
 
 ## 下一步
 
 - Step 8：etcd 服务注册/发现
-- Step 9：Nginx TLS/限流
 - 清理 pass-the-hash 分支与 `VerifyServer/config.json` 明文凭据
 - Qt 客户端编译与手工冒烟
 - ChatServer2 的 metrics server 运行态接入（当前只验证 ChatServer1/Gate）

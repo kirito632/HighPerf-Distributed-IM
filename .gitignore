@@ -85,3 +85,7 @@ __pycache__/
 
 # Local JWT signing keys (never commit)
 keys/
+
+# OpenTelemetry build tree and local TLS material
+build_otel/
+deploy/nginx/certs/
