@@ -38,6 +38,7 @@ class LoginResult:
     port: int
     raw: dict[str, Any]
     access_token: str = ""
+    traceparent: str = ""
 
 
 class ImClient:
@@ -47,13 +48,25 @@ class ImClient:
         self.uid = 0
         self.token = ""
         self.access_token = ""
+        self.traceparent = ""
+        self.gate_traceparent = ""
         self._buffer = b""
 
     # ------------------------------------------------------------------ HTTP
-    def login_gate(self, email: str, password: str, timeout: float = 5.0) -> LoginResult:
+    def login_gate(self, email: str, password: str, timeout: float = 5.0,
+                   traceparent: str = "") -> LoginResult:
+        """Log in through Gate.
+
+        ``traceparent`` is an optional W3C trace context header. When the
+        services are built with OpenTelemetry, Gate returns a child
+        ``traceparent`` response header that the caller can pass on to the TCP
+        login.
+        """
+        headers = {"traceparent": traceparent} if traceparent else {}
         response = requests.post(
             f"{self.gate_url}/user_login",
             json={"user": email, "passwd": password},
+            headers=headers,
             timeout=timeout,
         )
         response.raise_for_status()
@@ -64,6 +77,7 @@ class ImClient:
         port = int(data.get("port", 0))
         if not host or port <= 0:
             raise ImProtocolError(f"gate login returned invalid chat endpoint: {data}")
+        child_traceparent = response.headers.get("traceparent", "")
         return LoginResult(
             uid=int(data["uid"]),
             token=str(data["token"]),
@@ -71,11 +85,13 @@ class ImClient:
             port=port,
             raw=data,
             access_token=str(data.get("access_token", "")),
+            traceparent=child_traceparent,
         )
 
     # ------------------------------------------------------------------- TCP
     def connect_chat(self, host: str, port: int, uid: int, token: str,
-                     timeout: float = 5.0, access_token: str = "") -> dict[str, Any]:
+                     timeout: float = 5.0, access_token: str = "",
+                     traceparent: str = "") -> dict[str, Any]:
         self.uid = uid
         self.token = token
         self.access_token = access_token
@@ -85,6 +101,8 @@ class ImClient:
         payload = {"uid": uid, "token": token}
         if access_token:
             payload["access_token"] = access_token
+        if traceparent:
+            payload["traceparent"] = traceparent
         self._send_packet(MSG_CHAT_LOGIN, payload)
         msg_id, body = self._recv_packet()
         if msg_id != MSG_CHAT_LOGIN_RSP:
@@ -92,13 +110,17 @@ class ImClient:
         result = json.loads(body)
         if result.get("error") != 0:
             raise ImProtocolError(f"chat login failed: {result}")
+        self.traceparent = str(result.get("traceparent", "")) or traceparent
         return result
 
-    def login(self, email: str, password: str, timeout: float = 5.0) -> dict[str, Any]:
-        gate = self.login_gate(email, password, timeout=timeout)
+    def login(self, email: str, password: str, timeout: float = 5.0,
+              traceparent: str = "") -> dict[str, Any]:
+        gate = self.login_gate(email, password, timeout=timeout, traceparent=traceparent)
+        self.gate_traceparent = gate.traceparent
         return self.connect_chat(
             gate.host, gate.port, gate.uid, gate.token,
-            timeout=timeout, access_token=gate.access_token)
+            timeout=timeout, access_token=gate.access_token,
+            traceparent=gate.traceparent)
 
     def send_text(
         self,
@@ -106,6 +128,7 @@ class ImClient:
         content: str,
         client_msg_id: Optional[str] = None,
         timeout: float = 5.0,
+        traceparent: str = "",
     ) -> dict[str, Any]:
         """Send a 1017 text message and return the 1018 response."""
         msg_id = client_msg_id or str(uuid.uuid4())
@@ -119,6 +142,9 @@ class ImClient:
                 "client_msg_id": msg_id,
             }],
         }
+        inherited = traceparent or self.traceparent
+        if inherited:
+            payload["traceparent"] = inherited
         self._send_packet(ID_TEXT_CHAT_MSG_REQ, payload)
         response_id, body = self._recv_packet(timeout=timeout)
         if response_id != ID_TEXT_CHAT_MSG_RSP:

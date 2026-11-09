@@ -76,12 +76,13 @@ services:
       retries: 20
 
   jaeger-test:
-    image: jaegertracing/all-in-one:1.62
+    # Jaeger v2 is the single-binary distribution; it exposes OTLP/HTTP on
+    # 4318, OTLP/gRPC on 4317 and the query UI on 16686 out of the box.
+    image: jaegertracing/jaeger:2.6.0
     profiles: ["observability"]
-    environment:
-      COLLECTOR_OTLP_ENABLED: "true"
     ports:
       - "16686:16686"
+      - "4317:4317"
       - "4318:4318"
 
   prometheus-test:

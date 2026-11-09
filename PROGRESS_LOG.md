@@ -193,25 +193,42 @@ Dashboard IM Overview 已 provision
 test_metrics.py 通过
 ```
 
-## 当前状态
+## 2026-11-05 ~ 2026-11-09
 
-- 当前测试环境（MySQL/Redis/Kafka/Chat/Gate/Status/Prometheus/Grafana）已启动并验证。
-- Prometheus targets `19101` / `19103` 均为 `up=1`，Grafana `IM Overview` 已 provision。
-- `Feature.KafkaEnabled` 与 `DeliveryMode` 目前由测试配置控制。
-- 生产默认：
-  - `JwtEnabled=true`（启动前必须生成密钥）
-  - `OutboxEnabled=false`
-  - `DeliveryMode=legacy`
-- Qt 客户端仍未实际编译（环境无 Qt 头文件/qmake）。
-
-### Step 7：OpenTelemetry tracing（实现中）
+### Step 7：OpenTelemetry tracing
 
 - Gate HTTP span + W3C `traceparent` 请求/响应头。
 - Qt 把登录 HTTP context 传播到 TCP 登录、发消息、离线拉取与 ACK。
 - ChatServer/ChatServer2 TCP span、Outbox 持久化 `traceparent`、Kafka header、Delivery span 与接收端 ACK context。
 - `IM_WITH_OPENTELEMETRY` 可选构建；使用官方 OTLP/HTTP exporter，默认关闭，不增加默认构建依赖。
-- Jaeger 使用 OTLP/HTTP 4318；Grafana provision Jaeger datasource。
-- 环境限制：当前 Docker registry 对 `jaegertracing/all-in-one:1.62` 返回 `denied`，故容器端到端 UI 验收待 registry 可用后补做。
+- 2026-11-09 补齐端到端验收：
+  - 用 `build_otel` 从源码构建 OTel C++ SDK（`FetchContent` 拉取 `opentelemetry-cpp 1.19.0` / proto 1.4.0）；
+  - Jaeger 改用 v2 单二进制镜像 `jaegertracing/jaeger:2.6.0`（旧 `all-in-one:1.62` 在测试 VM 的镜像源上返回 `denied`），OTLP/HTTP 4318 + UI 16686 开箱可用；
+  - `tests/py/im_client.py` 支持把 `traceparent` 传入 Gate 登录、TCP 登录和发消息；
+  - 新增 `tests/integration/test_trace.py`：校验 HTTP→TCP→Outbox→Kafka→Delivery 全链路 trace id 一致，并通过 Jaeger Query API 断言 `gate-server` / `chat-server` 两侧 span；
+  - `deploy/sql/007_outbox_trace_context.sql` 已在测试库补应用。
+
+验收：
+
+```text
+35 unit tests（含 2 个 tracing 测试，SDK 构建）
+31 integration tests（1 个 Kafka 默认跳过）
+test_trace.py: 2 passed
+Jaeger /api/traces/{trace_id} 返回 gate-server + chat-server span
+outbox.traceparent 与 HTTP 请求 trace id 一致
+```
+
+## 当前状态
+
+- 测试环境（MySQL/Redis/Kafka/Jaeger/Chat/Gate/Status）已启动并验证。
+- Prometheus targets `19101` / `19103` 均为 `up=1`，Grafana `IM Overview` 已 provision；Grafana 已 provision Jaeger datasource（`http://jaeger-test:16686`）。
+- `Feature.KafkaEnabled` 与 `DeliveryMode` 目前由测试配置控制。
+- `TracingEnabled` 默认关闭；测试时用 `IM_TRACING_ENABLED=1` 覆盖，不改仓库配置。
+- 生产默认：
+  - `JwtEnabled=true`（启动前必须生成密钥）
+  - `OutboxEnabled=false`
+  - `DeliveryMode=legacy`
+- Qt 客户端仍未实际编译（环境无 Qt 头文件/qmake）。
 
 ## 复现命令
 
@@ -234,21 +251,28 @@ bash scripts/dev/seed_test_data.sh
 BIN_DIR=$PWD/build_test/bin bash scripts/dev/run_test_services.sh
 
 # Observability
-docker compose -f docker-compose.test.yml --profile observability up -d prometheus-test grafana-test
+docker compose -f docker-compose.test.yml --profile observability up -d prometheus-test grafana-test jaeger-test
 # Prometheus: http://127.0.0.1:19090
 # Grafana:    http://127.0.0.1:13000  (admin/admin)
+# Jaeger:     http://127.0.0.1:16686
 
-# 测试
+# Trace-enabled build（可选，首次配置会从 GitHub 拉 OTel 源码）
+cmake -S . -B build_otel -DIM_WITH_OPENTELEMETRY=ON -DBUILD_TESTING=ON
+cmake --build build_otel --target gate_server chat_server chat_server2 status_server im_unit_tests -j4
+IM_TRACING_ENABLED=1 BIN_DIR=$PWD/build_otel/bin bash scripts/dev/run_test_services.sh
+
+# 测试（依赖装在 ~/venvs/im，见 tests/requirements-test.txt）
 ./build_test/bin/im_unit_tests
-IM_E2E=1 IM_GATE_URL=http://127.0.0.1:18080 pytest tests/integration -q
+IM_E2E=1 ~/venvs/im/bin/python -m pytest tests/integration -q
 IM_KAFKA_E2E=1 MQ_SMOKE_BIN=build_test/bin/mq_smoke \
-  pytest tests/integration/test_kafka_roundtrip.py -q
+  ~/venvs/im/bin/python -m pytest tests/integration/test_kafka_roundtrip.py -q
+IM_TRACE_E2E=1 ~/venvs/im/bin/python -m pytest tests/integration/test_trace.py -q
 ```
 
 ## 下一步
 
-- Step 7：OpenTelemetry + Jaeger
-- Step 8：etcd
-- Step 9：Nginx
+- Step 8：etcd 服务注册/发现
+- Step 9：Nginx TLS/限流
+- 清理 pass-the-hash 分支与 `VerifyServer/config.json` 明文凭据
 - Qt 客户端编译与手工冒烟
 - ChatServer2 的 metrics server 运行态接入（当前只验证 ChatServer1/Gate）

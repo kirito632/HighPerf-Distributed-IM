@@ -14,7 +14,8 @@
 > **Step 3 完成（2026-11-01）**：`common/mq`（KafkaProducer/Consumer、EventEnvelope、TopicNames）、`mq_smoke`、可选 CMake 依赖、Kafka 3.8 KRaft 双 listener、6 个 topic、33/33 单测通过；`IM_KAFKA_E2E=1 pytest tests/integration/test_kafka_roundtrip.py` 通过。  
 > **Step 4 完成（2026-11-01）**：`outbox` 表、消息写入与 outbox 同一 MySQL 事务、`OutboxPublisher` 轮询发布到 `im.message.created`、成功标记 published、失败重试/最大次数；25/25 集成测试通过，outbox 端到端发布测试通过。  
 > **Step 5 完成（2026-11-01）**：`DeliveryConsumer` 消费 Kafka、`processed_events` 幂等、`DeliveryMode=kafka`、陈旧事件跳过、畸形事件入 `im.message.dlq`；27/27 集成测试通过，ChatServer2 同步并编译通过。  
-> **Step 6 完成（2026-11-01）**：Gate/Chat Prometheus 文本指标端点、消息/Outbox/Delivery 计数、Prometheus 抓取、Grafana IM Overview 面板、3 条告警规则；29/29 集成测试通过。
+> **Step 6 完成（2026-11-01）**：Gate/Chat Prometheus 文本指标端点、消息/Outbox/Delivery 计数、Prometheus 抓取、Grafana IM Overview 面板、3 条告警规则；29/29 集成测试通过。  
+> **Step 7 完成（2026-11-09）**：OpenTelemetry 可选构建、W3C `traceparent` 从 HTTP 登录贯穿 TCP 登录/发消息/Outbox/Kafka/Delivery，Jaeger v2 端到端验收，新增 `tests/integration/test_trace.py`；35/35 单测、31/31 集成测试通过（1 个 Kafka 测试默认跳过）。
 >
 > 主线：**消息可靠性（Kafka + Outbox）→ 可观测性（Prometheus/OTel）→ 服务治理（etcd/Nginx）→ 工程质量（GoogleTest/CI）**。
 >
