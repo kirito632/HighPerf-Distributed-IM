@@ -20,7 +20,7 @@ jobs:
             build-essential cmake ninja-build pkg-config \
             libboost-all-dev libssl-dev libhiredis-dev libjsoncpp-dev \
             libprotobuf-dev protobuf-compiler protobuf-compiler-grpc \
-            libgrpc++-dev
+            libgrpc++-dev libcurl4-openssl-dev
 
       - name: Configure
         run: |
