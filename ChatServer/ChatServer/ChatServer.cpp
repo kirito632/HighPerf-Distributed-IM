@@ -420,10 +420,10 @@ int main()
         signals.async_wait([&](const boost::system::error_code& ec, int signo) {
             if (!ec) {
                 std::cout << "signal " << signo << " received, stopping..." << std::endl;
-                // 信号回调运行在 IO 线程上，绝不能在这里 join IO 线程。
-                // 只置标志并唤醒主线程，由主线程完成 acceptor/IO 池的停止。
+                // 信号回调运行在 IO 线程上：只置标志并唤醒主线程。
+                // gRPC Shutdown / IO 池 join 等阻塞操作必须由主线程执行，
+                // 否则会卡住信号线程并导致主线程永远等不到 notify。
                 bstop.store(true);
-                grpc_server->Shutdown();
                 cond_quit.notify_one();
             }
             else {
@@ -486,35 +486,50 @@ int main()
         std::cout << "About to wait on cond_quit\n";
         cond_quit.wait(lk, [&] { return bstop.load(); });
 
-        // 主线程先停止 acceptor，再停止 IO 池；Stop() 幂等，析构时再次调用安全。
+        // 主线程先停止 acceptor，再关闭 gRPC、停止 IO 池。
+        // Stop() 幂等，析构时再次调用安全。
         s.Stop();
+        std::cout << "[Shutdown] acceptor stopped" << std::endl;
+        if (grpc_server) {
+            grpc_server->Shutdown();
+        }
+        std::cout << "[Shutdown] grpc stopped" << std::endl;
         pool->Stop();
+        std::cout << "[Shutdown] io pool stopped" << std::endl;
 
         if (service_registry) {
             service_registry->Stop();
             service_registry.reset();
         }
+        std::cout << "[Shutdown] registry stopped" << std::endl;
 
         if (metrics_server) {
             metrics_server->Stop();
         }
+        std::cout << "[Shutdown] metrics stopped" << std::endl;
 
         // 停止 outbox publisher，确保不再访问 MySQL/Kafka
 #ifdef IM_WITH_KAFKA
         if (delivery_consumer) {
             delivery_consumer->Stop();
         }
+        std::cout << "[Shutdown] delivery stopped" << std::endl;
         if (outbox_publisher) {
             outbox_publisher->Stop();
         }
+        std::cout << "[Shutdown] outbox stopped" << std::endl;
 #endif
 
         // 清理资源
         RedisMgr::GetInstance()->HDel(LOGIN_COUNT, server_name);
+        std::cout << "[Shutdown] redis hdel done" << std::endl;
         RedisMgr::GetInstance()->Close();
+        std::cout << "[Shutdown] redis closed" << std::endl;
         grpc_server_thread.join(); // 等待 gRPC 线程退出
+        std::cout << "[Shutdown] grpc thread joined" << std::endl;
         // [FriendNotify]
         if (redis_sub_thread.joinable()) redis_sub_thread.join();
+        std::cout << "[Shutdown] redis subscriber joined" << std::endl;
 
         std::cout << "Woke from cond_quit wait, bstop=" << bstop.load() << "\n";
         std::cout << "Server exiting normally." << std::endl;
