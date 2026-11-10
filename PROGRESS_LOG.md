@@ -297,6 +297,31 @@ delivery：100/100 送达，p50 573 ms
 MySQL：11 条 SQL/消息，峰值 ~118% CPU
 ```
 
+### ChatServer 吞吐优化（4 worker 分片）
+
+- 调查确认根因：`LogicSystem` 单 `_worker_thread` 串行执行所有回调，且回调内同步等 MySQL 事务。
+- 实现：按 `session id` 哈希分片的 worker 队列，每个分片独立线程；同一会话固定同一分片，保持登录→发消息→拉取/ACK 顺序；回调在锁外执行。
+- Worker 数：`IM_CHAT_WORKERS` > `[Feature] ChatWorkers` > 默认 `min(8, max(2, hardware_concurrency))`（本机 4）；`=1` 可回退旧行为。
+- ChatServer2 同步相同实现；新增 `tests/integration/test_concurrency.py`（8 会话 × 15 条，校验会话内递增、跨会话不重复）。
+- 修复压测中暴露的关停缺陷：
+  - 信号回调不再调用阻塞的 `grpc_server->Shutdown()`，改为只置标志并唤醒主线程；Shutdown 移到主线程并补 `[Shutdown]` 阶段日志。
+  - `MetricsServer` 改为 non-blocking accept + 带 deadline 的 non-blocking 读，`Stop()` 先 join 再 close；解决 Prometheus 不抓取时 SIGTERM 卡死。
+- SQL 路径调查：`general_log` 确认 11 次 Questions/消息；Connector/C++ 1.1.12 无 `getGeneratedKeys()`，去掉 `SELECT id` 需要存储过程/改 payload 语义，风险大于收益，本轮不改。
+- 复测（100 连接 / 8s）：93 → **235 msg/s**，p50 957 → **417 ms**；200 连接 789 ms（旧版 2269 ms）。
+- 量化持久化成本：测试库 `innodb_flush_log_at_trx_commit=2` + `sync_binlog=0` 时 4 worker 达 331 msg/s（仅测试环境，不提交）。
+- 回归：40 integration tests passed（1 个 Kafka opt-in skipped），含 tracing/etcd/nginx/并发；`IM_CHAT_WORKERS=1` 下并发测试通过，100 连接 104 msg/s。
+- 文档：`docs/CHAT_THROUGHPUT_OPTIMIZATION.md`；`docs/PERFORMANCE_REPORT.md` 追加优化后复测。
+
+验收：
+
+```text
+40 integration tests passed, 1 skipped
+chat 100 连接：235 msg/s，p50 417 ms，0 错误
+chat 200 连接：232 msg/s，p50 789 ms
+worker=1 回退：104 msg/s，p50 904 ms
+SIGTERM 连续 5 次均在 1s 内退出
+```
+
 ## 当前状态
 
 - 测试环境（MySQL/Redis/Kafka/etcd/Jaeger/Nginx/Chat/Gate/Status）已启动并验证。
@@ -304,7 +329,7 @@ MySQL：11 条 SQL/消息，峰值 ~118% CPU
 - `Feature.KafkaEnabled` 与 `DeliveryMode` 目前由测试配置控制。
 - `TracingEnabled`、`EtcdEnabled` 默认关闭；测试时用 `IM_TRACING_ENABLED=1`、`IM_ETCD_ENABLED=1` 覆盖，不改仓库配置。
 - Nginx 测试入口：`https://127.0.0.1:18443`（自签证书，仅测试环境）。
-- 容量基线：单 ChatServer 约 93 msg/s（p50 957 ms @100 连接），Gate 约 493 QPS；详见 `docs/PERFORMANCE_REPORT.md`。
+- 容量基线：单 ChatServer（4 worker）约 235 msg/s（p50 417 ms @100 连接），Gate 约 493 QPS；详见 `docs/PERFORMANCE_REPORT.md` 与 `docs/CHAT_THROUGHPUT_OPTIMIZATION.md`。
 - 生产默认：
   - `JwtEnabled=true`（启动前必须生成密钥）
   - `OutboxEnabled=false`
@@ -368,7 +393,7 @@ IM_ETCD_E2E=1 ~/venvs/im/bin/python -m pytest tests/integration/test_etcd_regist
 
 - 口令哈希升级：SHA-256 → Argon2id/bcrypt（需种子数据与登录时自动升级）
 - 在 SMTP/数据库服务商侧轮换历史提交中出现过的旧凭据
-- 性能优化（按 `docs/PERFORMANCE_REPORT.md`）：LogicSystem 多 worker、减少每消息 SQL 往返、缩短 Outbox 轮询
+- 继续压测优化：存储过程/批量提交把 11 条 SQL 降到 1~4 条；评估 MySQL 持久化参数；多 ChatServer 实例分流
 - Qt 客户端编译与手工冒烟
 - ChatServer2 的 metrics server 运行态接入（当前只验证 ChatServer1/Gate）
 - Step 10：CI 完整化（clang-tidy / ASan / 覆盖率）

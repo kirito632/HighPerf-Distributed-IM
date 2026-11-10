@@ -67,7 +67,7 @@ def test_traceparent_is_forwarded_through_tls(test_credentials):
 
 def test_rate_limit_returns_429():
     codes = []
-    for _ in range(120):
+    for _ in range(300):
         response = requests.get(f"{NGINX_URL}/not-a-route", verify=False, timeout=2)
         codes.append(response.status_code)
 

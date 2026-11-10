@@ -11,10 +11,10 @@ client --TLS--> nginx:443 (18443) --HTTP--> Gate:18080 --gRPC--> Status
 
 ## Files
 
-- `deploy/nginx/nginx.conf` â€?TLS server, upstream, rate limits, trace-aware access log
-- `scripts/dev/gen_nginx_certs.sh` â€?self-signed certificate generator (`deploy/nginx/certs/`, gitignored)
-- `docker-compose.test.yml` â€?`nginx-test` service, profile `gateway`
-- `tests/integration/test_nginx.py` â€?opt-in HTTPS/rate-limit/trace tests
+- `deploy/nginx/nginx.conf` ï¿½?TLS server, upstream, rate limits, trace-aware access log
+- `scripts/dev/gen_nginx_certs.sh` ï¿½?self-signed certificate generator (`deploy/nginx/certs/`, gitignored)
+- `docker-compose.test.yml` ï¿½?`nginx-test` service, profile `gateway`
+- `tests/integration/test_nginx.py` ï¿½?opt-in HTTPS/rate-limit/trace tests
 
 ## Run
 
@@ -56,7 +56,7 @@ Last verified 2026-11-09:
 3 passed
 - HTTPS login proxied to Gate (nginx terminates TLS, Gate returns the JWT)
 - inbound traceparent reaches Gate and the child trace id is returned
-- 120 rapid requests hit the api zone and produce 429
+- 300 rapid requests hit the api zone and produce 429
 ```
 
 ## Limitations

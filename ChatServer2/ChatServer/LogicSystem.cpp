@@ -11,18 +11,27 @@
 #include <algorithm>
 
 #include "ChatGrpcClient.h"
+#include <cstdlib>
 
 // 析构函数：清理资源
 // 
 // 实现逻辑：
 //   1. 设置停止标志
-//   2. 通知工作线程退出
-//   3. 等待工作线程结束
+//   2. 通知所有 worker 退出并 drain 各自队列
+//   3. 等待所有 worker 结束
 LogicSystem::~LogicSystem()
 {
-	_b_stop = true;
-	_consume.notify_one();
-	_worker_thread.join();
+	_b_stop.store(true);
+	for (auto& shard : _shards) {
+		if (shard) {
+			shard->cv.notify_all();
+		}
+	}
+	for (auto& shard : _shards) {
+		if (shard && shard->thread.joinable()) {
+			shard->thread.join();
+		}
+	}
 }
 
 // 投递消息到队列
@@ -36,13 +45,19 @@ LogicSystem::~LogicSystem()
 //   3. 如果队列只有一条消息，通知工作线程处理
 void LogicSystem::PostMsgToQue(std::shared_ptr<LogicNode> msg)
 {
-	std::unique_lock<std::mutex> unique_lk(_mutex);
-	_msg_que.push(msg);
-
-	// 如果队列只有一条消息，通知工作线程
-	if (_msg_que.size() == 1) {
-		_consume.notify_one();
+	if (!msg || _shards.empty() || _b_stop.load()) {
+		return;
 	}
+
+	const std::string session_id =
+		msg->_session ? msg->_session->GetSessionId() : std::string{};
+	WorkerShard& shard = *_shards[ShardIndex(session_id)];
+
+	{
+		std::lock_guard<std::mutex> lock(shard.mutex);
+		shard.queue.push(std::move(msg));
+	}
+	shard.cv.notify_one();
 }
 
 // 构造函数：初始化逻辑系统
@@ -77,7 +92,38 @@ LogicSystem::LogicSystem() :_b_stop(false) {
 	}
 
 	RegisterCallBacks();
-	_worker_thread = std::thread(&LogicSystem::DealMsg, this);
+
+	// Worker 数量：IM_CHAT_WORKERS 优先，其次 [Feature] ChatWorkers，
+	// 默认 min(8, max(2, hardware_concurrency))；设为 1 即恢复旧的单线程行为。
+	std::size_t workers = 0;
+	const char* worker_env = std::getenv("IM_CHAT_WORKERS");
+	if (worker_env && *worker_env) {
+		try { workers = static_cast<std::size_t>(std::stoul(worker_env)); }
+		catch (...) { workers = 0; }
+	}
+	if (workers == 0) {
+		const std::string configured = ConfigMgr::Inst()["Feature"]["ChatWorkers"];
+		if (!configured.empty()) {
+			try { workers = static_cast<std::size_t>(std::stoul(configured)); }
+			catch (...) { workers = 0; }
+		}
+	}
+	if (workers == 0) {
+		const unsigned hw = std::thread::hardware_concurrency();
+		workers = std::max<std::size_t>(2, std::min<std::size_t>(8, hw ? hw : 4));
+	}
+	workers = std::min<std::size_t>(workers, 32);
+
+	_shards.reserve(workers);
+	for (std::size_t i = 0; i < workers; ++i) {
+		_shards.push_back(std::make_unique<WorkerShard>());
+	}
+	for (auto& shard : _shards) {
+		WorkerShard* raw = shard.get();
+		shard->thread = std::thread(&LogicSystem::DealMsg, this, raw);
+	}
+	std::cout << "[LogicSystem] worker shards=" << _shards.size() << std::endl;
+
 	AsyncDBPool::GetInstance()->Init();
 }
 
@@ -515,54 +561,53 @@ bool LogicSystem::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<Use
 	return true;
 }
 
-// 处理消息（在工作线程中运行）
+// 处理消息（在 worker 线程中运行）
 // 
-// 实现逻辑：
-//   1. 无限循环，等待消息
-//   2. 队列为空且未停止时，等待条件变量
-//   3. 如果已停止，处理完剩余消息后退出
-//   4. 从队列中取出消息，根据消息ID查找回调函数
-//   5. 调用回调函数处理消息
-void LogicSystem::DealMsg()
+// 每个 shard 一个线程，同一会话的消息只会进入同一个 shard，所以会话内
+// 顺序（登录 -> 发消息 -> 拉取/ACK）与旧实现一致；不同会话可以并行。
+void LogicSystem::DealMsg(WorkerShard* shard)
 {
 	for (;;) {
-		std::unique_lock<std::mutex> unique_lk(_mutex);
+		std::shared_ptr<LogicNode> msg_node;
+		{
+			std::unique_lock<std::mutex> lock(shard->mutex);
+			shard->cv.wait(lock, [this, shard] {
+				return _b_stop.load() || !shard->queue.empty();
+			});
 
-		// 判断队列为空，等待条件变量唤醒
-		while (_msg_que.empty() && !_b_stop) {
-			_consume.wait(unique_lk);
-		}
-
-		// 判断系统为关闭状态，取出消息队列中的所有剩余数据，处理完再退出循环
-		if (_b_stop) {
-			while (!_msg_que.empty()) {
-				auto msg_node = _msg_que.front();
-				std::cout << "recv msg id is" << msg_node->_recvnode->_msg_id << std::endl;
-				auto call_back_iter = _fun_callbacks.find(msg_node->_recvnode->_msg_id);
-				if (call_back_iter == _fun_callbacks.end()) {
-					_msg_que.pop();
-					continue;
+			if (shard->queue.empty()) {
+				if (_b_stop.load()) {
+					break;
 				}
-				call_back_iter->second(msg_node->_session, msg_node->_recvnode->_msg_id,
-					std::string(msg_node->_recvnode->_data, msg_node->_recvnode->_cur_len));
-				_msg_que.pop();
+				continue;
 			}
 
-			break;
+			msg_node = std::move(shard->queue.front());
+			shard->queue.pop();
 		}
 
-		// 如果没有停止，且消息队列不空，取出一条处理
-		auto msg_node = _msg_que.front();
-		std::cout << "recv msg id is" << msg_node->_recvnode->_msg_id << std::endl;
-
-		auto call_back_iter = _fun_callbacks.find(msg_node->_recvnode->_msg_id);
-		if (call_back_iter == _fun_callbacks.end()) {
-			_msg_que.pop();
-			continue;
-		}
-
-		call_back_iter->second(msg_node->_session, msg_node->_recvnode->_msg_id,
-			std::string(msg_node->_recvnode->_data, msg_node->_recvnode->_cur_len));
-		_msg_que.pop();
+		// 回调在锁外执行，避免 DB/Redis 调用阻塞同一 shard 的入队。
+		Dispatch(msg_node);
 	}
+}
+
+void LogicSystem::Dispatch(const std::shared_ptr<LogicNode>& msg_node)
+{
+	if (!msg_node || !msg_node->_recvnode) {
+		return;
+	}
+	auto call_back_iter = _fun_callbacks.find(msg_node->_recvnode->_msg_id);
+	if (call_back_iter == _fun_callbacks.end()) {
+		return;
+	}
+	call_back_iter->second(msg_node->_session, msg_node->_recvnode->_msg_id,
+		std::string(msg_node->_recvnode->_data, msg_node->_recvnode->_cur_len));
+}
+
+std::size_t LogicSystem::ShardIndex(const std::string& session_id) const
+{
+	if (_shards.empty()) {
+		return 0;
+	}
+	return std::hash<std::string>{}(session_id) % _shards.size();
 }

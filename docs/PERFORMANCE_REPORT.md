@@ -192,3 +192,23 @@ IM_ETCD_ENABLED=1 BIN_DIR=$PWD/build_otel/bin bash scripts/dev/run_test_services
 - 客户端是 Python 线程模型，100 连接、~100 msg/s 时客户端不是瓶颈；更高并发需要压测机或 C++/Go 客户端。
 - 未测试 TLS（Nginx）链路下的吞吐，也未开启 tracing 做对照；这两项的建议单独补测。
 - 未做长时间稳定性（>30 分钟）与故障注入，属于 Step 11 的剩余部分。
+
+## 9. 优化后复测（2026-11-10）
+
+在完成 LogicSystem 多 worker 分片（默认 4）与关停修复后，用同一套 `tests/load/load_im.py` 复测：
+
+| 连接数 | 优化前吞吐 | 优化后吞吐 | 优化前 p50 | 优化后 p50 |
+|---|---|---|---|---|
+| 1 | 84 msg/s | 103 msg/s | 10 ms | 9.6 ms |
+| 10 | 98 msg/s | 197 msg/s | 90 ms | 48 ms |
+| 50 | 91 msg/s | 189 msg/s | 483 ms | 246 ms |
+| 100 | 93 msg/s | 235 msg/s | 957 ms | 417 ms |
+| 200 | 80 msg/s | 232 msg/s | 2269 ms | 789 ms |
+
+- 100 连接：**2.5× 吞吐，p50 降低 56%**；200 连接不再出现 2 秒级排队。
+- 4 worker 时 Chat 约 0.5 核，MySQL 峰值约 1.5 核；瓶颈从“单线程串行”转移到 MySQL commit（1 commit/消息 + redo/binlog 两次 fsync）。
+- 把测试库临时改为 `innodb_flush_log_at_trx_commit=2`、`sync_binlog=0` 后，4 worker 达到 **331 msg/s / p50 281 ms**，量化了持久化成本。
+- 6 worker 在 100 连接下约 269 msg/s，8 worker 约 203 msg/s（不稳定），默认仍取 4。
+- 回归：40 integration tests passed（1 个 Kafka opt-in skipped）；`IM_CHAT_WORKERS=1` 可回退到旧行为（104 msg/s / p50 904 ms）。
+
+详细调查与实现见 `docs/CHAT_THROUGHPUT_OPTIMIZATION.md`。

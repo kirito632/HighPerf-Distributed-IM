@@ -8,6 +8,9 @@
 #include"data.h"
 #include<memory>
 #include<string>
+#include<atomic>
+#include<cstddef>
+#include<vector>
 #include"StatusGrpcClient.h"
 #include "CSession.h"
 
@@ -61,9 +64,6 @@ private:
     // 注册回调函数
     void RegisterCallBacks();
 
-    // 处理消息（在工作线程中运行）
-    void DealMsg();
-
     // 登录处理函数
     // 参数：
     //   - session: 会话对象
@@ -86,12 +86,22 @@ private:
     //   成功返回true，否则返回false
     bool GetBaseInfo(std::string base_key, int uid, std::shared_ptr<UserInfo>& userinfo);
 
-    std::queue<std::shared_ptr<LogicNode>> _msg_que;  // 消息队列
-    std::mutex _mutex;                                 // 互斥锁
-    std::condition_variable _consume;                 // 条件变量（用于唤醒工作线程）
-    std::thread _worker_thread;                       // 工作线程
-    bool _b_stop;                                     // 停止标志
+    // 每个 worker 拥有独立队列；消息按 session id 哈希分片，保证同一会话
+    // 的消息始终由同一个线程按入队顺序处理（登录 -> 发消息 -> 拉取/ACK）。
+    struct WorkerShard {
+        std::queue<std::shared_ptr<LogicNode>> queue;
+        std::mutex mutex;
+        std::condition_variable cv;
+        std::thread thread;
+    };
+
+    std::vector<std::unique_ptr<WorkerShard>> _shards;
+    std::atomic<bool> _b_stop{false};
     std::map<short, FunCallBack> _fun_callbacks;     // 回调函数映射表（消息ID -> 处理函数）
+
+    void DealMsg(WorkerShard* shard);
+    void Dispatch(const std::shared_ptr<LogicNode>& msg);
+    std::size_t ShardIndex(const std::string& session_id) const;
 
     // JWT 本地验签；JwtEnabled=false 时为空，退回 Redis token
     std::unique_ptr<im::auth::JwtVerifier> _jwt_verifier;

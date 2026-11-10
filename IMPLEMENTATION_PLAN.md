@@ -19,7 +19,8 @@
 > **Step 9 完成（2026-11-09）**：Nginx TLS/HTTP2 终止、Gate 反向代理、登录/API 双限流 zone、自签证书脚本与 `test_nginx.py`；3/3 Nginx 测试通过。  
 > **Step 8 完成（2026-11-09）**：`im_registry`（etcd v3 HTTP JSON gateway + libcurl）、租约注册/keepalive/revoke、StatusServer 注册中心发现与配置回退、`registry_probe` 与 `test_etcd_registry.py`；39/39 单测、37/37 集成测试通过。  
 > **安全清理完成（2026-11-09）**：删除 Gate pass-the-hash 分支；`VerifyServer/config.json` 移出 git 并改用 example + 环境变量；新增哈希登录拒绝/明文登录回归测试；39/39 集成测试通过。  
-> **Step 11 部分完成（2026-11-10）**：新增 `tests/load/load_im.py` 与 `docs/PERFORMANCE_REPORT.md`；测得单 ChatServer 约 93 msg/s（p50 957ms @100 连接）、Gate 493 QPS、投递 p50 573ms，并定位到 LogicSystem 单 worker + 每消息 11 条 SQL 两个瓶颈。故障注入尚未做。
+> **Step 11 部分完成（2026-11-10）**：新增 `tests/load/load_im.py` 与 `docs/PERFORMANCE_REPORT.md`；测得单 ChatServer 约 93 msg/s（p50 957ms @100 连接）、Gate 493 QPS、投递 p50 573ms，并定位到 LogicSystem 单 worker + 每消息 11 条 SQL 两个瓶颈。故障注入尚未做。  
+> **ChatServer 吞吐优化（2026-11-10）**：LogicSystem 改为按 session 分片的 4 worker（保持会话内顺序，`IM_CHAT_WORKERS=1` 可回退），修复信号处理与 MetricsServer 导致的关停卡死；100 连接 93→235 msg/s、p50 957→417ms；新增 `test_concurrency.py`，40 集成测试通过。详见 `docs/CHAT_THROUGHPUT_OPTIMIZATION.md`。
 >
 > 主线：**消息可靠性（Kafka + Outbox）→ 可观测性（Prometheus/OTel）→ 服务治理（etcd/Nginx）→ 工程质量（GoogleTest/CI）**。
 >
