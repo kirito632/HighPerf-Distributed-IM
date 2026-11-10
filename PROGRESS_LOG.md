@@ -272,6 +272,31 @@ probe: 租约内可发现，revoke 后 5s 内消失
 test_auth_hardening.py: 5 passed（含哈希登录拒绝、明文登录成功）
 ```
 
+## 2026-11-10
+
+### Step 11（部分）：容量压测与瓶颈定位
+
+- 新增 `tests/load/load_im.py`：chat/http/delivery 三种模式；用测试私钥离线签发 JWT（绕过 Gate 60 次/分钟登录限流）；通过 `/proc` 采样服务 CPU/RSS。
+- 环境：4 vCPU i5-11320H VM，MySQL/Redis/Kafka/etcd 同机，Kafka+Outbox 开启、tracing 关闭、单 ChatServer。
+- TCP 消息：1/10/50/100 连接 → 84 / 98 / 91 / 93 msg/s；p50 10 / 90 / 483 / 957 ms；0 错误。
+  - 吞吐与连接数无关，`p50 ≈ 连接数 × 10ms`，说明存在串行化点。
+  - 根因：`LogicSystem` 只有 1 个 `_worker_thread`（`LogicSystem.h:92`），所有消息串行执行同步 DB 事务。
+  - 每条消息约 11 条 SQL（882 条消息 / 9659 `Questions`）；四语句事务本机 p50 7.4 ms，commit 含 redo+binlog 两次 fsync。
+- Gate HTTP `/get_my_friends`：8 线程 493 req/s，p50 14.9 ms，Gate 单核约 80%，16 线程不再增长。
+- 投递：Outbox→Kafka→Delivery p50 573 ms / p95 1454 ms；Outbox 轮询 300ms + consumer poll 500ms 决定下限。
+- 数据面 0 丢失；期间发现残留 chat_server 进程导致同 consumer group 双消费者、50% 投递“丢失”，清理后 100% 送达。
+- 报告：`docs/PERFORMANCE_REPORT.md`（含优化收益排序：多 worker、减少 SQL 往返、缩短 Outbox 轮询、多实例分流）。
+- 未完成：Step 11 的故障注入（Kafka 停机、消费者重启、DLQ 注入）、TLS/tracing 开启后的对照压测、长稳测试。
+
+验收：
+
+```text
+chat 100 连接：93.1 msg/s，p50 957 ms，0 错误
+gate 8 线程：493 req/s，p50 14.9 ms
+delivery：100/100 送达，p50 573 ms
+MySQL：11 条 SQL/消息，峰值 ~118% CPU
+```
+
 ## 当前状态
 
 - 测试环境（MySQL/Redis/Kafka/etcd/Jaeger/Nginx/Chat/Gate/Status）已启动并验证。
@@ -279,6 +304,7 @@ test_auth_hardening.py: 5 passed（含哈希登录拒绝、明文登录成功）
 - `Feature.KafkaEnabled` 与 `DeliveryMode` 目前由测试配置控制。
 - `TracingEnabled`、`EtcdEnabled` 默认关闭；测试时用 `IM_TRACING_ENABLED=1`、`IM_ETCD_ENABLED=1` 覆盖，不改仓库配置。
 - Nginx 测试入口：`https://127.0.0.1:18443`（自签证书，仅测试环境）。
+- 容量基线：单 ChatServer 约 93 msg/s（p50 957 ms @100 连接），Gate 约 493 QPS；详见 `docs/PERFORMANCE_REPORT.md`。
 - 生产默认：
   - `JwtEnabled=true`（启动前必须生成密钥）
   - `OutboxEnabled=false`
@@ -342,7 +368,8 @@ IM_ETCD_E2E=1 ~/venvs/im/bin/python -m pytest tests/integration/test_etcd_regist
 
 - 口令哈希升级：SHA-256 → Argon2id/bcrypt（需种子数据与登录时自动升级）
 - 在 SMTP/数据库服务商侧轮换历史提交中出现过的旧凭据
+- 性能优化（按 `docs/PERFORMANCE_REPORT.md`）：LogicSystem 多 worker、减少每消息 SQL 往返、缩短 Outbox 轮询
 - Qt 客户端编译与手工冒烟
 - ChatServer2 的 metrics server 运行态接入（当前只验证 ChatServer1/Gate）
 - Step 10：CI 完整化（clang-tidy / ASan / 覆盖率）
-- Step 11：故障注入与压测
+- Step 11 剩余：故障注入（Kafka 停机、消费者重启、DLQ）、长稳与 TLS/tracing 对照压测
